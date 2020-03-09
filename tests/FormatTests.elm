@@ -26,8 +26,7 @@ normalizeField ( key, value ) =
     String.concat
         [ key
         , ":"
-        , formatValue "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua."
-        , """\\nbeep boop"""
+        , formatValue value
         ]
         |> splitOverflowingLines
 
@@ -36,6 +35,7 @@ formatValue : String -> String
 formatValue value =
     value
         |> Regex.replace (reg "[\\\\;,\"]") (\{ match } -> "\\" ++ match)
+        |> Regex.replace (reg "(?:\u{000D}\n|\u{000D}|\n)") (\_ -> "\\n")
 
 
 splitOverflowingLines : String -> String
