@@ -1,6 +1,8 @@
 module Tests exposing (..)
 
 import Expect exposing (Expectation)
+import Iso8601
+import Rfc3339
 import Test exposing (..)
 import Time
 
@@ -11,15 +13,18 @@ UID:uid1@example.com
 DTSTAMP:19970714T170000Z
 ORGANIZER;CN=John Doe:MAILTO:john.doe@example.com
 """
-        ++ formatKeys keys
+        ++ formatKeys (keys details)
         ++ """
 END:VEVENT"""
 
 
-keys =
-    [ ( "DTSTART", "20200404T000000Z" )
-    , ( "DTEND", "20200404T050000Z" )
-    , ( "SUMMARY", "Party" )
+keys details =
+    [ --( "DTSTART", details.start |> Rfc3339.format ),
+      ( "DTSTART"
+      , details.start |> Rfc3339.format
+      )
+    , ( "DTEND", details.end |> Rfc3339.format )
+    , ( "SUMMARY", "Bastille Day Party" )
     ]
 
 
@@ -41,10 +46,10 @@ suite =
     describe "ical event"
         [ test "single event" <|
             \() ->
-                { start = Time.millisToPosix 1586044800
+                { start = toIso8601 "1997-07-14T17:00:00.000Z"
 
-                -- Saturday, April 4, 2020 5:00:00 PM GMT-07:00
-                , end = Time.millisToPosix 1586062800
+                --July 15, 1997 03:59:59
+                , end = toIso8601 "1997-07-15T03:59:59.000Z"
 
                 --stamp: new Date('Fr Oct 04 2013 23:34:53 UTC'),
                 , created = "" -- new Date('Fr Oct 04 2013 23:34:53 UTC'),
@@ -56,8 +61,18 @@ suite =
 UID:uid1@example.com
 DTSTAMP:19970714T170000Z
 ORGANIZER;CN=John Doe:MAILTO:john.doe@example.com
-DTSTART:20200404T000000Z
-DTEND:20200404T050000Z
-SUMMARY:Party
+DTSTART:19970714T170000Z
+DTEND:19970715T035959Z
+SUMMARY:Bastille Day Party
 END:VEVENT"""
         ]
+
+
+toIso8601 : String -> Time.Posix
+toIso8601 string =
+    case Iso8601.toTime string of
+        Ok parsed ->
+            parsed
+
+        Err error ->
+            Debug.todo (Debug.toString error)
