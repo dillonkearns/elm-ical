@@ -2,6 +2,7 @@ module FormatTests exposing (..)
 
 import Expect exposing (Expectation)
 import Iso8601
+import Regex
 import Test exposing (..)
 import Time
 
@@ -21,9 +22,25 @@ formatKeys nodes =
 
 normalizeField : ( String, String ) -> String
 normalizeField ( key, value ) =
-    """DESCRIPTION:Lorem ipsum dolor sit amet\\, consetetur sadipscing elitr\\, sed
+    String.concat
+        [ key
+        , ":"
+        , formatValue "Lorem ipsum dolor sit amet, "
+        , """consetetur sadipscing elitr\\, sed
   diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam era
  t\\, sed diam voluptua.\\nbeep boop"""
+        ]
+
+
+formatValue : String -> String
+formatValue value =
+    value
+        |> Regex.replace (reg ",") (\_ -> "\\,")
+
+
+reg string =
+    Regex.fromString string
+        |> Maybe.withDefault Regex.never
 
 
 suite : Test
