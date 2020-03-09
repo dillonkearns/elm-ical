@@ -25,8 +25,8 @@ normalizeField ( key, value ) =
     String.concat
         [ key
         , ":"
-        , formatValue "Lorem ipsum dolor sit amet, "
-        , """consetetur sadipscing elitr\\, sed
+        , formatValue "Lorem ipsum dolor sit amet, consetetur sadipscing elitr,"
+        , """ sed
   diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam era
  t\\, sed diam voluptua.\\nbeep boop"""
         ]
