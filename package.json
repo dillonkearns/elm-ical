@@ -1,0 +1,17 @@
+{
+  "name": "elm-ical",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "elm-test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "elm": "latest-0.19.1",
+    "elm-format": "^0.8.2",
+    "elm-test": "latest-0.19.1"
+  }
+}
