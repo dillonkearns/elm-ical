@@ -7,11 +7,13 @@ import Test exposing (..)
 import Time
 
 
+
+--eventGenerate : { a | start : Time.Posix, end : Time.Posix } -> String
+
+
 eventGenerate details =
     """BEGIN:VEVENT
 UID:uid1@example.com
-DTSTAMP:19970714T170000Z
-ORGANIZER;CN=John Doe:MAILTO:john.doe@example.com
 """
         ++ formatKeys (keys details)
         ++ """
@@ -19,12 +21,10 @@ END:VEVENT"""
 
 
 keys details =
-    [ --( "DTSTART", details.start |> Rfc3339.format ),
-      ( "DTSTART"
-      , details.start |> Rfc3339.format
-      )
+    [ ( "DTSTAMP", details.stamp |> Rfc3339.format )
+    , ( "DTSTART", details.start |> Rfc3339.format )
     , ( "DTEND", details.end |> Rfc3339.format )
-    , ( "SUMMARY", "Bastille Day Party" )
+    , ( "SUMMARY", details.summary )
     ]
 
 
@@ -47,20 +47,14 @@ suite =
         [ test "single event" <|
             \() ->
                 { start = toIso8601 "1997-07-14T17:00:00.000Z"
-
-                --July 15, 1997 03:59:59
                 , end = toIso8601 "1997-07-15T03:59:59.000Z"
-
-                --stamp: new Date('Fr Oct 04 2013 23:34:53 UTC'),
-                , created = "" -- new Date('Fr Oct 04 2013 23:34:53 UTC'),
-                , lastModified = "" -- new Date('Fr Oct 04 2013 23:34:53 UTC'),
-                , summary = "Party"
+                , stamp = toIso8601 "1997-07-14T17:00:00.000Z"
+                , summary = "Bastille Day Party"
                 }
                     |> eventGenerate
                     |> Expect.equal """BEGIN:VEVENT
 UID:uid1@example.com
 DTSTAMP:19970714T170000Z
-ORGANIZER;CN=John Doe:MAILTO:john.doe@example.com
 DTSTART:19970714T170000Z
 DTEND:19970715T035959Z
 SUMMARY:Bastille Day Party
