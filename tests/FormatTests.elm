@@ -26,24 +26,23 @@ normalizeField ( key, value ) =
     String.concat
         [ key
         , ":"
-        , formatValue "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam "
-        , """nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam era
- t\\, sed diam voluptua.\\nbeep boop"""
+        , formatValue "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua."
+        , """\\nbeep boop"""
         ]
+        |> splitOverflowingLines
 
 
 formatValue : String -> String
 formatValue value =
     value
-        |> Regex.replace (reg ",") (\_ -> "\\,")
-        |> splitOverflowingLines
+        |> Regex.replace (reg "[\\\\;,\"]") (\{ match } -> "\\" ++ match)
 
 
 splitOverflowingLines : String -> String
 splitOverflowingLines string =
     string
         |> String.toList
-        |> List.Extra.greedyGroupsOf 62
+        |> List.Extra.greedyGroupsOf 74
         |> List.map String.fromList
         |> String.join "\n "
 
