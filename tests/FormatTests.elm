@@ -2,6 +2,7 @@ module FormatTests exposing (..)
 
 import Expect exposing (Expectation)
 import Iso8601
+import List.Extra
 import Regex
 import Test exposing (..)
 import Time
@@ -25,9 +26,8 @@ normalizeField ( key, value ) =
     String.concat
         [ key
         , ":"
-        , formatValue "Lorem ipsum dolor sit amet, consetetur sadipscing elitr,"
-        , """ sed
-  diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam era
+        , formatValue "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam "
+        , """nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam era
  t\\, sed diam voluptua.\\nbeep boop"""
         ]
 
@@ -36,6 +36,16 @@ formatValue : String -> String
 formatValue value =
     value
         |> Regex.replace (reg ",") (\_ -> "\\,")
+        |> splitOverflowingLines
+
+
+splitOverflowingLines : String -> String
+splitOverflowingLines string =
+    string
+        |> String.toList
+        |> List.Extra.greedyGroupsOf 62
+        |> List.map String.fromList
+        |> String.join "\n "
 
 
 reg string =
@@ -46,11 +56,12 @@ reg string =
 suite : Test
 suite =
     describe "ical event"
-        [ test "single event" <|
-            \() ->
-                ( "DESCRIPTION", "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua.\nbeep boop" )
-                    |> normalizeField
-                    |> Expect.equal """DESCRIPTION:Lorem ipsum dolor sit amet\\, consetetur sadipscing elitr\\, sed
+        [ only <|
+            test "single event" <|
+                \() ->
+                    ( "DESCRIPTION", "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua.\nbeep boop" )
+                        |> normalizeField
+                        |> Expect.equal """DESCRIPTION:Lorem ipsum dolor sit amet\\, consetetur sadipscing elitr\\, sed
   diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam era
  t\\, sed diam voluptua.\\nbeep boop"""
         ]
