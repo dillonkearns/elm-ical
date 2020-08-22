@@ -55,12 +55,11 @@ reg string =
 suite : Test
 suite =
     describe "ical event"
-        [ only <|
-            test "single event" <|
-                \() ->
-                    ( "DESCRIPTION", "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua.\nbeep boop" )
-                        |> normalizeField
-                        |> Expect.equal """DESCRIPTION:Lorem ipsum dolor sit amet\\, consetetur sadipscing elitr\\, sed
+        [ test "single event" <|
+            \() ->
+                ( "DESCRIPTION", "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua.\nbeep boop" )
+                    |> normalizeField
+                    |> Expect.equal """DESCRIPTION:Lorem ipsum dolor sit amet\\, consetetur sadipscing elitr\\, sed
   diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam era
  t\\, sed diam voluptua.\\nbeep boop"""
         ]
