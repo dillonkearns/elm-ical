@@ -1,6 +1,8 @@
 module Property exposing (..)
 
 import Format
+import Rfc3339
+import Time
 
 
 type alias Pair =
@@ -17,6 +19,7 @@ type PropertyValue
 type ValueData
     = Text String
     | CalAddress String (List Parameter) -- https://tools.ietf.org/html/rfc5545#section-3.3.3
+    | DateTime Time.Posix -- https://tools.ietf.org/html/rfc5545#section-3.3.5
 
 
 {-| <https://tools.ietf.org/html/rfc5545#section-3.2>
@@ -32,8 +35,16 @@ encode ( key, value ) =
     --        key ++ ":" ++ encodeValue singleValue
     --
     --    MultiPart ( firstPair, remainingPairs ) ->
+    let
+        separator =
+            if isMultipart value then
+                ";"
+
+            else
+                ":"
+    in
     key
-        ++ ";"
+        ++ separator
         ++ (encodeValue value
             --|> List.map encodePair
             --|> String.join ";"
@@ -49,16 +60,29 @@ encodePair ( key, value ) =
            encodeValue value
 
 
+isMultipart : ValueData -> Bool
+isMultipart data =
+    case data of
+        Text string ->
+            False
+
+        CalAddress string parameters ->
+            not (List.isEmpty parameters)
+
+        DateTime posix ->
+            False
+
+
 encodeValue : ValueData -> String
 encodeValue data =
     case data of
         Text text ->
-            text
+            Format.formatValue text
 
         CalAddress address parameters ->
             case parameters of
                 [] ->
-                    "mailto:" ++ address
+                    "mailto:" ++ Format.formatValue address
 
                 _ ->
                     (parameters
@@ -66,7 +90,10 @@ encodeValue data =
                         |> String.join ";"
                     )
                         ++ ":mailto:"
-                        ++ address
+                        ++ Format.formatValue address
+
+        DateTime posix ->
+            Rfc3339.format posix
 
 
 encodeParameter (Parameter ( key, value )) =

@@ -17,12 +17,14 @@ suite =
                   , start = toIso8601 "2013-10-04T22:39:30.000Z"
                   , end = toIso8601 "2013-10-06T23:15:00.000Z"
                   , summary = "repeating by month"
+                  , organizer = Nothing
                   }
                 , { id = "2"
                   , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                   , start = toIso8601 "2013-10-04T22:39:30.000Z"
                   , end = toIso8601 "2013-10-06T23:15:00.000Z"
                   , summary = "repeating by day, twice"
+                  , organizer = Nothing
                   }
                 ]
                     |> Ical.generate { id = "//incrementalelm.com//elm-ical.tests//EN", domain = "incrementalelm.com" }

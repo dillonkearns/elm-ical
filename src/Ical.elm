@@ -2,6 +2,7 @@ module Ical exposing (generate)
 
 import Format
 import Iso8601
+import Property exposing (Parameter(..), ValueData(..))
 import Rfc3339
 import Time
 
@@ -12,6 +13,15 @@ type alias Event =
     , end : Time.Posix
     , summary : String
     , id : String
+    , organizer : Maybe Recipient
+    }
+
+
+type alias Recipient =
+    { name : String
+    , email : String
+
+    --, mailTo : Maybe String
     }
 
 
@@ -19,7 +29,7 @@ eventGenerate : Config -> Event -> String
 eventGenerate config details =
     """BEGIN:VEVENT
 """
-        ++ formatKeys (keys config details)
+        ++ formatKeysNew (keysNew config details)
         ++ """
 END:VEVENT"""
 
@@ -34,10 +44,38 @@ keys config details =
     ]
 
 
+keysNew : Config -> Event -> List ( String, ValueData )
+keysNew config details =
+    [ ( "UID", details.id ++ "@" ++ config.domain |> Text )
+    , ( "DTSTAMP", details.stamp |> DateTime ) -- https://www.kanzaki.com/docs/ical/dtstamp.html
+    , ( "DTSTART", details.start |> DateTime )
+    , ( "DTEND", details.end |> DateTime )
+    , ( "SUMMARY", details.summary |> Text )
+    ]
+        ++ ([ details.organizer
+                |> Maybe.map
+                    (\organizer ->
+                        ( "ORGANIZER"
+                        , CalAddress organizer.email
+                            [ Parameter ( "CN", organizer.name ) ]
+                        )
+                    )
+            ]
+                |> List.filterMap identity
+           )
+
+
 formatKeys : List ( String, String ) -> String
 formatKeys nodes =
     nodes
         |> List.map Format.normalizeField
+        |> String.join "\n"
+
+
+formatKeysNew : List ( String, ValueData ) -> String
+formatKeysNew nodes =
+    nodes
+        |> List.map Property.encode
         |> String.join "\n"
 
 
