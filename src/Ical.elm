@@ -1,7 +1,5 @@
 module Ical exposing (generate)
 
-import Format
-import Iso8601
 import Property exposing (Parameter(..), ValueData(..))
 import Rfc3339
 import Time
@@ -12,6 +10,7 @@ type alias Event =
     , start : Time.Posix
     , end : Time.Posix
     , summary : String
+    , description : Maybe String
     , id : String
     , organizer : Maybe Recipient
     }
@@ -60,16 +59,10 @@ keysNew config details =
                         , [ Parameter ( "CN", organizer.name ) ]
                         )
                     )
+            , details.description |> Maybe.map (\description -> ( "DESCRIPTION", Text description, [] ))
             ]
                 |> List.filterMap identity
            )
-
-
-formatKeys : List ( String, String ) -> String
-formatKeys nodes =
-    nodes
-        |> List.map Format.normalizeField
-        |> String.join "\n"
 
 
 formatKeysNew : List ( String, ValueData, List Parameter ) -> String

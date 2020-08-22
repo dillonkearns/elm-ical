@@ -17,13 +17,15 @@ suite =
                   , start = toIso8601 "2013-10-04T22:39:30.000Z"
                   , end = toIso8601 "2013-10-06T23:15:00.000Z"
                   , summary = "repeating by month"
+                  , description = Just "repeating by month"
                   , organizer = Nothing
                   }
                 , { id = "2"
                   , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                   , start = toIso8601 "2013-10-04T22:39:30.000Z"
                   , end = toIso8601 "2013-10-06T23:15:00.000Z"
-                  , summary = "repeating by day, twice"
+                  , summary = "This is the title, it escapes commas"
+                  , description = Just "This is the description, it escapes commas"
                   , organizer = Nothing
                   }
                 ]
@@ -46,13 +48,15 @@ DTSTAMP:20131004T233453Z
 DTSTART:20131004T223930Z
 DTEND:20131006T231500Z
 SUMMARY:repeating by month
+DESCRIPTION:repeating by month
 END:VEVENT
 BEGIN:VEVENT
 UID:2@incrementalelm.com
 DTSTAMP:20131004T233453Z
 DTSTART:20131004T223930Z
 DTEND:20131006T231500Z
-SUMMARY:repeating by day\\, twice
+SUMMARY:This is the title\\, it escapes commas
+DESCRIPTION:This is the description\\, it escapes commas
 END:VEVENT
 END:VCALENDAR"""
         ]
