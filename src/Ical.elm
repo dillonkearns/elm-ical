@@ -80,13 +80,34 @@ formatKeysNew nodes =
 
 
 type alias Config =
-    { id : String, domain : String }
+    { id : String
+    , domain : String
+    , name : Maybe String
+    , description : Maybe String
+    , url : Maybe String
+    }
 
 
 generate : Config -> List Event -> String
 generate config events =
     """BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//incrementalelm.com//elm-ical.tests//EN
-""" ++ String.join "\n" (List.map (eventGenerate config) events) ++ """
+"""
+        ++ calendarProperties config
+        ++ "\n"
+        ++ String.join "\n" (List.map (eventGenerate config) events)
+        ++ """
 END:VCALENDAR"""
+
+
+calendarProperties : Config -> String
+calendarProperties config =
+    [ ( "VERSION", "2.0" |> Text, [] )
+    , ( "PRODID", "-//incrementalelm.com//elm-ical.tests//EN" |> Text, [] )
+    ]
+        ++ ([ config.name |> Maybe.map (\name -> ( "NAME", Text name, [] ))
+            , config.description |> Maybe.map (\description -> ( "DESCRIPTION", Text description, [] ))
+            , config.url |> Maybe.map (\url -> ( "URL", Text url, [] ))
+            ]
+                |> List.filterMap identity
+           )
+        |> formatKeysNew

@@ -27,10 +27,19 @@ suite =
                   , organizer = Nothing
                   }
                 ]
-                    |> Ical.generate { id = "//incrementalelm.com//elm-ical.tests//EN", domain = "incrementalelm.com" }
+                    |> Ical.generate
+                        { id = "//incrementalelm.com//elm-ical.tests//EN"
+                        , domain = "incrementalelm.com"
+                        , name = Just "Incremental Elm Live"
+                        , description = Just "Pairing on Elm Open Source and learning from the community."
+                        , url = Just "https://incrementalelm.com/live.ics"
+                        }
                     |> expectEqualLines """BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//incrementalelm.com//elm-ical.tests//EN
+NAME:Incremental Elm Live
+DESCRIPTION:Pairing on Elm Open Source and learning from the community.
+URL:https://incrementalelm.com/live.ics
 BEGIN:VEVENT
 UID:1@incrementalelm.com
 DTSTAMP:20131004T233453Z
