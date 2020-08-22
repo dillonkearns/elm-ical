@@ -54,36 +54,51 @@ encodeProperty ( key, value, parameters ) =
 
 encodeValue : ValueData -> List Parameter -> String
 encodeValue data parameters =
-    case data of
-        Text text ->
-            Format.formatValue text
-
-        CalAddress address ->
+    let
+        paramPrefix =
             case parameters of
                 [] ->
-                    "mailto:" ++ Format.formatValue address
+                    ""
 
                 _ ->
                     (parameters
                         |> List.map encodeParameter
                         |> String.join ";"
                     )
-                        ++ ":mailto:"
+                        ++ ":"
+    in
+    paramPrefix
+        ++ (case data of
+                Text text ->
+                    Format.formatValue text
+
+                CalAddress address ->
+                    "mailto:"
                         ++ Format.formatValue address
 
-        DateTime posix ->
-            Rfc3339.format posix
+                DateTime posix ->
+                    Rfc3339.format posix
+           )
 
 
 encodeParameter (Parameter ( key, value )) =
     key
         ++ "="
-        ++ -- TODO quote value if needed (https://tools.ietf.org/html/rfc5545#section-3.2)
-           -- Property parameter values that contain the COLON, SEMICOLON, or COMMA
-           --   character separators MUST be specified as quoted-string text values.
+        ++ -- TODO quote value if needed
            quoted value
 
 
 quoted : String -> String
 quoted string =
-    "\"" ++ string ++ "\""
+    -- Property parameter values that contain the COLON, SEMICOLON, or COMMA
+    --   character separators MUST be specified as quoted-string text values.
+    -- (https://tools.ietf.org/html/rfc5545#section-3.2)
+    let
+        needsQuotes =
+            (string |> String.contains ":") || (string |> String.contains ";") || (string |> String.contains ",")
+    in
+    if needsQuotes then
+        "\"" ++ string ++ "\""
+
+    else
+        string
