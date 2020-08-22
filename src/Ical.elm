@@ -44,20 +44,20 @@ keys config details =
     ]
 
 
-keysNew : Config -> Event -> List ( String, ValueData )
+keysNew : Config -> Event -> List ( String, ValueData, List Parameter )
 keysNew config details =
-    [ ( "UID", details.id ++ "@" ++ config.domain |> Text )
-    , ( "DTSTAMP", details.stamp |> DateTime ) -- https://www.kanzaki.com/docs/ical/dtstamp.html
-    , ( "DTSTART", details.start |> DateTime )
-    , ( "DTEND", details.end |> DateTime )
-    , ( "SUMMARY", details.summary |> Text )
+    [ ( "UID", details.id ++ "@" ++ config.domain |> Text, [] )
+    , ( "DTSTAMP", details.stamp |> DateTime, [] ) -- https://www.kanzaki.com/docs/ical/dtstamp.html
+    , ( "DTSTART", details.start |> DateTime, [] )
+    , ( "DTEND", details.end |> DateTime, [] )
+    , ( "SUMMARY", details.summary |> Text, [] )
     ]
         ++ ([ details.organizer
                 |> Maybe.map
                     (\organizer ->
                         ( "ORGANIZER"
                         , CalAddress organizer.email
-                            [ Parameter ( "CN", organizer.name ) ]
+                        , [ Parameter ( "CN", organizer.name ) ]
                         )
                     )
             ]
@@ -72,10 +72,10 @@ formatKeys nodes =
         |> String.join "\n"
 
 
-formatKeysNew : List ( String, ValueData ) -> String
+formatKeysNew : List ( String, ValueData, List Parameter ) -> String
 formatKeysNew nodes =
     nodes
-        |> List.map Property.encode
+        |> List.map Property.encodeProperty
         |> String.join "\n"
 
 

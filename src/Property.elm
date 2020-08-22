@@ -18,7 +18,7 @@ type PropertyValue
 -}
 type ValueData
     = Text String
-    | CalAddress String (List Parameter) -- https://tools.ietf.org/html/rfc5545#section-3.3.3
+    | CalAddress String -- https://tools.ietf.org/html/rfc5545#section-3.3.3
     | DateTime Time.Posix -- https://tools.ietf.org/html/rfc5545#section-3.3.5
 
 
@@ -28,58 +28,37 @@ type Parameter
     = Parameter ( String, String )
 
 
-encode : ( String, ValueData ) -> String
-encode ( key, value ) =
-    --case value of
-    --    SinglePart singleValue ->
-    --        key ++ ":" ++ encodeValue singleValue
-    --
-    --    MultiPart ( firstPair, remainingPairs ) ->
+encodeProperty : ( String, ValueData, List Parameter ) -> String
+encodeProperty ( key, value, parameters ) =
     let
         separator =
-            if isMultipart value then
-                ";"
+            if List.isEmpty parameters then
+                ":"
 
             else
-                ":"
+                ";"
     in
     key
         ++ separator
-        ++ (encodeValue value
-            --|> List.map encodePair
-            --|> String.join ";"
-            --|> encodeValue
-           )
+        ++ encodeValue value parameters
 
 
-encodePair : Pair -> String
-encodePair ( key, value ) =
-    key
-        ++ "="
-        ++ --Format.formatValue
-           encodeValue value
+
+--encodePair : Pair -> String
+--encodePair ( key, value ) =
+--    key
+--        ++ "="
+--        ++ --Format.formatValue
+--           encodeValue value
 
 
-isMultipart : ValueData -> Bool
-isMultipart data =
-    case data of
-        Text string ->
-            False
-
-        CalAddress string parameters ->
-            not (List.isEmpty parameters)
-
-        DateTime posix ->
-            False
-
-
-encodeValue : ValueData -> String
-encodeValue data =
+encodeValue : ValueData -> List Parameter -> String
+encodeValue data parameters =
     case data of
         Text text ->
             Format.formatValue text
 
-        CalAddress address parameters ->
+        CalAddress address ->
             case parameters of
                 [] ->
                     "mailto:" ++ Format.formatValue address

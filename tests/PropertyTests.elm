@@ -12,15 +12,17 @@ suite =
         [ test "organizer is escaped correctly" <|
             \() ->
                 ( "ORGANIZER"
-                , Property.CalAddress "dillon@incrementalelm.com" [ Property.Parameter ( "CN", "Dillon Kearns" ) ]
+                , Property.CalAddress "dillon@incrementalelm.com"
+                , [ Property.Parameter ( "CN", "Dillon Kearns" ) ]
                 )
-                    |> Property.encode
+                    |> Property.encodeProperty
                     |> Expect.equal """ORGANIZER;CN="Dillon Kearns":mailto:dillon@incrementalelm.com"""
         , test "another thing is escaped correctly" <|
             \() ->
                 ( "ORGANIZER"
-                , Property.CalAddress "dillon@incrementalelm.com" [ Property.Parameter ( "CN", "Dillon Kearns" ) ]
+                , Property.CalAddress "dillon@incrementalelm.com"
+                , [ Property.Parameter ( "CN", "Dillon Kearns" ) ]
                 )
-                    |> Property.encode
+                    |> Property.encodeProperty
                     |> Expect.equal """ORGANIZER;CN="Dillon Kearns":mailto:dillon@incrementalelm.com"""
         ]
