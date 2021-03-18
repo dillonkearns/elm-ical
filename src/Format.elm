@@ -1,4 +1,4 @@
-module Format exposing (formatValue, normalizeField)
+module Format exposing (formatValue, normalizeField, splitOverflowingLines)
 
 import List.Extra
 import Regex

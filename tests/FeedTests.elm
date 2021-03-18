@@ -21,6 +21,8 @@ suite =
                   , summary = "repeating by month"
                   , description = Just "repeating by month"
                   , organizer = Nothing
+                  , location = Nothing
+                  , htmlDescription = Nothing
                   }
                 , { id = "2"
                   , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
@@ -31,6 +33,8 @@ suite =
                   , summary = "This is the title, it escapes commas"
                   , description = Just "This is the description, it escapes commas"
                   , organizer = Nothing
+                  , location = Nothing
+                  , htmlDescription = Nothing
                   }
                 ]
                     |> Ical.generate
@@ -74,6 +78,8 @@ END:VCALENDAR"""
                   , summary = "Simple Event"
                   , description = Nothing
                   , organizer = Nothing
+                  , location = Nothing
+                  , htmlDescription = Nothing
                   }
                 ]
                     |> Ical.generate
@@ -94,6 +100,47 @@ DTEND:20131004T231500Z
 SUMMARY:Simple Event
 CREATED:20131004T233453Z
 LAST-MODIFIED:20131004T233453Z
+END:VEVENT
+END:VCALENDAR"""
+        , test "generate_02" <|
+            -- source: https://github.com/sebbo2002/ical-generator/blob/634389543bb057b8767bff6edb562affe16809f0/test/cases.ts#L31
+            \() ->
+                [ { id = "123"
+                  , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
+                  , start = toIso8601 "2013-10-04T22:39:30.000Z"
+                  , end = toIso8601 "2013-10-04T23:15:00.000Z"
+                  , created = Nothing
+                  , lastModified = Nothing
+                  , summary = "Sample Event"
+                  , description = Just "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua.\nbeep boop"
+                  , organizer = Nothing
+                  , location = Just "localhost"
+                  , htmlDescription = Just "<p>Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua.\nbeep boop</p>"
+                  }
+                ]
+                    |> Ical.generate
+                        { id = "//sebbo.net//ical-generator.tests//EN"
+                        , domain = "sebbo.net"
+                        , name = Nothing
+                        , description = Nothing
+                        , url = Nothing
+                        }
+                    |> expectEqualLines """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//sebbo.net//ical-generator.tests//EN
+BEGIN:VEVENT
+UID:123@sebbo.net
+DTSTAMP:20131004T233453Z
+DTSTART:20131004T223930Z
+DTEND:20131004T231500Z
+SUMMARY:Sample Event
+LOCATION:localhost
+DESCRIPTION:Lorem ipsum dolor sit amet\\, consetetur sadipscing elitr\\, sed
+  diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam era
+ t\\, sed diam voluptua.\\nbeep boop
+X-ALT-DESC;FMTTYPE=text/html:<p>Lorem ipsum dolor sit amet\\, consetetur sa
+ dipscing elitr\\, sed diam nonumy eirmod tempor invidunt ut labore et dolor
+ e magna aliquyam erat\\, sed diam voluptua.\\nbeep boop</p>
 END:VEVENT
 END:VCALENDAR"""
         ]

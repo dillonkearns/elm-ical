@@ -39,9 +39,11 @@ encodeProperty ( key, value, parameters ) =
             else
                 ";"
     in
-    key
+    (key
         ++ separator
         ++ encodeValue value parameters
+    )
+        |> Format.splitOverflowingLines
 
 
 

@@ -14,6 +14,8 @@ type alias Event =
     , description : Maybe String
     , id : String
     , organizer : Maybe Recipient
+    , location : Maybe String
+    , htmlDescription : Maybe String
     }
 
 
@@ -44,10 +46,10 @@ keysNew config details =
     ]
         ++ ([ details.created |> Maybe.map (\created -> ( "CREATED", created |> DateTime, [] ))
             , details.lastModified |> Maybe.map (\lastModified -> ( "LAST-MODIFIED", lastModified |> DateTime, [] ))
-            ]
-                |> List.filterMap identity
-           )
-        ++ ([ details.organizer
+            , details.location |> Maybe.map (\location -> ( "LOCATION", location |> Text, [] ))
+            , details.description |> Maybe.map (\description -> ( "DESCRIPTION", Text description, [] ))
+            , details.htmlDescription |> Maybe.map (\htmlDescription -> ( "X-ALT-DESC;FMTTYPE=text/html", htmlDescription |> Text, [] ))
+            , details.organizer
                 |> Maybe.map
                     (\organizer ->
                         ( "ORGANIZER"
@@ -55,7 +57,6 @@ keysNew config details =
                         , [ Parameter ( "CN", organizer.name ) ]
                         )
                     )
-            , details.description |> Maybe.map (\description -> ( "DESCRIPTION", Text description, [] ))
             ]
                 |> List.filterMap identity
            )
