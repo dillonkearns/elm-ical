@@ -1,4 +1,4 @@
-module Rfc3339 exposing (..)
+module Rfc3339 exposing (format)
 
 import DateFormat
 import Time exposing (Posix)

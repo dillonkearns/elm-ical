@@ -1,6 +1,6 @@
-module PropertyTests exposing (..)
+module PropertyTests exposing (suite)
 
-import Expect exposing (Expectation)
+import Expect
 import Iso8601
 import Property
 import Test exposing (..)

@@ -1,4 +1,4 @@
-module FeedTests exposing (..)
+module FeedTests exposing (suite)
 
 import Expect exposing (Expectation)
 import Ical

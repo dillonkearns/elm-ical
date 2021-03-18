@@ -1,22 +1,7 @@
-module Format exposing (..)
+module Format exposing (formatValue, normalizeField)
 
-import Iso8601
 import List.Extra
 import Regex
-import Time
-
-
-formatKeys nodes =
-    nodes
-        |> List.map
-            (\( key, value ) ->
-                String.concat
-                    [ key
-                    , ":"
-                    , value
-                    ]
-            )
-        |> String.join "\n"
 
 
 normalizeField : ( String, String ) -> String
@@ -48,13 +33,3 @@ splitOverflowingLines string =
 reg string =
     Regex.fromString string
         |> Maybe.withDefault Regex.never
-
-
-toIso8601 : String -> Time.Posix
-toIso8601 string =
-    case Iso8601.toTime string of
-        Ok parsed ->
-            parsed
-
-        Err error ->
-            Debug.todo (Debug.toString error)

@@ -1,6 +1,6 @@
-module FormatTests exposing (..)
+module FormatTests exposing (suite)
 
-import Expect exposing (Expectation)
+import Expect
 import Format
 import Test exposing (..)
 

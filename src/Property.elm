@@ -1,4 +1,4 @@
-module Property exposing (..)
+module Property exposing (Pair, Parameter(..), PropertyValue(..), ValueData(..), encodeProperty)
 
 import Format
 import Rfc3339

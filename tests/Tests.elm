@@ -1,6 +1,6 @@
-module Tests exposing (..)
+module Tests exposing (suite)
 
-import Expect exposing (Expectation)
+import Expect
 import Iso8601
 import Rfc3339
 import Test exposing (..)

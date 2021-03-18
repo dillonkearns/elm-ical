@@ -1,7 +1,6 @@
-module Ical exposing (generate)
+module Ical exposing (Config, Event, Recipient, generate)
 
 import Property exposing (Parameter(..), ValueData(..))
-import Rfc3339
 import Time
 
 
@@ -33,16 +32,6 @@ eventGenerate config details =
         ++ formatKeysNew (keysNew config details)
         ++ """
 END:VEVENT"""
-
-
-keys : Config -> Event -> List ( String, String )
-keys config details =
-    [ ( "UID", details.id ++ "@" ++ config.domain )
-    , ( "DTSTAMP", details.stamp |> Rfc3339.format ) -- https://www.kanzaki.com/docs/ical/dtstamp.html
-    , ( "DTSTART", details.start |> Rfc3339.format )
-    , ( "DTEND", details.end |> Rfc3339.format )
-    , ( "SUMMARY", details.summary )
-    ]
 
 
 keysNew : Config -> Event -> List ( String, ValueData, List Parameter )
