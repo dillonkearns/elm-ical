@@ -1,17 +1,17 @@
-module Property exposing (Pair, Parameter(..), PropertyValue(..), ValueData(..), encodeProperty)
+module Property exposing (Parameter(..), ValueData(..), encodeProperty)
 
 import Format
 import Rfc3339
 import Time
 
 
-type alias Pair =
-    ( String, ValueData )
 
-
-type PropertyValue
-    = SinglePart ValueData
-    | MultiPart ( Pair, List Pair )
+--type alias Pair =
+--    ( String, ValueData )
+--{-| https://tools.ietf.org/html/rfc5545#section-3.1.2 -}
+--type PropertyValue
+--    = SinglePart ValueData
+--    | MultiPart ( Pair, List Pair )
 
 
 {-| <https://tools.ietf.org/html/rfc5545#section-3.2.20>
@@ -31,6 +31,7 @@ type Parameter
 encodeProperty : ( String, ValueData, List Parameter ) -> String
 encodeProperty ( key, value, parameters ) =
     let
+        separator : String
         separator =
             if List.isEmpty parameters then
                 ":"
@@ -55,6 +56,7 @@ encodeProperty ( key, value, parameters ) =
 encodeValue : ValueData -> List Parameter -> String
 encodeValue data parameters =
     let
+        paramPrefix : String
         paramPrefix =
             case parameters of
                 [] ->
@@ -81,6 +83,7 @@ encodeValue data parameters =
            )
 
 
+encodeParameter : Parameter -> String
 encodeParameter (Parameter ( key, value )) =
     key
         ++ "="
@@ -94,6 +97,7 @@ quoted string =
     --   character separators MUST be specified as quoted-string text values.
     -- (https://tools.ietf.org/html/rfc5545#section-3.2)
     let
+        needsQuotes : Bool
         needsQuotes =
             (string |> String.contains ":") || (string |> String.contains ";") || (string |> String.contains ",")
     in

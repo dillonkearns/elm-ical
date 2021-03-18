@@ -30,6 +30,7 @@ splitOverflowingLines string =
         |> String.join "\n "
 
 
+reg : String -> Regex.Regex
 reg string =
     Regex.fromString string
         |> Maybe.withDefault Regex.never
