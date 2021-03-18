@@ -15,6 +15,8 @@ suite =
                 [ { id = "1"
                   , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                   , start = toIso8601 "2013-10-04T22:39:30.000Z"
+                  , created = Nothing
+                  , lastModified = Nothing
                   , end = toIso8601 "2013-10-06T23:15:00.000Z"
                   , summary = "repeating by month"
                   , description = Just "repeating by month"
@@ -23,6 +25,8 @@ suite =
                 , { id = "2"
                   , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                   , start = toIso8601 "2013-10-04T22:39:30.000Z"
+                  , created = Nothing
+                  , lastModified = Nothing
                   , end = toIso8601 "2013-10-06T23:15:00.000Z"
                   , summary = "This is the title, it escapes commas"
                   , description = Just "This is the description, it escapes commas"
@@ -57,6 +61,39 @@ DTSTART:20131004T223930Z
 DTEND:20131006T231500Z
 SUMMARY:This is the title\\, it escapes commas
 DESCRIPTION:This is the description\\, it escapes commas
+END:VEVENT
+END:VCALENDAR"""
+        , test "example feed 2" <|
+            \() ->
+                [ { id = "123"
+                  , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
+                  , start = toIso8601 "2013-10-04T22:39:30.000Z"
+                  , end = toIso8601 "2013-10-04T23:15:00.000Z"
+                  , created = toIso8601 "2013-10-04T23:34:53.000Z" |> Just
+                  , lastModified = toIso8601 "2013-10-04T23:34:53.000Z" |> Just
+                  , summary = "Simple Event"
+                  , description = Nothing
+                  , organizer = Nothing
+                  }
+                ]
+                    |> Ical.generate
+                        { id = "//sebbo.net//ical-generator.tests//EN"
+                        , domain = "sebbo.net"
+                        , name = Nothing
+                        , description = Nothing
+                        , url = Nothing
+                        }
+                    |> expectEqualLines """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//sebbo.net//ical-generator.tests//EN
+BEGIN:VEVENT
+UID:123@sebbo.net
+DTSTAMP:20131004T233453Z
+DTSTART:20131004T223930Z
+DTEND:20131004T231500Z
+SUMMARY:Simple Event
+CREATED:20131004T233453Z
+LAST-MODIFIED:20131004T233453Z
 END:VEVENT
 END:VCALENDAR"""
         ]

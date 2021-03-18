@@ -9,6 +9,8 @@ type alias Event =
     { stamp : Time.Posix
     , start : Time.Posix
     , end : Time.Posix
+    , created : Maybe Time.Posix
+    , lastModified : Maybe Time.Posix
     , summary : String
     , description : Maybe String
     , id : String
@@ -51,6 +53,11 @@ keysNew config details =
     , ( "DTEND", details.end |> DateTime, [] )
     , ( "SUMMARY", details.summary |> Text, [] )
     ]
+        ++ ([ details.created |> Maybe.map (\created -> ( "CREATED", created |> DateTime, [] ))
+            , details.lastModified |> Maybe.map (\lastModified -> ( "LAST-MODIFIED", lastModified |> DateTime, [] ))
+            ]
+                |> List.filterMap identity
+           )
         ++ ([ details.organizer
                 |> Maybe.map
                     (\organizer ->
@@ -95,7 +102,7 @@ END:VCALENDAR"""
 calendarProperties : Config -> String
 calendarProperties config =
     [ ( "VERSION", "2.0" |> Text, [] )
-    , ( "PRODID", "-//incrementalelm.com//elm-ical.tests//EN" |> Text, [] )
+    , ( "PRODID", "-" ++ config.id |> Text, [] )
     ]
         ++ ([ config.name |> Maybe.map (\name -> ( "NAME", Text name, [] ))
             , config.description |> Maybe.map (\description -> ( "DESCRIPTION", Text description, [] ))
