@@ -1,5 +1,6 @@
-module Rfc3339 exposing (format)
+module Rfc3339 exposing (format, formatDateISO8601_2004)
 
+import Date exposing (Date)
 import DateFormat
 import Time exposing (Posix)
 
@@ -18,3 +19,10 @@ format posix =
         ]
         Time.utc
         posix
+
+
+{-| <https://tools.ietf.org/html/rfc5545#section-3.3.4>
+-}
+formatDateISO8601_2004 : Date -> String
+formatDateISO8601_2004 date =
+    date |> Date.format "yyyyMMdd"

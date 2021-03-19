@@ -13,6 +13,7 @@
         "elm/regex": "1.0.0 <= v < 2.0.0",
         "elm/time": "1.0.0 <= v < 2.0.0",
         "elm-community/list-extra": "8.2.3 <= v < 9.0.0",
+        "justinmimbs/date": "3.2.1 <= v < 4.0.0",
         "rtfeldman/elm-iso8601-date-strings": "1.1.3 <= v < 2.0.0",
         "ryannhg/date-format": "2.3.0 <= v < 3.0.0"
     },
