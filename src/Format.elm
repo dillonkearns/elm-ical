@@ -17,7 +17,7 @@ normalizeField ( key, value ) =
 formatValue : String -> String
 formatValue value =
     value
-        |> Regex.replace (reg "[\\\\;,\"]") (\{ match } -> "\\" ++ match)
+        |> Regex.replace (reg "[\\\\;,]") (\{ match } -> "\\" ++ match)
         |> Regex.replace (reg "(?:\u{000D}\n|\u{000D}|\n)") (\_ -> "\\n")
 
 
@@ -27,7 +27,7 @@ splitOverflowingLines string =
         |> String.toList
         |> List.Extra.greedyGroupsOf 74
         |> List.map String.fromList
-        |> String.join "\n "
+        |> String.join "\u{000D}\n "
 
 
 reg : String -> Regex.Regex

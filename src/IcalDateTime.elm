@@ -1,10 +1,12 @@
-module Rfc3339 exposing (format, formatDateISO8601_2004)
+module IcalDateTime exposing (format, formatDate)
 
 import Date exposing (Date)
 import DateFormat
 import Time exposing (Posix)
 
 
+{-| Format a Posix time as an iCal DATE-TIME value (e.g. "20210318T162044Z").
+-}
 format : Posix -> String
 format posix =
     DateFormat.format
@@ -21,8 +23,11 @@ format posix =
         posix
 
 
-{-| <https://tools.ietf.org/html/rfc5545#section-3.3.4>
+{-| Format a Date as an iCal DATE value (e.g. "20210318").
+
+<https://tools.ietf.org/html/rfc5545#section-3.3.4>
+
 -}
-formatDateISO8601_2004 : Date -> String
-formatDateISO8601_2004 date =
+formatDate : Date -> String
+formatDate date =
     date |> Date.format "yyyyMMdd"

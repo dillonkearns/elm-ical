@@ -1,3 +1,5 @@
 node_modules/
 elm-stuff/
+test/generate-fixtures.js
+test/fixtures.json
 

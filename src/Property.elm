@@ -2,26 +2,17 @@ module Property exposing (Parameter(..), ValueData(..), encodeProperty)
 
 import Date exposing (Date)
 import Format
-import Rfc3339
+import IcalDateTime
 import Time
-
-
-
---type alias Pair =
---    ( String, ValueData )
---{-| https://tools.ietf.org/html/rfc5545#section-3.1.2 -}
---type PropertyValue
---    = SinglePart ValueData
---    | MultiPart ( Pair, List Pair )
 
 
 {-| <https://tools.ietf.org/html/rfc5545#section-3.2.20>
 -}
 type ValueData
     = Text String
-    | CalAddress String -- https://tools.ietf.org/html/rfc5545#section-3.3.3
-    | DateTime Time.Posix -- https://tools.ietf.org/html/rfc5545#section-3.3.5
-    | DateValue Date -- https://tools.ietf.org/html/rfc5545#section-3.3.4
+    | CalAddress String
+    | DateTime Time.Posix
+    | DateValue Date
 
 
 {-| <https://tools.ietf.org/html/rfc5545#section-3.2>
@@ -46,15 +37,6 @@ encodeProperty ( key, value, parameters ) =
         ++ encodeValue value parameters
     )
         |> Format.splitOverflowingLines
-
-
-
---encodePair : Pair -> String
---encodePair ( key, value ) =
---    key
---        ++ "="
---        ++ --Format.formatValue
---           encodeValue value
 
 
 encodeValue : ValueData -> List Parameter -> String
@@ -83,10 +65,10 @@ encodeValue data parameters =
                         ++ Format.formatValue address
 
                 DateTime posix ->
-                    Rfc3339.format posix
+                    IcalDateTime.format posix
 
                 DateValue date ->
-                    Rfc3339.formatDateISO8601_2004 date
+                    IcalDateTime.formatDate date
            )
 
 
@@ -99,9 +81,6 @@ encodeParameter (Parameter ( key, value )) =
 
 quoted : String -> String
 quoted string =
-    -- Property parameter values that contain the COLON, SEMICOLON, or COMMA
-    --   character separators MUST be specified as quoted-string text values.
-    -- (https://tools.ietf.org/html/rfc5545#section-3.2)
     let
         needsQuotes : Bool
         needsQuotes =

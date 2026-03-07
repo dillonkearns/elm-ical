@@ -51,6 +51,8 @@ jobs:
         run: npx --no-install elm-tooling install
       - name: Tests
         run: npm test
+      - name: Cross-reference tests
+        run: npm run test:cross-reference
       - name: elm-format
         run: npx --no-install elm-format --validate src/
       - name: Add elm-review, elm and elm-format to path

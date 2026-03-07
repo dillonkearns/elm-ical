@@ -5,6 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "elm-test",
+    "test:generate-fixtures": "node test/generate-fixtures.mjs",
+    "test:cross-reference": "npm run test:generate-fixtures && node --test test/cross-reference.test.mjs",
     "postinstall": "elm-tooling install"
   },
   "keywords": [],
@@ -15,6 +17,7 @@
     "elm-format": "^0.8.2",
     "elm-review": "^2.4.6",
     "elm-test": "^0.19.1-revision17",
-    "elm-tooling": "^1.3.0"
+    "elm-tooling": "^1.3.0",
+    "ical.js": "^2.2.1"
   }
 }

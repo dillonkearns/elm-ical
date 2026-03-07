@@ -2,7 +2,7 @@ module FeedTests exposing (suite)
 
 import Date
 import Expect exposing (Expectation)
-import Ical exposing (DateOrDateTime)
+import Ical
 import Iso8601
 import Test exposing (..)
 import Time
@@ -13,42 +13,38 @@ suite =
     describe "ical event"
         [ test "example feed" <|
             \() ->
-                [ { id = "1"
-                  , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
-                  , start = toIso8601D "2013-10-04T22:39:30.000Z"
-                  , created = Nothing
-                  , lastModified = Nothing
-                  , end = toIso8601D "2013-10-06T23:15:00.000Z"
-                  , summary = "repeating by month"
-                  , description = Just "repeating by month"
-                  , organizer = Nothing
-                  , location = Nothing
-                  , htmlDescription = Nothing
-                  , transparency = Nothing
-                  , status = Nothing
-                  }
-                , { id = "2"
-                  , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
-                  , start = toIso8601D "2013-10-04T22:39:30.000Z"
-                  , created = Nothing
-                  , lastModified = Nothing
-                  , end = toIso8601D "2013-10-06T23:15:00.000Z"
-                  , summary = "This is the title, it escapes commas"
-                  , description = Just "This is the description, it escapes commas"
-                  , organizer = Nothing
-                  , location = Nothing
-                  , htmlDescription = Nothing
-                  , transparency = Nothing
-                  , status = Nothing
-                  }
+                [ Ical.event
+                    { id = "1"
+                    , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
+                    , time =
+                        Ical.WithTime
+                            { start = toIso8601 "2013-10-04T22:39:30.000Z"
+                            , end = toIso8601 "2013-10-06T23:15:00.000Z"
+                            }
+                    , summary = "repeating by month"
+                    }
+                    |> Ical.withDescription "repeating by month"
+                , Ical.event
+                    { id = "2"
+                    , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
+                    , time =
+                        Ical.WithTime
+                            { start = toIso8601 "2013-10-04T22:39:30.000Z"
+                            , end = toIso8601 "2013-10-06T23:15:00.000Z"
+                            }
+                    , summary = "This is the title, it escapes commas"
+                    }
+                    |> Ical.withDescription "This is the description, it escapes commas"
                 ]
                     |> Ical.generate
-                        { id = "//incrementalelm.com//elm-ical.tests//EN"
-                        , domain = "incrementalelm.com"
-                        , name = Just "Incremental Elm Live"
-                        , description = Just "Pairing on Elm Open Source and learning from the community."
-                        , url = Just "https://incrementalelm.com/live.ics"
-                        }
+                        (Ical.config
+                            { id = "//incrementalelm.com//elm-ical.tests//EN"
+                            , domain = "incrementalelm.com"
+                            }
+                            |> Ical.withName "Incremental Elm Live"
+                            |> Ical.withCalendarDescription "Pairing on Elm Open Source and learning from the community."
+                            |> Ical.withUrl "https://incrementalelm.com/live.ics"
+                        )
                     |> expectEqualLines """BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//incrementalelm.com//elm-ical.tests//EN
@@ -74,28 +70,25 @@ END:VEVENT
 END:VCALENDAR"""
         , test "example feed 2" <|
             \() ->
-                [ { id = "123"
-                  , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
-                  , start = toIso8601D "2013-10-04T22:39:30.000Z"
-                  , end = toIso8601D "2013-10-04T23:15:00.000Z"
-                  , created = toIso8601 "2013-10-04T23:34:53.000Z" |> Just
-                  , lastModified = toIso8601 "2013-10-04T23:34:53.000Z" |> Just
-                  , summary = "Simple Event"
-                  , description = Nothing
-                  , organizer = Nothing
-                  , location = Nothing
-                  , htmlDescription = Nothing
-                  , transparency = Nothing
-                  , status = Nothing
-                  }
+                [ Ical.event
+                    { id = "123"
+                    , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
+                    , time =
+                        Ical.WithTime
+                            { start = toIso8601 "2013-10-04T22:39:30.000Z"
+                            , end = toIso8601 "2013-10-04T23:15:00.000Z"
+                            }
+                    , summary = "Simple Event"
+                    }
+                    |> Ical.withCreated (toIso8601 "2013-10-04T23:34:53.000Z")
+                    |> Ical.withLastModified (toIso8601 "2013-10-04T23:34:53.000Z")
                 ]
                     |> Ical.generate
-                        { id = "//sebbo.net//ical-generator.tests//EN"
-                        , domain = "sebbo.net"
-                        , name = Nothing
-                        , description = Nothing
-                        , url = Nothing
-                        }
+                        (Ical.config
+                            { id = "//sebbo.net//ical-generator.tests//EN"
+                            , domain = "sebbo.net"
+                            }
+                        )
                     |> expectEqualLines """BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//sebbo.net//ical-generator.tests//EN
@@ -112,28 +105,26 @@ END:VCALENDAR"""
         , test "generate_02" <|
             -- source: https://github.com/sebbo2002/ical-generator/blob/634389543bb057b8767bff6edb562affe16809f0/test/cases.ts#L31
             \() ->
-                [ { id = "123"
-                  , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
-                  , start = toIso8601D "2013-10-04T22:39:30.000Z"
-                  , end = toIso8601D "2013-10-04T23:15:00.000Z"
-                  , created = Nothing
-                  , lastModified = Nothing
-                  , summary = "Sample Event"
-                  , description = Just "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua.\nbeep boop"
-                  , organizer = Nothing
-                  , location = Just "localhost"
-                  , htmlDescription = Just "<p>Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua.\nbeep boop</p>"
-                  , transparency = Nothing
-                  , status = Nothing
-                  }
+                [ Ical.event
+                    { id = "123"
+                    , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
+                    , time =
+                        Ical.WithTime
+                            { start = toIso8601 "2013-10-04T22:39:30.000Z"
+                            , end = toIso8601 "2013-10-04T23:15:00.000Z"
+                            }
+                    , summary = "Sample Event"
+                    }
+                    |> Ical.withDescription "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua.\nbeep boop"
+                    |> Ical.withLocation "localhost"
+                    |> Ical.withHtmlDescription "<p>Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua.\nbeep boop</p>"
                 ]
                     |> Ical.generate
-                        { id = "//sebbo.net//ical-generator.tests//EN"
-                        , domain = "sebbo.net"
-                        , name = Nothing
-                        , description = Nothing
-                        , url = Nothing
-                        }
+                        (Ical.config
+                            { id = "//sebbo.net//ical-generator.tests//EN"
+                            , domain = "sebbo.net"
+                            }
+                        )
                     |> expectEqualLines """BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//sebbo.net//ical-generator.tests//EN
@@ -152,33 +143,30 @@ X-ALT-DESC;FMTTYPE=text/html:<p>Lorem ipsum dolor sit amet\\, consetetur sa
  e magna aliquyam erat\\, sed diam voluptua.\\nbeep boop</p>
 END:VEVENT
 END:VCALENDAR"""
-        , test "example 1" <|
-            -- source: https://github.com/sebbo2002/ical-generator/blob/634389543bb057b8767bff6edb562affe16809f0/test/cases.ts#L31
+        , test "all-day event" <|
             \() ->
-                { id = "4ot852po37bvri1natdlv4cf6r"
-                , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
-                , start =
-                    Ical.Date <|
-                        Date.fromCalendarDate 2021 Time.Mar 18
-                , end =
-                    Ical.Date <| Date.fromCalendarDate 2021 Time.Mar 19
-                , created = toIso8601 "2021-03-18T14:59:37.000Z" |> Just
-                , lastModified = toIso8601 "2021-03-18T14:59:37.000Z" |> Just
-                , summary = "All day event"
-                , description = Just ""
-                , organizer = Nothing
-                , location = Just ""
-                , htmlDescription = Nothing
-                , transparency = Just Ical.Transparent
-                , status = Just Ical.Confirmed
-                }
-                    |> Ical.eventGenerate
-                        { id = "//sebbo.net//ical-generator.tests//EN"
-                        , domain = "incrementalelm.com"
-                        , name = Nothing
-                        , description = Nothing
-                        , url = Nothing
-                        }
+                Ical.event
+                    { id = "4ot852po37bvri1natdlv4cf6r"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.AllDay
+                            { start = Date.fromCalendarDate 2021 Time.Mar 18
+                            , end = Date.fromCalendarDate 2021 Time.Mar 18
+                            }
+                    , summary = "All day event"
+                    }
+                    |> Ical.withCreated (toIso8601 "2021-03-18T14:59:37.000Z")
+                    |> Ical.withLastModified (toIso8601 "2021-03-18T14:59:37.000Z")
+                    |> Ical.withLocation ""
+                    |> Ical.withDescription ""
+                    |> Ical.withTransparency Ical.Transparent
+                    |> Ical.withStatus Ical.Confirmed
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//sebbo.net//ical-generator.tests//EN"
+                            , domain = "incrementalelm.com"
+                            }
+                        )
                     |> expectEqualLines """BEGIN:VEVENT
 DTSTART;VALUE=DATE:20210318
 DTEND;VALUE=DATE:20210319
@@ -192,12 +180,79 @@ DESCRIPTION:
 STATUS:CONFIRMED
 TRANSP:TRANSPARENT
 END:VEVENT"""
+        , test "output uses CRLF line endings" <|
+            \() ->
+                [ Ical.event
+                    { id = "1"
+                    , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
+                    , time =
+                        Ical.WithTime
+                            { start = toIso8601 "2013-10-04T22:39:30.000Z"
+                            , end = toIso8601 "2013-10-06T23:15:00.000Z"
+                            }
+                    , summary = "test"
+                    }
+                ]
+                    |> Ical.generate
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> String.contains "\u{000D}\n"
+                    |> Expect.equal True
+        , test "double quotes are not escaped in text" <|
+            \() ->
+                [ Ical.event
+                    { id = "1"
+                    , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
+                    , time =
+                        Ical.WithTime
+                            { start = toIso8601 "2013-10-04T22:39:30.000Z"
+                            , end = toIso8601 "2013-10-06T23:15:00.000Z"
+                            }
+                    , summary = "She said \"hello\""
+                    }
+                ]
+                    |> Ical.generate
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> String.contains "She said \"hello\""
+                    |> Expect.equal True
+        , test "multi-day all-day event uses inclusive end date" <|
+            \() ->
+                Ical.event
+                    { id = "multi-day"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.AllDay
+                            { start = Date.fromCalendarDate 2021 Time.Mar 18
+                            , end = Date.fromCalendarDate 2021 Time.Mar 20
+                            }
+                    , summary = "3-day event"
+                    }
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART;VALUE=DATE:20210318
+DTEND;VALUE=DATE:20210321
+DTSTAMP:20210318T162044Z
+UID:multi-day@test.com
+SUMMARY:3-day event
+END:VEVENT"""
         ]
 
 
 expectEqualLines : String -> String -> Expectation
-expectEqualLines actual expected =
-    Expect.equalLists (String.lines actual) (String.lines expected)
+expectEqualLines expected actual =
+    Expect.equalLists (String.split "\n" expected) (String.split "\u{000D}\n" actual)
 
 
 toIso8601 : String -> Time.Posix
@@ -205,16 +260,6 @@ toIso8601 string =
     case Iso8601.toTime string of
         Ok parsed ->
             parsed
-
-        Err error ->
-            Debug.todo (Debug.toString error)
-
-
-toIso8601D : String -> DateOrDateTime
-toIso8601D string =
-    case Iso8601.toTime string of
-        Ok parsed ->
-            parsed |> Ical.DateWithTime
 
         Err error ->
             Debug.todo (Debug.toString error)
