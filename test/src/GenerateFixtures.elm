@@ -30,6 +30,8 @@ encodeFixtures () =
         , ( "emoji", emojiEvent )
         , ( "empty-fields", emptyFieldsEvent )
         , ( "special-email", specialEmailEvent )
+        , ( "url-with-special-chars", urlWithSpecialChars )
+        , ( "empty-calendar-fields", emptyCalendarFields )
         ]
 
 
@@ -261,6 +263,52 @@ specialEmailEvent =
                 { id = "//test//test//EN"
                 , domain = "test.com"
                 }
+            )
+
+
+urlWithSpecialChars : String
+urlWithSpecialChars =
+    [ Ical.event
+        { id = "url-test"
+        , stamp = millisToPosix 1380929693000
+        , time =
+            Ical.WithTime
+                { start = millisToPosix 1380926370000
+                , end = millisToPosix 1380928500000
+                }
+        , summary = "Event with URL"
+        }
+    ]
+        |> Ical.generate
+            (Ical.config
+                { id = "//test//test//EN"
+                , domain = "test.com"
+                }
+                |> Ical.withUrl "https://example.com/cal?a=1,2;b=3"
+            )
+
+
+emptyCalendarFields : String
+emptyCalendarFields =
+    [ Ical.event
+        { id = "empty-cal-test"
+        , stamp = millisToPosix 1380929693000
+        , time =
+            Ical.WithTime
+                { start = millisToPosix 1380926370000
+                , end = millisToPosix 1380928500000
+                }
+        , summary = "Event with empty cal fields"
+        }
+    ]
+        |> Ical.generate
+            (Ical.config
+                { id = "//test//test//EN"
+                , domain = "test.com"
+                }
+                |> Ical.withName ""
+                |> Ical.withCalendarDescription ""
+                |> Ical.withUrl ""
             )
 
 

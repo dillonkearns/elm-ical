@@ -354,9 +354,9 @@ calendarProperties c =
     [ ( "VERSION", "2.0" |> Text, [] )
     , ( "PRODID", "-" ++ c.id |> Text, [] )
     ]
-        ++ ([ c.name |> Maybe.map (\name -> ( "NAME", Text name, [] ))
-            , c.description |> Maybe.map (\description -> ( "DESCRIPTION", Text description, [] ))
-            , c.url |> Maybe.map (\url -> ( "URL", Text url, [] ))
+        ++ ([ c.name |> Maybe.andThen nonEmpty |> Maybe.map (\name -> ( "NAME", Text name, [] ))
+            , c.description |> Maybe.andThen nonEmpty |> Maybe.map (\description -> ( "DESCRIPTION", Text description, [] ))
+            , c.url |> Maybe.andThen nonEmpty |> Maybe.map (\url -> ( "URL", Property.Uri url, [] ))
             ]
                 |> List.filterMap identity
            )

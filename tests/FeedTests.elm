@@ -295,6 +295,60 @@ END:VEVENT"""
                         )
                     |> String.contains "mailto:user;tag@example.com"
                     |> Expect.equal True
+        , test "URL property is not text-escaped" <|
+            \() ->
+                [ Ical.event
+                    { id = "1"
+                    , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
+                    , time =
+                        Ical.WithTime
+                            { start = toIso8601 "2013-10-04T22:39:30.000Z"
+                            , end = toIso8601 "2013-10-06T23:15:00.000Z"
+                            }
+                    , summary = "test"
+                    }
+                ]
+                    |> Ical.generate
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                            |> Ical.withUrl "https://example.com/cal?a=1,2;b=3"
+                        )
+                    |> String.contains "URL:https://example.com/cal?a=1,2;b=3"
+                    |> Expect.equal True
+        , test "empty calendar-level fields are not emitted" <|
+            \() ->
+                let
+                    output : String
+                    output =
+                        [ Ical.event
+                            { id = "1"
+                            , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
+                            , time =
+                                Ical.WithTime
+                                    { start = toIso8601 "2013-10-04T22:39:30.000Z"
+                                    , end = toIso8601 "2013-10-06T23:15:00.000Z"
+                                    }
+                            , summary = "test"
+                            }
+                        ]
+                            |> Ical.generate
+                                (Ical.config
+                                    { id = "//test//test//EN"
+                                    , domain = "test.com"
+                                    }
+                                    |> Ical.withName ""
+                                    |> Ical.withCalendarDescription ""
+                                    |> Ical.withUrl ""
+                                )
+                in
+                Expect.all
+                    [ \o -> o |> String.contains "NAME:" |> Expect.equal False
+                    , \o -> o |> String.contains "DESCRIPTION:" |> Expect.equal False
+                    , \o -> o |> String.contains "URL:" |> Expect.equal False
+                    ]
+                    output
         , test "multi-day all-day event uses inclusive end date" <|
             \() ->
                 Ical.event

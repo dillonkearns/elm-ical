@@ -10,6 +10,7 @@ import Time
 -}
 type ValueData
     = Text String
+    | Uri String
     | CalAddress String
     | DateTime Time.Posix
     | DateValue Date
@@ -59,6 +60,9 @@ encodeValue data parameters =
         ++ (case data of
                 Text text ->
                     Format.formatValue text
+
+                Uri uri ->
+                    uri
 
                 CalAddress address ->
                     "mailto:" ++ address

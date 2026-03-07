@@ -245,6 +245,43 @@ describe("cross-reference: CalAddress not text-escaped (from Elm output)", () =>
   });
 });
 
+describe("cross-reference: URL with special chars (from Elm output)", () => {
+  it("URL property preserves commas and semicolons", () => {
+    const cal = parseCalendar(getFixture("url-with-special-chars"));
+    assert.equal(
+      cal.getFirstPropertyValue("url"),
+      "https://example.com/cal?a=1,2;b=3"
+    );
+  });
+});
+
+describe("cross-reference: empty calendar-level fields (from Elm output)", () => {
+  it("empty name, description, and url are absent", () => {
+    const cal = parseCalendar(getFixture("empty-calendar-fields"));
+    assert.equal(
+      cal.getFirstPropertyValue("name"),
+      null,
+      "empty name should not be emitted"
+    );
+    assert.equal(
+      cal.getFirstPropertyValue("description"),
+      null,
+      "empty description should not be emitted"
+    );
+    assert.equal(
+      cal.getFirstPropertyValue("url"),
+      null,
+      "empty url should not be emitted"
+    );
+  });
+
+  it("version and prodid are still present", () => {
+    const cal = parseCalendar(getFixture("empty-calendar-fields"));
+    assert.equal(cal.getFirstPropertyValue("version"), "2.0");
+    assert.ok(cal.getFirstPropertyValue("prodid"));
+  });
+});
+
 describe("cross-reference: trailing CRLF (from Elm output)", () => {
   it("all fixtures end with CRLF", () => {
     for (const fixture of fixtures) {
