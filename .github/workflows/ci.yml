@@ -54,7 +54,7 @@ jobs:
       - name: elm-format
         run: npx --no-install elm-format --validate src/
       - name: Add elm-review, elm and elm-format to path
-        run: npm bin >> $GITHUB_PATH
+        run: echo "$(npm prefix)/node_modules/.bin" >> $GITHUB_PATH
       - uses: sparksp/elm-review-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
