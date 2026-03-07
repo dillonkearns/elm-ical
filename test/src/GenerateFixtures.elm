@@ -2,6 +2,7 @@ port module GenerateFixtures exposing (main)
 
 import Date
 import Ical
+import Ical.Parse as Parse
 import Json.Encode
 import Time
 
@@ -40,7 +41,108 @@ encodeFixture ( name, ics ) =
     Json.Encode.object
         [ ( "name", Json.Encode.string name )
         , ( "ics", Json.Encode.string ics )
+        , ( "elmParsed", encodeElmParsed ics )
         ]
+
+
+encodeElmParsed : String -> Json.Encode.Value
+encodeElmParsed ics =
+    case Parse.parse ics of
+        Ok cal ->
+            Json.Encode.object
+                [ ( "ok", Json.Encode.bool True )
+                , ( "version", encodeMaybe Json.Encode.string cal.version )
+                , ( "prodId", encodeMaybe Json.Encode.string cal.prodId )
+                , ( "events", Json.Encode.list encodeEvent cal.events )
+                ]
+
+        Err err ->
+            Json.Encode.object
+                [ ( "ok", Json.Encode.bool False )
+                , ( "error", Json.Encode.string err )
+                ]
+
+
+encodeEvent : Parse.Event -> Json.Encode.Value
+encodeEvent ev =
+    Json.Encode.object
+        (List.filterMap identity
+            [ Just ( "uid", encodeMaybe Json.Encode.string ev.uid )
+            , Just ( "summary", encodeMaybe Json.Encode.string ev.summary )
+            , Just ( "description", encodeMaybe Json.Encode.string ev.description )
+            , Just ( "location", encodeMaybe Json.Encode.string ev.location )
+            , Just ( "status", encodeMaybe Json.Encode.string ev.status )
+            , Just ( "transp", encodeMaybe Json.Encode.string ev.transp )
+            , ev.organizer
+                |> Maybe.map
+                    (\org ->
+                        ( "organizer"
+                        , Json.Encode.object
+                            [ ( "calAddress", Json.Encode.string org.calAddress )
+                            , ( "commonName", encodeMaybe Json.Encode.string org.commonName )
+                            ]
+                        )
+                    )
+            , ev.dtstart |> Maybe.map (\dt -> ( "dtstart", encodeDateTimeValue dt ))
+            , ev.dtend |> Maybe.map (\dt -> ( "dtend", encodeDateTimeValue dt ))
+            ]
+        )
+
+
+encodeDateTimeValue : Parse.DateTimeValue -> Json.Encode.Value
+encodeDateTimeValue dtv =
+    case dtv of
+        Parse.DateOnly { year, month, day } ->
+            Json.Encode.object
+                [ ( "type", Json.Encode.string "date" )
+                , ( "year", Json.Encode.int year )
+                , ( "month", Json.Encode.int month )
+                , ( "day", Json.Encode.int day )
+                ]
+
+        Parse.DateTimeUtc { year, month, day, hour, minute, second } ->
+            Json.Encode.object
+                [ ( "type", Json.Encode.string "datetime-utc" )
+                , ( "year", Json.Encode.int year )
+                , ( "month", Json.Encode.int month )
+                , ( "day", Json.Encode.int day )
+                , ( "hour", Json.Encode.int hour )
+                , ( "minute", Json.Encode.int minute )
+                , ( "second", Json.Encode.int second )
+                ]
+
+        Parse.DateTimeLocal { year, month, day, hour, minute, second } ->
+            Json.Encode.object
+                [ ( "type", Json.Encode.string "datetime-local" )
+                , ( "year", Json.Encode.int year )
+                , ( "month", Json.Encode.int month )
+                , ( "day", Json.Encode.int day )
+                , ( "hour", Json.Encode.int hour )
+                , ( "minute", Json.Encode.int minute )
+                , ( "second", Json.Encode.int second )
+                ]
+
+        Parse.DateTimeWithTzid { year, month, day, hour, minute, second, tzid } ->
+            Json.Encode.object
+                [ ( "type", Json.Encode.string "datetime-tzid" )
+                , ( "year", Json.Encode.int year )
+                , ( "month", Json.Encode.int month )
+                , ( "day", Json.Encode.int day )
+                , ( "hour", Json.Encode.int hour )
+                , ( "minute", Json.Encode.int minute )
+                , ( "second", Json.Encode.int second )
+                , ( "tzid", Json.Encode.string tzid )
+                ]
+
+
+encodeMaybe : (a -> Json.Encode.Value) -> Maybe a -> Json.Encode.Value
+encodeMaybe encoder maybe =
+    case maybe of
+        Just val ->
+            encoder val
+
+        Nothing ->
+            Json.Encode.null
 
 
 basicFeed : String

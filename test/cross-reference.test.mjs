@@ -292,3 +292,146 @@ describe("cross-reference: trailing CRLF (from Elm output)", () => {
     }
   });
 });
+
+// --- Parsing cross-reference: Elm parser vs ical.js ---
+
+describe("cross-reference: Elm parser round-trip", () => {
+  it("all fixtures parse successfully in Elm", () => {
+    for (const fixture of fixtures) {
+      assert.ok(
+        fixture.elmParsed.ok,
+        `Fixture "${fixture.name}" should parse in Elm: ${fixture.elmParsed.error || ""}`
+      );
+    }
+  });
+});
+
+describe("cross-reference: Elm parser matches ical.js on basic-feed", () => {
+  let fixture;
+
+  before(() => {
+    fixture = fixtures.find((f) => f.name === "basic-feed");
+  });
+
+  it("Elm parser gets same summary as ical.js for event 1", () => {
+    const cal = parseCalendar(fixture.ics);
+    const icalJsEvent = getEvent(cal, 0);
+    const elmEvent = fixture.elmParsed.events[0];
+    assert.equal(elmEvent.summary, icalJsEvent.getFirstPropertyValue("summary"));
+  });
+
+  it("Elm parser gets same description as ical.js for event 1", () => {
+    const cal = parseCalendar(fixture.ics);
+    const icalJsEvent = getEvent(cal, 0);
+    const elmEvent = fixture.elmParsed.events[0];
+    assert.equal(elmEvent.description, icalJsEvent.getFirstPropertyValue("description"));
+  });
+
+  it("Elm parser gets same summary as ical.js for event 2 (with commas)", () => {
+    const cal = parseCalendar(fixture.ics);
+    const icalJsEvent = getEvent(cal, 1);
+    const elmEvent = fixture.elmParsed.events[1];
+    assert.equal(elmEvent.summary, icalJsEvent.getFirstPropertyValue("summary"));
+  });
+
+  it("Elm parser gets same event count as ical.js", () => {
+    const cal = parseCalendar(fixture.ics);
+    const icalJsEvents = cal.getAllSubcomponents("vevent");
+    assert.equal(fixture.elmParsed.events.length, icalJsEvents.length);
+  });
+});
+
+describe("cross-reference: Elm parser matches ical.js on long-description", () => {
+  let fixture;
+
+  before(() => {
+    fixture = fixtures.find((f) => f.name === "long-description");
+  });
+
+  it("description matches after unfold + unescape", () => {
+    const cal = parseCalendar(fixture.ics);
+    const icalJsEvent = getEvent(cal, 0);
+    const elmEvent = fixture.elmParsed.events[0];
+    assert.equal(elmEvent.description, icalJsEvent.getFirstPropertyValue("description"));
+  });
+
+  it("location matches", () => {
+    const cal = parseCalendar(fixture.ics);
+    const icalJsEvent = getEvent(cal, 0);
+    const elmEvent = fixture.elmParsed.events[0];
+    assert.equal(elmEvent.location, icalJsEvent.getFirstPropertyValue("location"));
+  });
+});
+
+describe("cross-reference: Elm parser matches ical.js on all-day-event", () => {
+  let fixture;
+
+  before(() => {
+    fixture = fixtures.find((f) => f.name === "all-day-event");
+  });
+
+  it("dtstart is date-only with correct values", () => {
+    const cal = parseCalendar(fixture.ics);
+    const icalJsEvent = getEvent(cal, 0);
+    const dtstart = icalJsEvent.getFirstProperty("dtstart").getFirstValue();
+    const elmDtstart = fixture.elmParsed.events[0].dtstart;
+    assert.equal(elmDtstart.type, "date");
+    assert.equal(elmDtstart.year, dtstart.year);
+    assert.equal(elmDtstart.month, dtstart.month);
+    assert.equal(elmDtstart.day, dtstart.day);
+  });
+
+  it("status matches", () => {
+    const cal = parseCalendar(fixture.ics);
+    const icalJsEvent = getEvent(cal, 0);
+    const elmEvent = fixture.elmParsed.events[0];
+    assert.equal(elmEvent.status, icalJsEvent.getFirstPropertyValue("status"));
+  });
+
+  it("transp matches", () => {
+    const cal = parseCalendar(fixture.ics);
+    const icalJsEvent = getEvent(cal, 0);
+    const elmEvent = fixture.elmParsed.events[0];
+    assert.equal(elmEvent.transp, icalJsEvent.getFirstPropertyValue("transp"));
+  });
+});
+
+describe("cross-reference: Elm parser matches ical.js on organizer", () => {
+  it("organizer calAddress matches", () => {
+    const fixture = fixtures.find((f) => f.name === "organizer");
+    const cal = parseCalendar(fixture.ics);
+    const icalJsEvent = getEvent(cal, 0);
+    const icalJsOrg = icalJsEvent.getFirstProperty("organizer");
+    const elmEvent = fixture.elmParsed.events[0];
+    assert.equal(elmEvent.organizer.calAddress, icalJsOrg.getFirstValue());
+  });
+
+  it("organizer CN matches", () => {
+    const fixture = fixtures.find((f) => f.name === "organizer");
+    const cal = parseCalendar(fixture.ics);
+    const icalJsEvent = getEvent(cal, 0);
+    const icalJsOrg = icalJsEvent.getFirstProperty("organizer");
+    const elmEvent = fixture.elmParsed.events[0];
+    assert.equal(elmEvent.organizer.commonName, icalJsOrg.getParameter("cn"));
+  });
+});
+
+describe("cross-reference: Elm parser matches ical.js on double-quotes", () => {
+  it("summary with double quotes matches", () => {
+    const fixture = fixtures.find((f) => f.name === "double-quotes");
+    const cal = parseCalendar(fixture.ics);
+    const icalJsEvent = getEvent(cal, 0);
+    const elmEvent = fixture.elmParsed.events[0];
+    assert.equal(elmEvent.summary, icalJsEvent.getFirstPropertyValue("summary"));
+  });
+});
+
+describe("cross-reference: Elm parser matches ical.js on emoji", () => {
+  it("summary with emojis matches", () => {
+    const fixture = fixtures.find((f) => f.name === "emoji");
+    const cal = parseCalendar(fixture.ics);
+    const icalJsEvent = getEvent(cal, 0);
+    const elmEvent = fixture.elmParsed.events[0];
+    assert.equal(elmEvent.summary, icalJsEvent.getFirstPropertyValue("summary"));
+  });
+});
