@@ -216,6 +216,43 @@ componentTests =
                 Parser.parse input
                     |> Result.map (.events >> List.length)
                     |> Expect.equal (Ok 2)
+        , test "VALARM nested inside VEVENT is skipped" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Event with alarm"
+                            , "UID:alarm-test"
+                            , "BEGIN:VALARM"
+                            , "TRIGGER:-PT15M"
+                            , "ACTION:DISPLAY"
+                            , "DESCRIPTION:Reminder"
+                            , "END:VALARM"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                Expect.all
+                                    [ \e -> e.summary |> Expect.equal (Just "Event with alarm")
+                                    , \e -> e.uid |> Expect.equal (Just "alarm-test")
+                                    ]
+                                    ev
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail ("Parse failed: " ++ err)
         , test "mismatched BEGIN/END gives error" <|
             \() ->
                 let

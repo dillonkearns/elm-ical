@@ -249,6 +249,14 @@ parseEvent lines ev =
             else if line.name == "END" then
                 Err ("Mismatched END: expected VEVENT, got " ++ line.value)
 
+            else if line.name == "BEGIN" then
+                case skipComponent (String.toUpper line.value) rest of
+                    Ok remaining ->
+                        parseEvent remaining ev
+
+                    Err err ->
+                        Err err
+
             else
                 parseEvent rest (applyEventProperty line ev)
 
