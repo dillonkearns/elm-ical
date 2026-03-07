@@ -3,6 +3,7 @@ module FormatTests exposing (suite)
 import Expect
 import Format
 import Fuzz
+import Property
 import Test exposing (..)
 
 
@@ -11,9 +12,18 @@ suite =
     describe "Format"
         [ test "escapes and folds long description" <|
             \() ->
-                ( "DESCRIPTION", "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua.\nbeep boop" )
-                    |> Format.normalizeField
-                    |> Expect.equal "DESCRIPTION:Lorem ipsum dolor sit amet\\, consetetur sadipscing elitr\\, sed\u{000D}\n  diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam era\u{000D}\n t\\, sed diam voluptua.\\nbeep boop"
+                ( "DESCRIPTION"
+                , Property.Text "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua.\nbeep boop"
+                , []
+                )
+                    |> Property.encodeProperty
+                    |> Expect.equal
+                        (String.join "\u{000D}\n"
+                            [ "DESCRIPTION:Lorem ipsum dolor sit amet\\, consetetur sadipscing elitr\\, sed "
+                            , " diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat"
+                            , " \\, sed diam voluptua.\\nbeep boop"
+                            ]
+                        )
         , test "double quotes are not escaped" <|
             \() ->
                 Format.formatValue "She said \"hello\""
@@ -38,26 +48,24 @@ suite =
             \() ->
                 Format.formatValue "line1\u{000D}\nline2"
                     |> Expect.equal "line1\\nline2"
-        , test "string at 74-char limit does not fold" <|
+        , test "ASCII string at 75-byte limit does not fold" <|
             \() ->
                 let
-                    value : String
-                    value =
-                        String.repeat 70 "x"
+                    input : String
+                    input =
+                        String.repeat 75 "x"
                 in
-                ( "KEY", value )
-                    |> Format.normalizeField
+                Format.splitOverflowingLines input
                     |> String.contains "\u{000D}\n "
                     |> Expect.equal False
-        , test "string one char over 74-char limit folds" <|
+        , test "ASCII string one byte over 75-byte limit folds" <|
             \() ->
                 let
-                    value : String
-                    value =
-                        String.repeat 71 "x"
+                    input : String
+                    input =
+                        String.repeat 76 "x"
                 in
-                ( "KEY", value )
-                    |> Format.normalizeField
+                Format.splitOverflowingLines input
                     |> String.contains "\u{000D}\n "
                     |> Expect.equal True
         , test "very long single word folds correctly" <|
@@ -69,14 +77,34 @@ suite =
 
                     result : String
                     result =
-                        ( "KEY", value ) |> Format.normalizeField
+                        Format.splitOverflowingLines ("KEY:" ++ value)
 
                     lines : List String
                     lines =
                         String.split "\u{000D}\n" result
                 in
                 lines
-                    |> List.all (\line -> String.length line <= 75)
+                    |> List.all (\line -> utf8ByteLength line <= 75)
+                    |> Expect.equal True
+        , test "line folding respects byte length for multi-byte characters" <|
+            \() ->
+                let
+                    -- "X:" (2 bytes) + 70 ASCII (70 bytes) + "🎉" (4 bytes) = 76 bytes total
+                    -- Should fold before the emoji to keep line <= 75 bytes.
+                    input : String
+                    input =
+                        "X:" ++ String.repeat 70 "a" ++ "🎉"
+
+                    result : String
+                    result =
+                        Format.splitOverflowingLines input
+
+                    lines : List String
+                    lines =
+                        String.split "\u{000D}\n" result
+                in
+                lines
+                    |> List.all (\line -> utf8ByteLength line <= 75)
                     |> Expect.equal True
         , fuzz Fuzz.string "no unescaped backslashes in output" <|
             \input ->
@@ -127,3 +155,31 @@ suite =
                     |> String.contains "\n"
                     |> Expect.equal False
         ]
+
+
+utf8ByteLength : String -> Int
+utf8ByteLength str =
+    str
+        |> String.toList
+        |> List.map charByteLength
+        |> List.sum
+
+
+charByteLength : Char -> Int
+charByteLength c =
+    let
+        code : Int
+        code =
+            Char.toCode c
+    in
+    if code < 0x80 then
+        1
+
+    else if code < 0x0800 then
+        2
+
+    else if code < 0x00010000 then
+        3
+
+    else
+        4

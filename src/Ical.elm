@@ -252,7 +252,7 @@ generate ((Config c) as cfg) events =
         ++ calendarProperties c
         ++ "\u{000D}\n"
         ++ String.join "\u{000D}\n" (List.map (generateEvent cfg) events)
-        ++ "\u{000D}\nEND:VCALENDAR"
+        ++ "\u{000D}\nEND:VCALENDAR\u{000D}\n"
 
 
 {-| Generate the iCal string for a single VEVENT.
@@ -273,9 +273,9 @@ eventProperties c details =
            ]
         ++ ([ details.created |> Maybe.map (\created -> ( "CREATED", created |> Property.DateTime, [] ))
             , details.lastModified |> Maybe.map (\lastModified -> ( "LAST-MODIFIED", lastModified |> Property.DateTime, [] ))
-            , details.location |> Maybe.map (\location -> ( "LOCATION", location |> Text, [] ))
-            , details.description |> Maybe.map (\description -> ( "DESCRIPTION", Text description, [] ))
-            , details.htmlDescription |> Maybe.map (\htmlDescription -> ( "X-ALT-DESC", htmlDescription |> Text, [ Parameter ( "FMTTYPE", "text/html" ) ] ))
+            , details.location |> Maybe.andThen nonEmpty |> Maybe.map (\location -> ( "LOCATION", location |> Text, [] ))
+            , details.description |> Maybe.andThen nonEmpty |> Maybe.map (\description -> ( "DESCRIPTION", Text description, [] ))
+            , details.htmlDescription |> Maybe.andThen nonEmpty |> Maybe.map (\htmlDescription -> ( "X-ALT-DESC", htmlDescription |> Text, [ Parameter ( "FMTTYPE", "text/html" ) ] ))
             , details.status |> Maybe.map (\status -> ( "STATUS", status |> statusToString |> Text, [] ))
             , details.transparency |> Maybe.map (\transparency -> ( "TRANSP", transparency |> transparencyToString |> Text, [] ))
             , details.organizer
@@ -331,6 +331,15 @@ transparencyToString transparency =
 
         Opaque ->
             "OPAQUE"
+
+
+nonEmpty : String -> Maybe String
+nonEmpty s =
+    if String.isEmpty s then
+        Nothing
+
+    else
+        Just s
 
 
 formatProperties : List ( String, ValueData, List Parameter ) -> String

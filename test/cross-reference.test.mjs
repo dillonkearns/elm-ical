@@ -181,3 +181,77 @@ describe("cross-reference: double quotes in text (from Elm output)", () => {
     );
   });
 });
+
+describe("cross-reference: line folding respects byte length (from Elm output)", () => {
+  it("no line exceeds 75 bytes", () => {
+    const ics = getFixture("emoji");
+    // Split on CRLF to get individual lines (unfolded lines start with space)
+    const lines = ics.split("\r\n");
+    for (const line of lines) {
+      const byteLength = Buffer.byteLength(line, "utf-8");
+      assert.ok(
+        byteLength <= 75,
+        `Line is ${byteLength} bytes (max 75): "${line}"`
+      );
+    }
+  });
+
+  it("emoji round-trips through parser correctly", () => {
+    const cal = parseCalendar(getFixture("emoji"));
+    const ev = getEvent(cal);
+    const summary = ev.getFirstPropertyValue("summary");
+    assert.ok(summary.includes("🎉"), "should contain party emoji");
+    assert.ok(summary.includes("🎊"), "should contain confetti emoji");
+    assert.ok(summary.includes("🥳"), "should contain party face emoji");
+  });
+});
+
+describe("cross-reference: empty fields not emitted (from Elm output)", () => {
+  it("empty description and location are absent", () => {
+    const cal = parseCalendar(getFixture("empty-fields"));
+    const ev = getEvent(cal);
+    assert.equal(
+      ev.getFirstPropertyValue("description"),
+      null,
+      "empty description should not be emitted"
+    );
+    assert.equal(
+      ev.getFirstPropertyValue("location"),
+      null,
+      "empty location should not be emitted"
+    );
+  });
+
+  it("summary is still present", () => {
+    const cal = parseCalendar(getFixture("empty-fields"));
+    const ev = getEvent(cal);
+    assert.equal(
+      ev.getFirstPropertyValue("summary"),
+      "Event with empty fields"
+    );
+  });
+});
+
+describe("cross-reference: CalAddress not text-escaped (from Elm output)", () => {
+  it("organizer email with semicolon is preserved", () => {
+    const cal = parseCalendar(getFixture("special-email"));
+    const ev = getEvent(cal);
+    const org = ev.getFirstProperty("organizer");
+    assert.ok(org, "organizer property should exist");
+    assert.equal(
+      org.getFirstValue(),
+      "mailto:user;tag@example.com"
+    );
+  });
+});
+
+describe("cross-reference: trailing CRLF (from Elm output)", () => {
+  it("all fixtures end with CRLF", () => {
+    for (const fixture of fixtures) {
+      assert.ok(
+        fixture.ics.endsWith("\r\n"),
+        `Fixture "${fixture.name}" should end with CRLF`
+      );
+    }
+  });
+});

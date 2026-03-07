@@ -6,6 +6,7 @@ import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import vm from "node:vm";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -16,20 +17,11 @@ execSync("npx elm make src/GenerateFixtures.elm --output=generate-fixtures.js", 
   stdio: "inherit",
 });
 
-// Step 2: Load and run the compiled Elm app
+// Step 2: Load the compiled Elm app using Node's vm module
 const elmCode = readFileSync(join(__dirname, "generate-fixtures.js"), "utf-8");
-
-// Elm's compiled output assigns to `this.Elm`, which in Node strict mode
-// (ESM) is undefined. We wrap it to capture the Elm object.
-const wrappedCode = `
-  var scope = {};
-  (function() {
-    ${elmCode.replace(/\(this\)\);\s*$/, "(scope));")}
-  })();
-  scope;
-`;
-const scope = eval(wrappedCode);
-const Elm = scope.Elm;
+const context = vm.createContext({ setTimeout, clearTimeout, setInterval });
+vm.runInContext(elmCode, context);
+const Elm = context.Elm;
 
 // Step 3: Initialize the Elm app and capture port output
 const fixtures = await new Promise((resolve, reject) => {

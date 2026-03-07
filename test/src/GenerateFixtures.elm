@@ -27,6 +27,9 @@ encodeFixtures () =
         , ( "all-day-event", allDayEvent )
         , ( "organizer", organizerEvent )
         , ( "double-quotes", doubleQuotes )
+        , ( "emoji", emojiEvent )
+        , ( "empty-fields", emptyFieldsEvent )
+        , ( "special-email", specialEmailEvent )
         ]
 
 
@@ -183,6 +186,75 @@ doubleQuotes =
                 }
         , summary = "She said \"hello\""
         }
+    ]
+        |> Ical.generate
+            (Ical.config
+                { id = "//test//test//EN"
+                , domain = "test.com"
+                }
+            )
+
+
+emojiEvent : String
+emojiEvent =
+    [ Ical.event
+        { id = "emoji-test"
+        , stamp = millisToPosix 1380929693000
+        , time =
+            Ical.WithTime
+                { start = millisToPosix 1380926370000
+                , end = millisToPosix 1380928500000
+                }
+        , summary = String.repeat 60 "a" ++ "🎉🎊🥳" ++ "bbb"
+        }
+    ]
+        |> Ical.generate
+            (Ical.config
+                { id = "//test//test//EN"
+                , domain = "test.com"
+                }
+            )
+
+
+emptyFieldsEvent : String
+emptyFieldsEvent =
+    [ Ical.event
+        { id = "empty-test"
+        , stamp = millisToPosix 1380929693000
+        , time =
+            Ical.WithTime
+                { start = millisToPosix 1380926370000
+                , end = millisToPosix 1380928500000
+                }
+        , summary = "Event with empty fields"
+        }
+        |> Ical.withDescription ""
+        |> Ical.withLocation ""
+    ]
+        |> Ical.generate
+            (Ical.config
+                { id = "//test//test//EN"
+                , domain = "test.com"
+                }
+            )
+
+
+specialEmailEvent : String
+specialEmailEvent =
+    [ Ical.event
+        { id = "special-email-test"
+        , stamp = millisToPosix 1380929693000
+        , time =
+            Ical.WithTime
+                { start = millisToPosix 1380926370000
+                , end = millisToPosix 1380928500000
+                }
+        , summary = "Event with special email"
+        }
+        |> Ical.withOrganizer
+            { name = "Test User"
+            , email = "user;tag@example.com"
+            }
     ]
         |> Ical.generate
             (Ical.config

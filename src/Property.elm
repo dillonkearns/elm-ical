@@ -61,8 +61,7 @@ encodeValue data parameters =
                     Format.formatValue text
 
                 CalAddress address ->
-                    "mailto:"
-                        ++ Format.formatValue address
+                    "mailto:" ++ address
 
                 DateTime posix ->
                     IcalDateTime.format posix
