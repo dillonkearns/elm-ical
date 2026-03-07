@@ -1,13 +1,21 @@
-module Ical exposing (Config, Event, EventTransparency(..), Recipient, Status(..), eventGenerate, generate)
+module Ical exposing (Config, DateOrDateTime(..), Event, EventTransparency(..), Recipient, Status(..), eventGenerate, generate)
 
+import Date exposing (Date)
 import Property exposing (Parameter(..), ValueData(..))
 import Time
 
 
+{-| Represents either a date or a date with time.
+-}
+type DateOrDateTime
+    = Date Date
+    | DateWithTime Time.Posix
+
+
 type alias Event =
     { stamp : Time.Posix
-    , start : Property.DateOrDateTime
-    , end : Property.DateOrDateTime
+    , start : DateOrDateTime
+    , end : DateOrDateTime
     , created : Maybe Time.Posix
     , lastModified : Maybe Time.Posix
     , summary : String
@@ -80,27 +88,37 @@ eventGenerate config details =
 END:VEVENT"""
 
 
-paramForDateOrTime : Property.DateOrDateTime -> List Parameter
+dateOrDateTimeToValueData : DateOrDateTime -> ValueData
+dateOrDateTimeToValueData dateOrDateTime =
+    case dateOrDateTime of
+        Date date ->
+            Property.DateValue date
+
+        DateWithTime posix ->
+            DateTime posix
+
+
+paramForDateOrTime : DateOrDateTime -> List Parameter
 paramForDateOrTime dateOrTime =
     case dateOrTime of
-        Property.Date _ ->
+        Date _ ->
             [ Parameter ( "VALUE", "DATE" ) ]
 
-        Property.DateWithTime _ ->
+        DateWithTime _ ->
             []
 
 
 keysNew : Config -> Event -> List ( String, ValueData, List Parameter )
 keysNew config details =
     [ ( "DTSTART"
-      , details.start |> Property.DateOrTime
+      , details.start |> dateOrDateTimeToValueData
       , paramForDateOrTime details.start
       )
 
     --[ ( "DTSTART", Property.Text "20210318", [ Parameter ( "VALUE", "DATE" ) ] )
     --, ( "DTEND", Property.Text "20210319", [ Parameter ( "VALUE", "DATE" ) ] )
     , ( "DTEND"
-      , details.end |> Property.DateOrTime
+      , details.end |> dateOrDateTimeToValueData
       , paramForDateOrTime details.start
       )
     , ( "DTSTAMP", details.stamp |> Property.DateTime, [] ) -- https://www.kanzaki.com/docs/ical/dtstamp.html

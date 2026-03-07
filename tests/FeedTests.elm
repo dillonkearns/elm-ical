@@ -2,9 +2,8 @@ module FeedTests exposing (suite)
 
 import Date
 import Expect exposing (Expectation)
-import Ical
+import Ical exposing (DateOrDateTime)
 import Iso8601
-import Property exposing (DateOrDateTime)
 import Test exposing (..)
 import Time
 
@@ -159,10 +158,10 @@ END:VCALENDAR"""
                 { id = "4ot852po37bvri1natdlv4cf6r"
                 , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                 , start =
-                    Property.Date <|
+                    Ical.Date <|
                         Date.fromCalendarDate 2021 Time.Mar 18
                 , end =
-                    Property.Date <| Date.fromCalendarDate 2021 Time.Mar 19
+                    Ical.Date <| Date.fromCalendarDate 2021 Time.Mar 19
                 , created = toIso8601 "2021-03-18T14:59:37.000Z" |> Just
                 , lastModified = toIso8601 "2021-03-18T14:59:37.000Z" |> Just
                 , summary = "All day event"
@@ -215,7 +214,7 @@ toIso8601D : String -> DateOrDateTime
 toIso8601D string =
     case Iso8601.toTime string of
         Ok parsed ->
-            parsed |> Property.DateWithTime
+            parsed |> Ical.DateWithTime
 
         Err error ->
             Debug.todo (Debug.toString error)

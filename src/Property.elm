@@ -1,4 +1,4 @@
-module Property exposing (DateOrDateTime(..), Parameter(..), ValueData(..), encodeProperty)
+module Property exposing (Parameter(..), ValueData(..), encodeProperty)
 
 import Date exposing (Date)
 import Format
@@ -21,12 +21,7 @@ type ValueData
     = Text String
     | CalAddress String -- https://tools.ietf.org/html/rfc5545#section-3.3.3
     | DateTime Time.Posix -- https://tools.ietf.org/html/rfc5545#section-3.3.5
-    | DateOrTime DateOrDateTime -- https://tools.ietf.org/html/rfc5545#section-3.3.5
-
-
-type DateOrDateTime
-    = Date Date
-    | DateWithTime Time.Posix
+    | DateValue Date -- https://tools.ietf.org/html/rfc5545#section-3.3.4
 
 
 {-| <https://tools.ietf.org/html/rfc5545#section-3.2>
@@ -90,13 +85,8 @@ encodeValue data parameters =
                 DateTime posix ->
                     Rfc3339.format posix
 
-                DateOrTime dateOrDateTime ->
-                    case dateOrDateTime of
-                        DateWithTime posix ->
-                            Rfc3339.format posix
-
-                        Date date ->
-                            Rfc3339.formatDateISO8601_2004 date
+                DateValue date ->
+                    Rfc3339.formatDateISO8601_2004 date
            )
 
 
