@@ -3,8 +3,9 @@ module ParseTests exposing (suite)
 import ContentLine
 import Date
 import Expect
+import Fuzz
 import Ical
-import Ical.Parse as Parse
+import Ical.Parser as Parser
 import Iso8601
 import Test exposing (..)
 import Time
@@ -170,7 +171,7 @@ componentTests =
                     input =
                         "BEGIN:VCALENDAR\u{000D}\nVERSION:2.0\u{000D}\nPRODID:-//test//EN\u{000D}\nEND:VCALENDAR\u{000D}\n"
                 in
-                Parse.parse input
+                Parser.parse input
                     |> Result.map .version
                     |> Expect.equal (Ok (Just "2.0"))
         , test "nested VEVENT inside VCALENDAR" <|
@@ -190,7 +191,7 @@ componentTests =
                             , ""
                             ]
                 in
-                Parse.parse input
+                Parser.parse input
                     |> Result.map (.events >> List.length)
                     |> Expect.equal (Ok 1)
         , test "multiple VEVENT children" <|
@@ -212,7 +213,7 @@ componentTests =
                             , ""
                             ]
                 in
-                Parse.parse input
+                Parser.parse input
                     |> Result.map (.events >> List.length)
                     |> Expect.equal (Ok 2)
         , test "mismatched BEGIN/END gives error" <|
@@ -227,7 +228,7 @@ componentTests =
                             , ""
                             ]
                 in
-                Parse.parse input
+                Parser.parse input
                     |> Expect.err
         ]
 
@@ -261,7 +262,7 @@ endToEndTests =
                             , ""
                             ]
                 in
-                case Parse.parse input of
+                case Parser.parse input of
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
@@ -297,7 +298,7 @@ endToEndTests =
                             , ""
                             ]
                 in
-                case Parse.parse input of
+                case Parser.parse input of
                     Ok cal ->
                         cal.events
                             |> List.map .summary
@@ -323,13 +324,13 @@ endToEndTests =
                             , ""
                             ]
                 in
-                case Parse.parse input of
+                case Parser.parse input of
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
                                 ev.dtstart
                                     |> Expect.equal
-                                        (Just (Parse.DateOnly { year = 2021, month = 3, day = 18 }))
+                                        (Just (Parser.DateOnly { year = 2021, month = 3, day = 18 }))
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -353,7 +354,7 @@ endToEndTests =
                             , ""
                             ]
                 in
-                case Parse.parse input of
+                case Parser.parse input of
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
@@ -362,7 +363,6 @@ endToEndTests =
                                         (Just
                                             { calAddress = "mailto:dillon@example.com"
                                             , commonName = Just "Dillon Kearns"
-                                            , parameters = [ ( "CN", "Dillon Kearns" ) ]
                                             }
                                         )
 
@@ -390,7 +390,7 @@ endToEndTests =
                             , ""
                             ]
                 in
-                case Parse.parse input of
+                case Parser.parse input of
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
@@ -420,7 +420,7 @@ endToEndTests =
                             , ""
                             ]
                 in
-                case Parse.parse input of
+                case Parser.parse input of
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
@@ -451,22 +451,22 @@ endToEndTests =
                             , ""
                             ]
                 in
-                case Parse.parse input of
+                case Parser.parse input of
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
                                 ev.dtstart
                                     |> Expect.equal
                                         (Just
-                                            (Parse.DateTimeWithTzid
+                                            (Parser.DateTime
                                                 { year = 1997
                                                 , month = 7
                                                 , day = 14
                                                 , hour = 13
                                                 , minute = 30
                                                 , second = 0
-                                                , tzid = "America/New_York"
                                                 }
+                                                (Parser.Tzid "America/New_York")
                                             )
                                         )
 
@@ -493,7 +493,7 @@ endToEndTests =
                             , ""
                             ]
                 in
-                case Parse.parse input of
+                case Parser.parse input of
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
@@ -502,6 +502,76 @@ endToEndTests =
                                     , \e -> e.transp |> Expect.equal (Just "TRANSPARENT")
                                     ]
                                     ev
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "UTC datetime has Utc timezone" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "DTSTART:20210318T162044Z"
+                            , "SUMMARY:Test"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.dtstart
+                                    |> Expect.equal
+                                        (Just
+                                            (Parser.DateTime
+                                                { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
+                                                Parser.Utc
+                                            )
+                                        )
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "local datetime has Floating timezone" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "DTSTART:20210318T162044"
+                            , "SUMMARY:Test"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.dtstart
+                                    |> Expect.equal
+                                        (Just
+                                            (Parser.DateTime
+                                                { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
+                                                Parser.Floating
+                                            )
+                                        )
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -543,7 +613,7 @@ roundTripTests =
                                     }
                                 )
                 in
-                case Parse.parse icsString of
+                case Parser.parse icsString of
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
@@ -583,14 +653,14 @@ roundTripTests =
                                     }
                                 )
                 in
-                case Parse.parse icsString of
+                case Parser.parse icsString of
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
                                 Expect.all
                                     [ \e -> e.summary |> Expect.equal (Just "All day round-trip")
-                                    , \e -> e.dtstart |> Expect.equal (Just (Parse.DateOnly { year = 2021, month = 3, day = 18 }))
-                                    , \e -> e.dtend |> Expect.equal (Just (Parse.DateOnly { year = 2021, month = 3, day = 19 }))
+                                    , \e -> e.dtstart |> Expect.equal (Just (Parser.DateOnly { year = 2021, month = 3, day = 18 }))
+                                    , \e -> e.dtend |> Expect.equal (Just (Parser.DateOnly { year = 2021, month = 3, day = 19 }))
                                     ]
                                     ev
 
@@ -623,7 +693,7 @@ roundTripTests =
                                     }
                                 )
                 in
-                case Parse.parse icsString of
+                case Parser.parse icsString of
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
@@ -671,7 +741,7 @@ roundTripTests =
                                     }
                                 )
                 in
-                case Parse.parse icsString of
+                case Parser.parse icsString of
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
@@ -707,7 +777,7 @@ roundTripTests =
                                     |> Ical.withName "My Calendar"
                                 )
                 in
-                case Parse.parse icsString of
+                case Parser.parse icsString of
                     Ok cal ->
                         Expect.all
                             [ \c -> c.version |> Expect.equal (Just "2.0")
@@ -717,7 +787,101 @@ roundTripTests =
 
                     Err err ->
                         Expect.fail err
+        , fuzz Fuzz.string "fuzz round-trip preserves summary" <|
+            \randomSummary ->
+                let
+                    summary : String
+                    summary =
+                        if String.isEmpty randomSummary then
+                            "fallback"
+
+                        else
+                            randomSummary
+
+                    icsString : String
+                    icsString =
+                        [ Ical.event
+                            { id = "fuzz-1"
+                            , stamp = Time.millisToPosix 1616083244000
+                            , time =
+                                Ical.WithTime
+                                    { start = Time.millisToPosix 1616083244000
+                                    , end = Time.millisToPosix 1616086844000
+                                    }
+                            , summary = summary
+                            }
+                        ]
+                            |> Ical.generate
+                                (Ical.config
+                                    { id = "//test//test//EN"
+                                    , domain = "test.com"
+                                    }
+                                )
+                in
+                case Parser.parse icsString of
+                    Ok cal ->
+                        cal.events
+                            |> List.head
+                            |> Maybe.andThen .summary
+                            |> Expect.equal (Just (normalizeNewlines summary))
+
+                    Err err ->
+                        Expect.fail err
+        , fuzz Fuzz.string "fuzz round-trip preserves description" <|
+            \randomDesc ->
+                let
+                    icsString : String
+                    icsString =
+                        [ Ical.event
+                            { id = "fuzz-2"
+                            , stamp = Time.millisToPosix 1616083244000
+                            , time =
+                                Ical.WithTime
+                                    { start = Time.millisToPosix 1616083244000
+                                    , end = Time.millisToPosix 1616086844000
+                                    }
+                            , summary = "Fuzz test"
+                            }
+                            |> Ical.withDescription randomDesc
+                        ]
+                            |> Ical.generate
+                                (Ical.config
+                                    { id = "//test//test//EN"
+                                    , domain = "test.com"
+                                    }
+                                )
+
+                    normalized : String
+                    normalized =
+                        normalizeNewlines randomDesc
+
+                    expected : Maybe String
+                    expected =
+                        if String.isEmpty normalized then
+                            Nothing
+
+                        else
+                            Just normalized
+                in
+                case Parser.parse icsString of
+                    Ok cal ->
+                        cal.events
+                            |> List.head
+                            |> Maybe.andThen .description
+                            |> Expect.equal expected
+
+                    Err err ->
+                        Expect.fail err
         ]
+
+
+{-| iCal normalizes all newline variants (CRLF, CR, LF) to escaped \\n,
+so round-tripping collapses them to LF.
+-}
+normalizeNewlines : String -> String
+normalizeNewlines =
+    String.replace "\u{000D}\n" "\n"
+        >> String.replace "\u{000D}" "\n"
 
 
 toIso8601 : String -> Time.Posix

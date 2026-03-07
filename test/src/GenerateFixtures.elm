@@ -2,7 +2,7 @@ port module GenerateFixtures exposing (main)
 
 import Date
 import Ical
-import Ical.Parse as Parse
+import Ical.Parser as Parser
 import Json.Encode
 import Time
 
@@ -47,7 +47,7 @@ encodeFixture ( name, ics ) =
 
 encodeElmParsed : String -> Json.Encode.Value
 encodeElmParsed ics =
-    case Parse.parse ics of
+    case Parser.parse ics of
         Ok cal ->
             Json.Encode.object
                 [ ( "ok", Json.Encode.bool True )
@@ -63,7 +63,7 @@ encodeElmParsed ics =
                 ]
 
 
-encodeEvent : Parse.Event -> Json.Encode.Value
+encodeEvent : Parser.Event -> Json.Encode.Value
 encodeEvent ev =
     Json.Encode.object
         (List.filterMap identity
@@ -89,10 +89,10 @@ encodeEvent ev =
         )
 
 
-encodeDateTimeValue : Parse.DateTimeValue -> Json.Encode.Value
+encodeDateTimeValue : Parser.DateTimeValue -> Json.Encode.Value
 encodeDateTimeValue dtv =
     case dtv of
-        Parse.DateOnly { year, month, day } ->
+        Parser.DateOnly { year, month, day } ->
             Json.Encode.object
                 [ ( "type", Json.Encode.string "date" )
                 , ( "year", Json.Encode.int year )
@@ -100,39 +100,30 @@ encodeDateTimeValue dtv =
                 , ( "day", Json.Encode.int day )
                 ]
 
-        Parse.DateTimeUtc { year, month, day, hour, minute, second } ->
-            Json.Encode.object
-                [ ( "type", Json.Encode.string "datetime-utc" )
-                , ( "year", Json.Encode.int year )
-                , ( "month", Json.Encode.int month )
-                , ( "day", Json.Encode.int day )
-                , ( "hour", Json.Encode.int hour )
-                , ( "minute", Json.Encode.int minute )
-                , ( "second", Json.Encode.int second )
-                ]
+        Parser.DateTime { year, month, day, hour, minute, second } timezone ->
+            let
+                ( typeName, tzFields ) =
+                    case timezone of
+                        Parser.Utc ->
+                            ( "datetime-utc", [] )
 
-        Parse.DateTimeLocal { year, month, day, hour, minute, second } ->
-            Json.Encode.object
-                [ ( "type", Json.Encode.string "datetime-local" )
-                , ( "year", Json.Encode.int year )
-                , ( "month", Json.Encode.int month )
-                , ( "day", Json.Encode.int day )
-                , ( "hour", Json.Encode.int hour )
-                , ( "minute", Json.Encode.int minute )
-                , ( "second", Json.Encode.int second )
-                ]
+                        Parser.Floating ->
+                            ( "datetime-local", [] )
 
-        Parse.DateTimeWithTzid { year, month, day, hour, minute, second, tzid } ->
+                        Parser.Tzid tz ->
+                            ( "datetime-tzid", [ ( "tzid", Json.Encode.string tz ) ] )
+            in
             Json.Encode.object
-                [ ( "type", Json.Encode.string "datetime-tzid" )
-                , ( "year", Json.Encode.int year )
-                , ( "month", Json.Encode.int month )
-                , ( "day", Json.Encode.int day )
-                , ( "hour", Json.Encode.int hour )
-                , ( "minute", Json.Encode.int minute )
-                , ( "second", Json.Encode.int second )
-                , ( "tzid", Json.Encode.string tzid )
-                ]
+                ([ ( "type", Json.Encode.string typeName )
+                 , ( "year", Json.Encode.int year )
+                 , ( "month", Json.Encode.int month )
+                 , ( "day", Json.Encode.int day )
+                 , ( "hour", Json.Encode.int hour )
+                 , ( "minute", Json.Encode.int minute )
+                 , ( "second", Json.Encode.int second )
+                 ]
+                    ++ tzFields
+                )
 
 
 encodeMaybe : (a -> Json.Encode.Value) -> Maybe a -> Json.Encode.Value

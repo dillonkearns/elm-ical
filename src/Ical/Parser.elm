@@ -1,8 +1,16 @@
-module Ical.Parse exposing (parse, Calendar, Event, DateTimeValue(..), Organizer, RawProperty)
+module Ical.Parser exposing
+    ( parse
+    , Calendar, Event
+    , DateTimeValue(..), TimeZone(..)
+    , Organizer, RawProperty
+    )
 
 {-| Parse iCal (RFC 5545) calendar strings.
 
-@docs parse, Calendar, Event, DateTimeValue, Organizer, RawProperty
+@docs parse
+@docs Calendar, Event
+@docs DateTimeValue, TimeZone
+@docs Organizer, RawProperty
 
 -}
 
@@ -20,7 +28,8 @@ type alias Calendar =
     }
 
 
-{-| A parsed iCal event.
+{-| A parsed iCal event. All fields are `Maybe` since parsed input may
+not contain every property.
 -}
 type alias Event =
     { uid : Maybe String
@@ -40,24 +49,39 @@ type alias Event =
 
 
 {-| A parsed date or date-time value.
+
+  - `DateOnly` — an all-day value with just year, month, day (iCal `VALUE=DATE`)
+  - `DateTime` — a date plus time-of-day with a [`TimeZone`](#TimeZone) context
+
 -}
 type DateTimeValue
     = DateOnly { year : Int, month : Int, day : Int }
-    | DateTimeUtc { year : Int, month : Int, day : Int, hour : Int, minute : Int, second : Int }
-    | DateTimeLocal { year : Int, month : Int, day : Int, hour : Int, minute : Int, second : Int }
-    | DateTimeWithTzid { year : Int, month : Int, day : Int, hour : Int, minute : Int, second : Int, tzid : String }
+    | DateTime { year : Int, month : Int, day : Int, hour : Int, minute : Int, second : Int } TimeZone
 
 
-{-| A parsed organizer.
+{-| The timezone context of a `DateTime` value.
+
+  - `Utc` — the value ends with `Z` (e.g. `20210318T162044Z`)
+  - `Floating` — no timezone indicator; interpreted in the viewer's local time
+  - `Tzid` — an explicit IANA timezone (e.g. `America/New_York`)
+
+-}
+type TimeZone
+    = Utc
+    | Floating
+    | Tzid String
+
+
+{-| A parsed ORGANIZER property.
 -}
 type alias Organizer =
     { calAddress : String
     , commonName : Maybe String
-    , parameters : List ( String, String )
     }
 
 
-{-| A raw property.
+{-| An uninterpreted property — name, parameters, and raw value string.
+Unknown properties and extension properties (`X-*`) are preserved here.
 -}
 type alias RawProperty =
     { name : String
@@ -67,6 +91,10 @@ type alias RawProperty =
 
 
 {-| Parse an iCal string into a Calendar.
+
+    Ical.Parser.parse icsString
+    --> Ok { prodId = Just "-//My App//EN", version = Just "2.0", events = [...], ... }
+
 -}
 parse : String -> Result String Calendar
 parse input =
@@ -301,14 +329,8 @@ parseDateTimeValue line =
             |> Result.map DateOnly
 
     else
-        case tzid of
-            Just tz ->
-                ValueParser.parseDateTime line.value
-                    |> Result.map (dateTimePartsToValue (Just tz))
-
-            Nothing ->
-                ValueParser.parseDateTime line.value
-                    |> Result.map (dateTimePartsToValue Nothing)
+        ValueParser.parseDateTime line.value
+            |> Result.map (dateTimePartsToValue tzid)
 
 
 dateTimePartsToValue : Maybe String -> ValueParser.DateTimeParts -> DateTimeValue
@@ -323,25 +345,21 @@ dateTimePartsToValue maybeTzid parts =
             , minute = parts.minute
             , second = parts.second
             }
+
+        timezone : TimeZone
+        timezone =
+            case maybeTzid of
+                Just tz ->
+                    Tzid tz
+
+                Nothing ->
+                    if parts.isUtc then
+                        Utc
+
+                    else
+                        Floating
     in
-    case maybeTzid of
-        Just tz ->
-            DateTimeWithTzid
-                { year = parts.year
-                , month = parts.month
-                , day = parts.day
-                , hour = parts.hour
-                , minute = parts.minute
-                , second = parts.second
-                , tzid = tz
-                }
-
-        Nothing ->
-            if parts.isUtc then
-                DateTimeUtc dt
-
-            else
-                DateTimeLocal dt
+    DateTime dt timezone
 
 
 parseOrganizer : ContentLine -> Organizer
@@ -362,7 +380,6 @@ parseOrganizer line =
     in
     { calAddress = line.value
     , commonName = cn
-    , parameters = line.parameters
     }
 
 
