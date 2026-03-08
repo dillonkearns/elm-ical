@@ -121,6 +121,46 @@ contentLineTests =
                             , value = "https://example.com"
                             }
                         )
+        , test "quoted parameter containing colon" <|
+            \() ->
+                ContentLine.parse "ATTENDEE;CN=\"Room: 101\":mailto:room@example.com"
+                    |> Expect.equal
+                        (Ok
+                            { name = "ATTENDEE"
+                            , parameters = [ ( "CN", "Room: 101" ) ]
+                            , value = "mailto:room@example.com"
+                            }
+                        )
+        , test "quoted parameter containing semicolon" <|
+            \() ->
+                ContentLine.parse "ORGANIZER;CN=\"Smith; John\":mailto:john@example.com"
+                    |> Expect.equal
+                        (Ok
+                            { name = "ORGANIZER"
+                            , parameters = [ ( "CN", "Smith; John" ) ]
+                            , value = "mailto:john@example.com"
+                            }
+                        )
+        , test "lowercase property name is uppercased" <|
+            \() ->
+                ContentLine.parse "summary:hello"
+                    |> Expect.equal
+                        (Ok
+                            { name = "SUMMARY"
+                            , parameters = []
+                            , value = "hello"
+                            }
+                        )
+        , test "RRULE-style value with semicolons" <|
+            \() ->
+                ContentLine.parse "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE"
+                    |> Expect.equal
+                        (Ok
+                            { name = "RRULE"
+                            , parameters = []
+                            , value = "FREQ=WEEKLY;BYDAY=MO,TU,WE"
+                            }
+                        )
         ]
 
 
@@ -154,6 +194,14 @@ valueParserTests =
             \() ->
                 ValueParser.unescapeText "hello\\nworld\\\\foo\\,bar\\;baz"
                     |> Expect.equal "hello\nworld\\foo,bar;baz"
+        , test "unknown escape sequence strips backslash" <|
+            \() ->
+                ValueParser.unescapeText "hello\\aworld"
+                    |> Expect.equal "helloaworld"
+        , test "uppercase N escape also produces newline" <|
+            \() ->
+                ValueParser.unescapeText "line1\\Nline2"
+                    |> Expect.equal "line1\nline2"
         ]
 
 
@@ -253,6 +301,67 @@ componentTests =
 
                     Err err ->
                         Expect.fail ("Parse failed: " ++ err)
+        , test "properties after nested VALARM are still parsed" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Before alarm"
+                            , "BEGIN:VALARM"
+                            , "TRIGGER:-PT15M"
+                            , "ACTION:DISPLAY"
+                            , "END:VALARM"
+                            , "DESCRIPTION:After alarm"
+                            , "LOCATION:Room 42"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                Expect.all
+                                    [ \e -> e.summary |> Expect.equal (Just "Before alarm")
+                                    , \e -> e.description |> Expect.equal (Just "After alarm")
+                                    , \e -> e.location |> Expect.equal (Just "Room 42")
+                                    ]
+                                    ev
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail ("Parse failed: " ++ err)
+        , test "empty calendar with no events" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        Expect.all
+                            [ \c -> c.events |> Expect.equal []
+                            , \c -> c.version |> Expect.equal (Just "2.0")
+                            ]
+                            cal
+
+                    Err err ->
+                        Expect.fail err
         , test "mismatched BEGIN/END gives error" <|
             \() ->
                 let
@@ -574,6 +683,107 @@ endToEndTests =
                                                 Parser.Utc
                                             )
                                         )
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "explicit VALUE=DATE-TIME parameter works" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "DTSTART;VALUE=DATE-TIME:20210318T162044Z"
+                            , "SUMMARY:Test"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.dtstart
+                                    |> Expect.equal
+                                        (Just
+                                            (Parser.DateTime
+                                                { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
+                                                Parser.Utc
+                                            )
+                                        )
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "lowercase parameter names are matched case-insensitively" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "DTSTART;tzid=America/Chicago:19970714T133000"
+                            , "SUMMARY:Test"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.dtstart
+                                    |> Expect.equal
+                                        (Just
+                                            (Parser.DateTime
+                                                { year = 1997, month = 7, day = 14, hour = 13, minute = 30, second = 0 }
+                                                (Parser.Tzid "America/Chicago")
+                                            )
+                                        )
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "RRULE preserved in event properties" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Weekly meeting"
+                            , "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.properties
+                                    |> List.filter (\p -> p.name == "RRULE")
+                                    |> List.map .value
+                                    |> Expect.equal [ "FREQ=WEEKLY;BYDAY=MO,WE,FR" ]
 
                             _ ->
                                 Expect.fail "Expected 1 event"
