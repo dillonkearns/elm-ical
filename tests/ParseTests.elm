@@ -202,6 +202,34 @@ valueParserTests =
             \() ->
                 ValueParser.unescapeText "line1\\Nline2"
                     |> Expect.equal "line1\nline2"
+        , test "parse DURATION PT1H30M" <|
+            \() ->
+                ValueParser.parseDuration "PT1H30M"
+                    |> Expect.equal (Ok { weeks = 0, days = 0, hours = 1, minutes = 30, seconds = 0 })
+        , test "parse DURATION P1D" <|
+            \() ->
+                ValueParser.parseDuration "P1D"
+                    |> Expect.equal (Ok { weeks = 0, days = 1, hours = 0, minutes = 0, seconds = 0 })
+        , test "parse DURATION P1W" <|
+            \() ->
+                ValueParser.parseDuration "P1W"
+                    |> Expect.equal (Ok { weeks = 1, days = 0, hours = 0, minutes = 0, seconds = 0 })
+        , test "parse DURATION P1DT2H30M" <|
+            \() ->
+                ValueParser.parseDuration "P1DT2H30M"
+                    |> Expect.equal (Ok { weeks = 0, days = 1, hours = 2, minutes = 30, seconds = 0 })
+        , test "parse DURATION PT15M" <|
+            \() ->
+                ValueParser.parseDuration "PT15M"
+                    |> Expect.equal (Ok { weeks = 0, days = 0, hours = 0, minutes = 15, seconds = 0 })
+        , test "parse DURATION PT30S" <|
+            \() ->
+                ValueParser.parseDuration "PT30S"
+                    |> Expect.equal (Ok { weeks = 0, days = 0, hours = 0, minutes = 0, seconds = 30 })
+        , test "invalid DURATION returns error" <|
+            \() ->
+                ValueParser.parseDuration "invalid"
+                    |> Expect.err
         ]
 
 
@@ -495,9 +523,13 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.start
+                                ev.time
                                     |> Expect.equal
-                                        (Parser.Date (Date.fromCalendarDate 2021 Time.Mar 18))
+                                        (Parser.AllDay
+                                            { start = Date.fromCalendarDate 2021 Time.Mar 18
+                                            , end = Just (Date.fromCalendarDate 2021 Time.Mar 19)
+                                            }
+                                        )
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -633,15 +665,18 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.start
+                                ev.time
                                     |> Expect.equal
-                                        (Parser.FloatingDateTime
-                                            { year = 1997
-                                            , month = 7
-                                            , day = 14
-                                            , hour = 13
-                                            , minute = 30
-                                            , second = 0
+                                        (Parser.FloatingTime
+                                            { start =
+                                                { year = 1997
+                                                , month = 7
+                                                , day = 14
+                                                , hour = 13
+                                                , minute = 30
+                                                , second = 0
+                                                }
+                                            , end = Nothing
                                             }
                                         )
 
@@ -709,9 +744,9 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.start
+                                ev.time
                                     |> Expect.equal
-                                        (Parser.DateTime { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing })
+                                        (Parser.WithTime { start = { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing }, end = Nothing })
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -741,9 +776,9 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.start
+                                ev.time
                                     |> Expect.equal
-                                        (Parser.DateTime { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing })
+                                        (Parser.WithTime { start = { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing }, end = Nothing })
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -773,10 +808,12 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.start
+                                ev.time
                                     |> Expect.equal
-                                        (Parser.FloatingDateTime
-                                            { year = 1997, month = 7, day = 14, hour = 13, minute = 30, second = 0 }
+                                        (Parser.FloatingTime
+                                            { start = { year = 1997, month = 7, day = 14, hour = 13, minute = 30, second = 0 }
+                                            , end = Nothing
+                                            }
                                         )
 
                             _ ->
@@ -818,6 +855,102 @@ endToEndTests =
 
                     Err err ->
                         Expect.fail err
+        , test "DURATION resolved into end time (UTC)" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "DTSTART:20210318T100000Z"
+                            , "DURATION:PT1H30M"
+                            , "UID:duration-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "SUMMARY:Duration test"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.time
+                                    |> Expect.equal
+                                        (Parser.WithTime
+                                            { start = { posix = toIso8601 "2021-03-18T10:00:00.000Z", timeZoneName = Nothing }
+                                            , end = Just { posix = toIso8601 "2021-03-18T11:30:00.000Z", timeZoneName = Nothing }
+                                            }
+                                        )
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "DURATION resolved into end time (all-day)" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "DTSTART;VALUE=DATE:20210318"
+                            , "DURATION:P2D"
+                            , "UID:duration-2"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "SUMMARY:Multi-day duration"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.time
+                                    |> Expect.equal
+                                        (Parser.AllDay
+                                            { start = Date.fromCalendarDate 2021 Time.Mar 18
+                                            , end = Just (Date.fromCalendarDate 2021 Time.Mar 20)
+                                            }
+                                        )
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "DTSTART+DTEND type mismatch gives error" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "DTSTART;VALUE=DATE:20210318"
+                            , "DTEND:20210319T100000Z"
+                            , "UID:mismatch-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "SUMMARY:Mismatch"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                Parser.parse input
+                    |> Expect.err
         , test "local datetime has Floating timezone" <|
             \() ->
                 let
@@ -841,10 +974,12 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.start
+                                ev.time
                                     |> Expect.equal
-                                        (Parser.FloatingDateTime
-                                            { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
+                                        (Parser.FloatingTime
+                                            { start = { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
+                                            , end = Nothing
+                                            }
                                         )
 
                             _ ->
@@ -933,8 +1068,14 @@ roundTripTests =
                             [ ev ] ->
                                 Expect.all
                                     [ \e -> e.summary |> Expect.equal (Just "All day round-trip")
-                                    , \e -> e.start |> Expect.equal (Parser.Date (Date.fromCalendarDate 2021 Time.Mar 18))
-                                    , \e -> e.end |> Expect.equal (Just (Parser.Date (Date.fromCalendarDate 2021 Time.Mar 19)))
+                                    , \e ->
+                                        e.time
+                                            |> Expect.equal
+                                                (Parser.AllDay
+                                                    { start = Date.fromCalendarDate 2021 Time.Mar 18
+                                                    , end = Just (Date.fromCalendarDate 2021 Time.Mar 19)
+                                                    }
+                                                )
                                     ]
                                     ev
 

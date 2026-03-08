@@ -83,55 +83,95 @@ encodeEvent ev =
                             ]
                         )
                     )
-            , Just ( "dtstart", encodeDateTimeValue ev.start )
-            , ev.end |> Maybe.map (\dt -> ( "dtend", encodeDateTimeValue dt ))
             , Just ( "dtstamp", encodePosix ev.stamp )
             , ev.created |> Maybe.map (\posix -> ( "created", encodePosix posix ))
             , ev.lastModified |> Maybe.map (\posix -> ( "lastModified", encodePosix posix ))
             ]
+            ++ encodeEventTime ev.time
         )
 
 
-encodeDateTimeValue : Parser.DateTimeValue -> Json.Encode.Value
-encodeDateTimeValue dtv =
-    case dtv of
-        Parser.Date date ->
-            Json.Encode.object
+encodeEventTime : Parser.EventTime -> List ( String, Json.Encode.Value )
+encodeEventTime eventTime =
+    case eventTime of
+        Parser.AllDay { start, end } ->
+            ( "dtstart"
+            , Json.Encode.object
                 [ ( "type", Json.Encode.string "date" )
-                , ( "year", Json.Encode.int (Date.year date) )
-                , ( "month", Json.Encode.int (Date.monthNumber date) )
-                , ( "day", Json.Encode.int (Date.day date) )
+                , ( "year", Json.Encode.int (Date.year start) )
+                , ( "month", Json.Encode.int (Date.monthNumber start) )
+                , ( "day", Json.Encode.int (Date.day start) )
                 ]
+            )
+                :: (case end of
+                        Just endDate ->
+                            [ ( "dtend"
+                              , Json.Encode.object
+                                    [ ( "type", Json.Encode.string "date" )
+                                    , ( "year", Json.Encode.int (Date.year endDate) )
+                                    , ( "month", Json.Encode.int (Date.monthNumber endDate) )
+                                    , ( "day", Json.Encode.int (Date.day endDate) )
+                                    ]
+                              )
+                            ]
 
-        Parser.DateTime { posix, timeZoneName } ->
-            Json.Encode.object
-                ([ ( "type", Json.Encode.string "datetime-utc" )
-                 , ( "year", Json.Encode.int (Time.toYear Time.utc posix) )
-                 , ( "month", Json.Encode.int (monthToInt (Time.toMonth Time.utc posix)) )
-                 , ( "day", Json.Encode.int (Time.toDay Time.utc posix) )
-                 , ( "hour", Json.Encode.int (Time.toHour Time.utc posix) )
-                 , ( "minute", Json.Encode.int (Time.toMinute Time.utc posix) )
-                 , ( "second", Json.Encode.int (Time.toSecond Time.utc posix) )
-                 ]
-                    ++ (case timeZoneName of
-                            Just tz ->
-                                [ ( "timeZoneName", Json.Encode.string tz ) ]
+                        Nothing ->
+                            []
+                   )
 
-                            Nothing ->
-                                []
-                       )
-                )
+        Parser.WithTime { start, end } ->
+            ( "dtstart", encodeResolvedTime start )
+                :: (case end of
+                        Just endTime ->
+                            [ ( "dtend", encodeResolvedTime endTime ) ]
 
-        Parser.FloatingDateTime { year, month, day, hour, minute, second } ->
-            Json.Encode.object
-                [ ( "type", Json.Encode.string "datetime-local" )
-                , ( "year", Json.Encode.int year )
-                , ( "month", Json.Encode.int month )
-                , ( "day", Json.Encode.int day )
-                , ( "hour", Json.Encode.int hour )
-                , ( "minute", Json.Encode.int minute )
-                , ( "second", Json.Encode.int second )
-                ]
+                        Nothing ->
+                            []
+                   )
+
+        Parser.FloatingTime { start, end } ->
+            ( "dtstart", encodeLocalDateTime start )
+                :: (case end of
+                        Just endTime ->
+                            [ ( "dtend", encodeLocalDateTime endTime ) ]
+
+                        Nothing ->
+                            []
+                   )
+
+
+encodeResolvedTime : Parser.ResolvedTime -> Json.Encode.Value
+encodeResolvedTime { posix, timeZoneName } =
+    Json.Encode.object
+        ([ ( "type", Json.Encode.string "datetime-utc" )
+         , ( "year", Json.Encode.int (Time.toYear Time.utc posix) )
+         , ( "month", Json.Encode.int (monthToInt (Time.toMonth Time.utc posix)) )
+         , ( "day", Json.Encode.int (Time.toDay Time.utc posix) )
+         , ( "hour", Json.Encode.int (Time.toHour Time.utc posix) )
+         , ( "minute", Json.Encode.int (Time.toMinute Time.utc posix) )
+         , ( "second", Json.Encode.int (Time.toSecond Time.utc posix) )
+         ]
+            ++ (case timeZoneName of
+                    Just tz ->
+                        [ ( "timeZoneName", Json.Encode.string tz ) ]
+
+                    Nothing ->
+                        []
+               )
+        )
+
+
+encodeLocalDateTime : Parser.LocalDateTime -> Json.Encode.Value
+encodeLocalDateTime { year, month, day, hour, minute, second } =
+    Json.Encode.object
+        [ ( "type", Json.Encode.string "datetime-local" )
+        , ( "year", Json.Encode.int year )
+        , ( "month", Json.Encode.int month )
+        , ( "day", Json.Encode.int day )
+        , ( "hour", Json.Encode.int hour )
+        , ( "minute", Json.Encode.int minute )
+        , ( "second", Json.Encode.int second )
+        ]
 
 
 encodePosix : Time.Posix -> Json.Encode.Value

@@ -192,9 +192,9 @@ integrationTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.start
+                                ev.time
                                     |> Expect.equal
-                                        (Parser.DateTime { posix = toIso8601 "2024-06-15T18:30:00.000Z", timeZoneName = Just "America/New_York" })
+                                        (Parser.WithTime { start = { posix = toIso8601 "2024-06-15T18:30:00.000Z", timeZoneName = Just "America/New_York" }, end = Nothing })
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -239,9 +239,9 @@ integrationTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.start
+                                ev.time
                                     |> Expect.equal
-                                        (Parser.DateTime { posix = toIso8601 "2024-12-15T19:30:00.000Z", timeZoneName = Just "America/New_York" })
+                                        (Parser.WithTime { start = { posix = toIso8601 "2024-12-15T19:30:00.000Z", timeZoneName = Just "America/New_York" }, end = Nothing })
 
                             _ ->
                                 Expect.fail "Expected 1 event"

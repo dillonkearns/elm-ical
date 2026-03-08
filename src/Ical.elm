@@ -2,9 +2,9 @@ module Ical exposing
     ( Config, config, withName, withCalendarDescription, withUrl
     , Event, event, EventTime(..)
     , withDescription, withLocation, withOrganizer, withHtmlDescription
-    , withStatus, Status(..), withTransparency, EventTransparency(..)
+    , withStatus, Status(..), withTransparency, Transparency(..)
     , withCreated, withLastModified
-    , Recipient
+    , Organizer
     , generate, generateEvent
     )
 
@@ -13,9 +13,9 @@ module Ical exposing
 @docs Config, config, withName, withCalendarDescription, withUrl
 @docs Event, event, EventTime
 @docs withDescription, withLocation, withOrganizer, withHtmlDescription
-@docs withStatus, Status, withTransparency, EventTransparency
+@docs withStatus, Status, withTransparency, Transparency
 @docs withCreated, withLastModified
-@docs Recipient
+@docs Organizer
 @docs generate, generateEvent
 
 -}
@@ -52,9 +52,9 @@ type alias EventData =
     , summary : String
     , description : Maybe String
     , location : Maybe String
-    , organizer : Maybe Recipient
+    , organizer : Maybe Organizer
     , htmlDescription : Maybe String
-    , transparency : Maybe EventTransparency
+    , transparency : Maybe Transparency
     , status : Maybe Status
     , created : Maybe Time.Posix
     , lastModified : Maybe Time.Posix
@@ -68,7 +68,7 @@ type alias EventData =
 Default value is OPAQUE.
 
 -}
-type EventTransparency
+type Transparency
     = Opaque
     | Transparent
 
@@ -88,7 +88,7 @@ type Status
 
 {-| A person with a name and email address, used for the ORGANIZER property.
 -}
-type alias Recipient =
+type alias Organizer =
     { name : String
     , email : String
     }
@@ -200,7 +200,7 @@ withLocation location (Event e) =
 
 {-| Set the event organizer (ORGANIZER property with CN parameter).
 -}
-withOrganizer : Recipient -> Event -> Event
+withOrganizer : Organizer -> Event -> Event
 withOrganizer organizer (Event e) =
     Event { e | organizer = Just organizer }
 
@@ -221,7 +221,7 @@ withStatus status (Event e) =
 
 {-| Set the event transparency.
 -}
-withTransparency : EventTransparency -> Event -> Event
+withTransparency : Transparency -> Event -> Event
 withTransparency transparency (Event e) =
     Event { e | transparency = Just transparency }
 
@@ -323,7 +323,7 @@ statusToString status =
             "CANCELLED"
 
 
-transparencyToString : EventTransparency -> String
+transparencyToString : Transparency -> String
 transparencyToString transparency =
     case transparency of
         Transparent ->

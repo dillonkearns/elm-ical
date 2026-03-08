@@ -1,7 +1,7 @@
 module Ical.Parser exposing
     ( parse
     , Calendar, Event
-    , DateTimeValue(..), LocalDateTime
+    , EventTime(..), ResolvedTime, LocalDateTime
     , Status(..), Transparency(..)
     , Organizer, RawProperty
     )
@@ -10,7 +10,7 @@ module Ical.Parser exposing
 
 @docs parse
 @docs Calendar, Event
-@docs DateTimeValue, LocalDateTime
+@docs EventTime, ResolvedTime, LocalDateTime
 @docs Status, Transparency
 @docs Organizer, RawProperty
 
@@ -36,16 +36,19 @@ type alias Calendar =
 
 {-| A parsed iCal event.
 
-The `uid`, `stamp`, and `start` fields are required by
+The `uid`, `stamp`, and `time` fields are required by
 [RFC 5545 Section 3.6.1](https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.1).
-Parsing will fail if any of these are missing from a VEVENT.
+Parsing will fail if DTSTART is missing from a VEVENT.
+
+The `end` inside `time` is populated from either DTEND or DURATION (which are
+[mutually exclusive](https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.1)
+per the spec). When neither is present, `end` is `Nothing`.
 
 -}
 type alias Event =
     { uid : String
     , stamp : Time.Posix
-    , start : DateTimeValue
-    , end : Maybe DateTimeValue
+    , time : EventTime
     , created : Maybe Time.Posix
     , lastModified : Maybe Time.Posix
     , summary : Maybe String
@@ -58,21 +61,31 @@ type alias Event =
     }
 
 
-{-| A parsed date or date-time value.
+{-| The time span of an event. The variant determines what type of values
+`start` and `end` carry, enforcing the
+[RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.2.2)
+requirement that DTSTART and DTEND share the same value type.
 
-  - `Date` — an all-day value (iCal `VALUE=DATE`), gives a `Date.Date`
-  - `DateTime` — a resolved instant in time (UTC or TZID resolved via VTIMEZONE),
-    gives a `Time.Posix`. The `timeZoneName` is `Nothing` for UTC datetimes,
-    or a [IANA Time Zone Database](https://www.iana.org/time-zones) name
-    (e.g. `Just "America/New_York"`) for TZID-resolved datetimes.
-  - `FloatingDateTime` — a local date-time with no timezone; interpreted in the
-    viewer's local time. Cannot be resolved to an instant without external timezone info.
+  - `AllDay` — `VALUE=DATE`; the event spans whole days.
+  - `WithTime` — a resolved instant in time (UTC or TZID resolved via VTIMEZONE).
+  - `FloatingTime` — a local date-time with no timezone; interpreted in the
+    viewer's local time.
 
 -}
-type DateTimeValue
-    = Date Date.Date
-    | DateTime { posix : Time.Posix, timeZoneName : Maybe String }
-    | FloatingDateTime LocalDateTime
+type EventTime
+    = AllDay { start : Date.Date, end : Maybe Date.Date }
+    | WithTime { start : ResolvedTime, end : Maybe ResolvedTime }
+    | FloatingTime { start : LocalDateTime, end : Maybe LocalDateTime }
+
+
+{-| A resolved date-time instant. The `timeZoneName` is `Nothing` for UTC
+datetimes, or a [IANA Time Zone Database](https://www.iana.org/time-zones)
+name (e.g. `Just "America/New_York"`) for TZID-resolved datetimes.
+-}
+type alias ResolvedTime =
+    { posix : Time.Posix
+    , timeZoneName : Maybe String
+    }
 
 
 {-| A date-time without timezone information. Represents a "floating" local
@@ -277,15 +290,24 @@ parseCalendarBody lines state =
 
 
 -- Event accumulator (all-Maybe during parsing, validated at END:VEVENT)
+-- Internally we still use DateTimeValue to track the raw parsed form of
+-- dtstart/dtend before building the final EventTime.
+
+
+type InternalDateTimeValue
+    = IDate Date.Date
+    | IDateTime ResolvedTime
+    | IFloating LocalDateTime
 
 
 type alias EventAccum =
     { uid : Maybe String
-    , dtstamp : Maybe DateTimeValue
-    , dtstart : Maybe DateTimeValue
-    , dtend : Maybe DateTimeValue
-    , created : Maybe DateTimeValue
-    , lastModified : Maybe DateTimeValue
+    , dtstamp : Maybe InternalDateTimeValue
+    , dtstart : Maybe InternalDateTimeValue
+    , dtend : Maybe InternalDateTimeValue
+    , duration : Maybe ValueParser.Duration
+    , created : Maybe InternalDateTimeValue
+    , lastModified : Maybe InternalDateTimeValue
     , summary : Maybe String
     , description : Maybe String
     , location : Maybe String
@@ -302,6 +324,7 @@ emptyEventAccum =
     , dtstamp = Nothing
     , dtstart = Nothing
     , dtend = Nothing
+    , duration = Nothing
     , created = Nothing
     , lastModified = Nothing
     , summary = Nothing
@@ -321,26 +344,29 @@ finalizeEvent accum =
             extractPosix "DTSTAMP" dtstamp
                 |> Result.andThen
                     (\stamp ->
-                        extractMaybePosix "CREATED" accum.created
+                        buildEventTime dtstart accum.dtend accum.duration
                             |> Result.andThen
-                                (\created ->
-                                    extractMaybePosix "LAST-MODIFIED" accum.lastModified
-                                        |> Result.map
-                                            (\lastModified ->
-                                                { uid = uid
-                                                , stamp = stamp
-                                                , start = dtstart
-                                                , end = accum.dtend
-                                                , created = created
-                                                , lastModified = lastModified
-                                                , summary = accum.summary
-                                                , description = accum.description
-                                                , location = accum.location
-                                                , organizer = accum.organizer
-                                                , status = accum.status
-                                                , transparency = accum.transparency
-                                                , extraProperties = List.reverse accum.extraProperties
-                                                }
+                                (\time ->
+                                    extractMaybePosix "CREATED" accum.created
+                                        |> Result.andThen
+                                            (\created ->
+                                                extractMaybePosix "LAST-MODIFIED" accum.lastModified
+                                                    |> Result.map
+                                                        (\lastModified ->
+                                                            { uid = uid
+                                                            , stamp = stamp
+                                                            , time = time
+                                                            , created = created
+                                                            , lastModified = lastModified
+                                                            , summary = accum.summary
+                                                            , description = accum.description
+                                                            , location = accum.location
+                                                            , organizer = accum.organizer
+                                                            , status = accum.status
+                                                            , transparency = accum.transparency
+                                                            , extraProperties = List.reverse accum.extraProperties
+                                                            }
+                                                        )
                                             )
                                 )
                     )
@@ -355,23 +381,138 @@ finalizeEvent accum =
             Err "VEVENT missing required DTSTART"
 
 
-extractPosix : String -> DateTimeValue -> Result String Time.Posix
+buildEventTime : InternalDateTimeValue -> Maybe InternalDateTimeValue -> Maybe ValueParser.Duration -> Result String EventTime
+buildEventTime dtstart maybeDtend maybeDuration =
+    case dtstart of
+        IDate startDate ->
+            case maybeDtend of
+                Just (IDate endDate) ->
+                    Ok (AllDay { start = startDate, end = Just endDate })
+
+                Just _ ->
+                    Err "DTEND value type must match DTSTART (expected DATE)"
+
+                Nothing ->
+                    case maybeDuration of
+                        Just dur ->
+                            Ok (AllDay { start = startDate, end = Just (addDurationToDate dur startDate) })
+
+                        Nothing ->
+                            Ok (AllDay { start = startDate, end = Nothing })
+
+        IDateTime startResolved ->
+            case maybeDtend of
+                Just (IDateTime endResolved) ->
+                    Ok (WithTime { start = startResolved, end = Just endResolved })
+
+                Just _ ->
+                    Err "DTEND value type must match DTSTART (expected DATE-TIME)"
+
+                Nothing ->
+                    case maybeDuration of
+                        Just dur ->
+                            Ok (WithTime { start = startResolved, end = Just (addDurationToResolved dur startResolved) })
+
+                        Nothing ->
+                            Ok (WithTime { start = startResolved, end = Nothing })
+
+        IFloating startLocal ->
+            case maybeDtend of
+                Just (IFloating endLocal) ->
+                    Ok (FloatingTime { start = startLocal, end = Just endLocal })
+
+                Just _ ->
+                    Err "DTEND value type must match DTSTART (expected local DATE-TIME)"
+
+                Nothing ->
+                    case maybeDuration of
+                        Just dur ->
+                            Ok (FloatingTime { start = startLocal, end = Just (addDurationToLocal dur startLocal) })
+
+                        Nothing ->
+                            Ok (FloatingTime { start = startLocal, end = Nothing })
+
+
+addDurationToDate : ValueParser.Duration -> Date.Date -> Date.Date
+addDurationToDate dur date =
+    let
+        totalDays : Int
+        totalDays =
+            dur.weeks * 7 + dur.days
+    in
+    Date.add Date.Days totalDays date
+
+
+addDurationToResolved : ValueParser.Duration -> ResolvedTime -> ResolvedTime
+addDurationToResolved dur resolved =
+    let
+        totalSeconds : Int
+        totalSeconds =
+            dur.weeks * 7 * 86400 + dur.days * 86400 + dur.hours * 3600 + dur.minutes * 60 + dur.seconds
+
+        millis : Int
+        millis =
+            Time.posixToMillis resolved.posix + totalSeconds * 1000
+    in
+    { posix = Time.millisToPosix millis
+    , timeZoneName = resolved.timeZoneName
+    }
+
+
+addDurationToLocal : ValueParser.Duration -> LocalDateTime -> LocalDateTime
+addDurationToLocal dur dt =
+    let
+        totalSeconds : Int
+        totalSeconds =
+            dur.hours * 3600 + dur.minutes * 60 + dur.seconds
+
+        -- Convert local datetime to a date + seconds-of-day, add duration, convert back
+        date : Date.Date
+        date =
+            Date.fromCalendarDate dt.year (intToMonth dt.month) dt.day
+
+        secondsOfDay : Int
+        secondsOfDay =
+            dt.hour * 3600 + dt.minute * 60 + dt.second + totalSeconds
+
+        extraDays : Int
+        extraDays =
+            dur.weeks * 7 + dur.days + (secondsOfDay // 86400)
+
+        remainingSeconds : Int
+        remainingSeconds =
+            modBy 86400 secondsOfDay
+
+        newDate : Date.Date
+        newDate =
+            Date.add Date.Days extraDays date
+    in
+    { year = Date.year newDate
+    , month = Date.monthNumber newDate
+    , day = Date.day newDate
+    , hour = remainingSeconds // 3600
+    , minute = modBy 60 (remainingSeconds // 60)
+    , second = modBy 60 remainingSeconds
+    }
+
+
+extractPosix : String -> InternalDateTimeValue -> Result String Time.Posix
 extractPosix fieldName dtv =
     case dtv of
-        DateTime { posix } ->
+        IDateTime { posix } ->
             Ok posix
 
         _ ->
             Err (fieldName ++ " must be a UTC datetime")
 
 
-extractMaybePosix : String -> Maybe DateTimeValue -> Result String (Maybe Time.Posix)
+extractMaybePosix : String -> Maybe InternalDateTimeValue -> Result String (Maybe Time.Posix)
 extractMaybePosix fieldName maybeDtv =
     case maybeDtv of
         Nothing ->
             Ok Nothing
 
-        Just (DateTime { posix }) ->
+        Just (IDateTime { posix }) ->
             Ok (Just posix)
 
         Just _ ->
@@ -426,6 +567,9 @@ applyEventProperty timezones line accum =
 
         "DTEND" ->
             { accum | dtend = parseDateTimeValue timezones line |> Result.toMaybe }
+
+        "DURATION" ->
+            { accum | duration = ValueParser.parseDuration line.value |> Result.toMaybe }
 
         "CREATED" ->
             { accum | created = parseDateTimeValue timezones line |> Result.toMaybe }
@@ -494,7 +638,7 @@ parseTransparency value =
             Nothing
 
 
-parseDateTimeValue : Dict String VTimeZone.ZoneDefinition -> ContentLine -> Result String DateTimeValue
+parseDateTimeValue : Dict String VTimeZone.ZoneDefinition -> ContentLine -> Result String InternalDateTimeValue
 parseDateTimeValue timezones line =
     let
         isDate : Bool
@@ -519,7 +663,7 @@ parseDateTimeValue timezones line =
         ValueParser.parseDate line.value
             |> Result.map
                 (\{ year, month, day } ->
-                    Date (Date.fromCalendarDate year (intToMonth month) day)
+                    IDate (Date.fromCalendarDate year (intToMonth month) day)
                 )
 
     else
@@ -527,7 +671,7 @@ parseDateTimeValue timezones line =
             |> Result.andThen (dateTimePartsToValue timezones tzid)
 
 
-dateTimePartsToValue : Dict String VTimeZone.ZoneDefinition -> Maybe String -> ValueParser.DateTimeParts -> Result String DateTimeValue
+dateTimePartsToValue : Dict String VTimeZone.ZoneDefinition -> Maybe String -> ValueParser.DateTimeParts -> Result String InternalDateTimeValue
 dateTimePartsToValue timezones maybeTzid parts =
     let
         dt : LocalDateTime
@@ -545,11 +689,11 @@ dateTimePartsToValue timezones maybeTzid parts =
             case Dict.get tz timezones of
                 Just zoneDef ->
                     VTimeZone.resolve zoneDef dt
-                        |> Result.map (\posix -> DateTime { posix = posix, timeZoneName = Just tz })
+                        |> Result.map (\posix -> IDateTime { posix = posix, timeZoneName = Just tz })
 
                 Nothing ->
-                    -- No VTIMEZONE found for this TZID, keep as FloatingDateTime
-                    Ok (FloatingDateTime dt)
+                    -- No VTIMEZONE found for this TZID, keep as floating
+                    Ok (IFloating dt)
 
         Nothing ->
             if parts.isUtc then
@@ -566,11 +710,10 @@ dateTimePartsToValue timezones maybeTzid parts =
                     totalSeconds =
                         daysSinceEpoch * 86400 + parts.hour * 3600 + parts.minute * 60 + parts.second
                 in
-                Ok (DateTime { posix = Time.millisToPosix (totalSeconds * 1000), timeZoneName = Nothing })
+                Ok (IDateTime { posix = Time.millisToPosix (totalSeconds * 1000), timeZoneName = Nothing })
 
             else
-                Ok
-                    (FloatingDateTime dt)
+                Ok (IFloating dt)
 
 
 intToMonth : Int -> Time.Month
