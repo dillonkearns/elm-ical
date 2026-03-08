@@ -92,21 +92,29 @@ encodeEvent ev =
 encodeDateTimeValue : Parser.DateTimeValue -> Json.Encode.Value
 encodeDateTimeValue dtv =
     case dtv of
-        Parser.DateOnly { year, month, day } ->
+        Parser.Date date ->
             Json.Encode.object
                 [ ( "type", Json.Encode.string "date" )
-                , ( "year", Json.Encode.int year )
-                , ( "month", Json.Encode.int month )
-                , ( "day", Json.Encode.int day )
+                , ( "year", Json.Encode.int (Date.year date) )
+                , ( "month", Json.Encode.int (Date.monthNumber date) )
+                , ( "day", Json.Encode.int (Date.day date) )
                 ]
 
-        Parser.DateTime { year, month, day, hour, minute, second } timezone ->
+        Parser.UtcDateTime posix ->
+            Json.Encode.object
+                [ ( "type", Json.Encode.string "datetime-utc" )
+                , ( "year", Json.Encode.int (Time.toYear Time.utc posix) )
+                , ( "month", Json.Encode.int (monthToInt (Time.toMonth Time.utc posix)) )
+                , ( "day", Json.Encode.int (Time.toDay Time.utc posix) )
+                , ( "hour", Json.Encode.int (Time.toHour Time.utc posix) )
+                , ( "minute", Json.Encode.int (Time.toMinute Time.utc posix) )
+                , ( "second", Json.Encode.int (Time.toSecond Time.utc posix) )
+                ]
+
+        Parser.LocalDateTime { year, month, day, hour, minute, second } timezone ->
             let
                 ( typeName, tzFields ) =
                     case timezone of
-                        Parser.Utc ->
-                            ( "datetime-utc", [] )
-
                         Parser.Floating ->
                             ( "datetime-local", [] )
 
@@ -124,6 +132,46 @@ encodeDateTimeValue dtv =
                  ]
                     ++ tzFields
                 )
+
+
+monthToInt : Time.Month -> Int
+monthToInt month =
+    case month of
+        Time.Jan ->
+            1
+
+        Time.Feb ->
+            2
+
+        Time.Mar ->
+            3
+
+        Time.Apr ->
+            4
+
+        Time.May ->
+            5
+
+        Time.Jun ->
+            6
+
+        Time.Jul ->
+            7
+
+        Time.Aug ->
+            8
+
+        Time.Sep ->
+            9
+
+        Time.Oct ->
+            10
+
+        Time.Nov ->
+            11
+
+        Time.Dec ->
+            12
 
 
 encodeMaybe : (a -> Json.Encode.Value) -> Maybe a -> Json.Encode.Value

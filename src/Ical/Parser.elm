@@ -1,7 +1,7 @@
 module Ical.Parser exposing
     ( parse
     , Calendar, Event
-    , DateTimeValue(..), TimeZone(..)
+    , DateTimeValue(..), LocalTimeZone(..)
     , Organizer, RawProperty
     )
 
@@ -9,12 +9,14 @@ module Ical.Parser exposing
 
 @docs parse
 @docs Calendar, Event
-@docs DateTimeValue, TimeZone
+@docs DateTimeValue, LocalTimeZone
 @docs Organizer, RawProperty
 
 -}
 
 import ContentLine exposing (ContentLine)
+import Date
+import Time
 import ValueParser
 
 
@@ -50,25 +52,25 @@ type alias Event =
 
 {-| A parsed date or date-time value.
 
-  - `DateOnly` — an all-day value with just year, month, day (iCal `VALUE=DATE`)
-  - `DateTime` — a date plus time-of-day with a [`TimeZone`](#TimeZone) context
+  - `Date` — an all-day value (iCal `VALUE=DATE`)
+  - `UtcDateTime` — a UTC date-time resolved to an exact instant
+  - `LocalDateTime` — a local date-time with a [`LocalTimeZone`](#LocalTimeZone) context
 
 -}
 type DateTimeValue
-    = DateOnly { year : Int, month : Int, day : Int }
-    | DateTime { year : Int, month : Int, day : Int, hour : Int, minute : Int, second : Int } TimeZone
+    = Date Date.Date
+    | UtcDateTime Time.Posix
+    | LocalDateTime { year : Int, month : Int, day : Int, hour : Int, minute : Int, second : Int } LocalTimeZone
 
 
-{-| The timezone context of a `DateTime` value.
+{-| The timezone context of a local (non-UTC) date-time value.
 
-  - `Utc` — the value ends with `Z` (e.g. `20210318T162044Z`)
   - `Floating` — no timezone indicator; interpreted in the viewer's local time
   - `Tzid` — an explicit IANA timezone (e.g. `America/New_York`)
 
 -}
-type TimeZone
-    = Utc
-    | Floating
+type LocalTimeZone
+    = Floating
     | Tzid String
 
 
@@ -334,7 +336,10 @@ parseDateTimeValue line =
     in
     if isDate then
         ValueParser.parseDate line.value
-            |> Result.map DateOnly
+            |> Result.map
+                (\{ year, month, day } ->
+                    Date (Date.fromCalendarDate year (intToMonth month) day)
+                )
 
     else
         ValueParser.parseDateTime line.value
@@ -343,31 +348,85 @@ parseDateTimeValue line =
 
 dateTimePartsToValue : Maybe String -> ValueParser.DateTimeParts -> DateTimeValue
 dateTimePartsToValue maybeTzid parts =
-    let
-        dt : { year : Int, month : Int, day : Int, hour : Int, minute : Int, second : Int }
-        dt =
-            { year = parts.year
-            , month = parts.month
-            , day = parts.day
-            , hour = parts.hour
-            , minute = parts.minute
-            , second = parts.second
-            }
+    case maybeTzid of
+        Just tz ->
+            LocalDateTime
+                { year = parts.year
+                , month = parts.month
+                , day = parts.day
+                , hour = parts.hour
+                , minute = parts.minute
+                , second = parts.second
+                }
+                (Tzid tz)
 
-        timezone : TimeZone
-        timezone =
-            case maybeTzid of
-                Just tz ->
-                    Tzid tz
+        Nothing ->
+            if parts.isUtc then
+                let
+                    date : Date.Date
+                    date =
+                        Date.fromCalendarDate parts.year (intToMonth parts.month) parts.day
 
-                Nothing ->
-                    if parts.isUtc then
-                        Utc
+                    daysSinceEpoch : Int
+                    daysSinceEpoch =
+                        Date.toRataDie date - 719163
 
-                    else
-                        Floating
-    in
-    DateTime dt timezone
+                    totalSeconds : Int
+                    totalSeconds =
+                        daysSinceEpoch * 86400 + parts.hour * 3600 + parts.minute * 60 + parts.second
+                in
+                UtcDateTime (Time.millisToPosix (totalSeconds * 1000))
+
+            else
+                LocalDateTime
+                    { year = parts.year
+                    , month = parts.month
+                    , day = parts.day
+                    , hour = parts.hour
+                    , minute = parts.minute
+                    , second = parts.second
+                    }
+                    Floating
+
+
+intToMonth : Int -> Time.Month
+intToMonth m =
+    case m of
+        1 ->
+            Time.Jan
+
+        2 ->
+            Time.Feb
+
+        3 ->
+            Time.Mar
+
+        4 ->
+            Time.Apr
+
+        5 ->
+            Time.May
+
+        6 ->
+            Time.Jun
+
+        7 ->
+            Time.Jul
+
+        8 ->
+            Time.Aug
+
+        9 ->
+            Time.Sep
+
+        10 ->
+            Time.Oct
+
+        11 ->
+            Time.Nov
+
+        _ ->
+            Time.Dec
 
 
 parseOrganizer : ContentLine -> Organizer

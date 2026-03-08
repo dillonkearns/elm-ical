@@ -476,7 +476,7 @@ endToEndTests =
                             [ ev ] ->
                                 ev.dtstart
                                     |> Expect.equal
-                                        (Just (Parser.DateOnly { year = 2021, month = 3, day = 18 }))
+                                        (Just (Parser.Date (Date.fromCalendarDate 2021 Time.Mar 18)))
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -604,7 +604,7 @@ endToEndTests =
                                 ev.dtstart
                                     |> Expect.equal
                                         (Just
-                                            (Parser.DateTime
+                                            (Parser.LocalDateTime
                                                 { year = 1997
                                                 , month = 7
                                                 , day = 14
@@ -654,7 +654,7 @@ endToEndTests =
 
                     Err err ->
                         Expect.fail err
-        , test "UTC datetime has Utc timezone" <|
+        , test "UTC datetime becomes Time.Posix" <|
             \() ->
                 let
                     input : String
@@ -677,12 +677,7 @@ endToEndTests =
                             [ ev ] ->
                                 ev.dtstart
                                     |> Expect.equal
-                                        (Just
-                                            (Parser.DateTime
-                                                { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
-                                                Parser.Utc
-                                            )
-                                        )
+                                        (Just (Parser.UtcDateTime (toIso8601 "2021-03-18T16:20:44.000Z")))
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -712,12 +707,7 @@ endToEndTests =
                             [ ev ] ->
                                 ev.dtstart
                                     |> Expect.equal
-                                        (Just
-                                            (Parser.DateTime
-                                                { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
-                                                Parser.Utc
-                                            )
-                                        )
+                                        (Just (Parser.UtcDateTime (toIso8601 "2021-03-18T16:20:44.000Z")))
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -748,7 +738,7 @@ endToEndTests =
                                 ev.dtstart
                                     |> Expect.equal
                                         (Just
-                                            (Parser.DateTime
+                                            (Parser.LocalDateTime
                                                 { year = 1997, month = 7, day = 14, hour = 13, minute = 30, second = 0 }
                                                 (Parser.Tzid "America/Chicago")
                                             )
@@ -814,7 +804,7 @@ endToEndTests =
                                 ev.dtstart
                                     |> Expect.equal
                                         (Just
-                                            (Parser.DateTime
+                                            (Parser.LocalDateTime
                                                 { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
                                                 Parser.Floating
                                             )
@@ -906,8 +896,8 @@ roundTripTests =
                             [ ev ] ->
                                 Expect.all
                                     [ \e -> e.summary |> Expect.equal (Just "All day round-trip")
-                                    , \e -> e.dtstart |> Expect.equal (Just (Parser.DateOnly { year = 2021, month = 3, day = 18 }))
-                                    , \e -> e.dtend |> Expect.equal (Just (Parser.DateOnly { year = 2021, month = 3, day = 19 }))
+                                    , \e -> e.dtstart |> Expect.equal (Just (Parser.Date (Date.fromCalendarDate 2021 Time.Mar 18)))
+                                    , \e -> e.dtend |> Expect.equal (Just (Parser.Date (Date.fromCalendarDate 2021 Time.Mar 19)))
                                     ]
                                     ev
 
