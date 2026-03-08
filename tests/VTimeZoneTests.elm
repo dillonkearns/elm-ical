@@ -94,7 +94,7 @@ transitionDateTests =
         ]
 
 
-{-| America/New_York VTIMEZONE data for testing.
+{-| America/New\_York VTIMEZONE data for testing.
 -}
 easternTimeZone : VTimeZone.ZoneDefinition
 easternTimeZone =

@@ -1,7 +1,7 @@
 {
     "type": "package",
     "name": "dillonkearns/elm-ical",
-    "summary": "Generate ical calendar feeds in elm.",
+    "summary": "Generate and parse iCal (RFC 5545) calendar feeds.",
     "license": "BSD-3-Clause",
     "version": "1.0.0",
     "exposed-modules": [

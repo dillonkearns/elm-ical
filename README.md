@@ -1,8 +1,8 @@
 # elm-ical
 
-Generate [iCal (RFC 5545)](https://tools.ietf.org/html/rfc5545) calendar feeds in Elm.
+Generate and parse [iCal (RFC 5545)](https://datatracker.ietf.org/doc/html/rfc5545) calendar feeds in Elm.
 
-## Usage
+## Generating
 
 ```elm
 import Date
@@ -51,6 +51,29 @@ calendarFeed =
     Ical.generate calendarConfig [ meeting, holiday ]
 ```
 
+## Parsing
+
+```elm
+import Ical.Parser as Parser
+
+
+parseCalendar : String -> Result String (List String)
+parseCalendar icsString =
+    Parser.parse icsString
+        |> Result.map
+            (\cal ->
+                List.filterMap .summary cal.events
+            )
+```
+
+The parser returns precise types:
+
+- **`EventTime`** enforces that start and end share the same value type (`AllDay`, `WithTime`, or `FloatingTime`)
+- **VTIMEZONE** datetimes are automatically resolved to `Time.Posix`
+- **DURATION** is resolved into an end time (same semantics as DTEND)
+- **`Status`** and **`Transparency`** are typed enums, not raw strings
+- Unknown and extension properties (`X-*`) are preserved in `extraProperties`
+
 ## Supported Properties
 
 ### Calendar (VCALENDAR)
@@ -65,21 +88,22 @@ calendarFeed =
 
 - `DTSTART` / `DTEND` (DATE or DATE-TIME)
 - `DTSTAMP`
+- `DURATION` (parsing only — resolved into end time)
 - `UID`
 - `SUMMARY`
 - `DESCRIPTION`
 - `LOCATION`
 - `ORGANIZER` (with CN parameter)
-- `X-ALT-DESC` (HTML description with FMTTYPE parameter)
+- `X-ALT-DESC` (HTML description with FMTTYPE parameter, generation only)
 - `STATUS` (TENTATIVE, CONFIRMED, CANCELLED)
 - `TRANSP` (OPAQUE, TRANSPARENT)
 - `CREATED`
 - `LAST-MODIFIED`
+- `VTIMEZONE` (parsing only — used to resolve TZID datetimes)
 
 ## Not Yet Supported
 
-- `RRULE` (recurrence rules)
-- `VALARM` (alarms/reminders)
+- `RRULE` (recurrence rules — preserved in `extraProperties` when parsing)
+- `VALARM` (alarms/reminders — skipped when parsing)
 - `ATTENDEE`
-- `VTIMEZONE`
 - `VTODO` / `VJOURNAL`

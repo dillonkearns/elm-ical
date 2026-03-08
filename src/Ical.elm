@@ -1,21 +1,30 @@
 module Ical exposing
     ( Config, config, withName, withCalendarDescription, withUrl
-    , Event, event, EventTime(..)
+    , Event, event, EventTime(..), Organizer
     , withDescription, withLocation, withOrganizer, withHtmlDescription
     , withStatus, Status(..), withTransparency, Transparency(..)
     , withCreated, withLastModified
-    , Organizer
     , generate, generateEvent
     )
 
 {-| Generate iCal ([RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545)) calendar feeds.
 
+
+## Calendar configuration
+
 @docs Config, config, withName, withCalendarDescription, withUrl
-@docs Event, event, EventTime
+
+
+## Events
+
+@docs Event, event, EventTime, Organizer
 @docs withDescription, withLocation, withOrganizer, withHtmlDescription
 @docs withStatus, Status, withTransparency, Transparency
 @docs withCreated, withLastModified
-@docs Organizer
+
+
+## Generating output
+
 @docs generate, generateEvent
 
 -}

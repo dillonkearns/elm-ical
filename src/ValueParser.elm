@@ -146,6 +146,7 @@ parseDuration input =
             case String.split "T" afterP of
                 [ datePart, timePart ] ->
                     let
+                        days : Int
                         days =
                             parseDurationDays datePart
                     in
