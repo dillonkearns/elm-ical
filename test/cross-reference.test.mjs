@@ -397,22 +397,24 @@ describe("cross-reference: Elm parser matches ical.js on all-day-event", () => {
 });
 
 describe("cross-reference: Elm parser matches ical.js on organizer", () => {
-  it("organizer calAddress matches", () => {
+  it("organizer email matches", () => {
     const fixture = fixtures.find((f) => f.name === "organizer");
     const cal = parseCalendar(fixture.ics);
     const icalJsEvent = getEvent(cal, 0);
     const icalJsOrg = icalJsEvent.getFirstProperty("organizer");
     const elmEvent = fixture.elmParsed.events[0];
-    assert.equal(elmEvent.organizer.calAddress, icalJsOrg.getFirstValue());
+    // ical.js returns "mailto:..." while Elm strips the mailto: prefix
+    const icalJsEmail = icalJsOrg.getFirstValue().replace(/^mailto:/i, "");
+    assert.equal(elmEvent.organizer.email, icalJsEmail);
   });
 
-  it("organizer CN matches", () => {
+  it("organizer name matches", () => {
     const fixture = fixtures.find((f) => f.name === "organizer");
     const cal = parseCalendar(fixture.ics);
     const icalJsEvent = getEvent(cal, 0);
     const icalJsOrg = icalJsEvent.getFirstProperty("organizer");
     const elmEvent = fixture.elmParsed.events[0];
-    assert.equal(elmEvent.organizer.commonName, icalJsOrg.getParameter("cn"));
+    assert.equal(elmEvent.organizer.name, icalJsOrg.getParameter("cn"));
   });
 });
 

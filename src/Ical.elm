@@ -8,7 +8,7 @@ module Ical exposing
     , generate, generateEvent
     )
 
-{-| Generate iCal (RFC 5545) calendar feeds.
+{-| Generate iCal ([RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545)) calendar feeds.
 
 @docs Config, config, withName, withCalendarDescription, withUrl
 @docs Event, event, EventTime

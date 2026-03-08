@@ -221,7 +221,7 @@ componentTests =
                 in
                 Parser.parse input
                     |> Result.map .version
-                    |> Expect.equal (Ok (Just "2.0"))
+                    |> Expect.equal (Ok "2.0")
         , test "nested VEVENT inside VCALENDAR" <|
             \() ->
                 let
@@ -234,6 +234,8 @@ componentTests =
                             , "BEGIN:VEVENT"
                             , "SUMMARY:Test Event"
                             , "UID:test-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
                             , "END:VEVENT"
                             , "END:VCALENDAR"
                             , ""
@@ -253,9 +255,15 @@ componentTests =
                             , "PRODID:-//test//EN"
                             , "BEGIN:VEVENT"
                             , "SUMMARY:Event 1"
+                            , "UID:event-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
                             , "END:VEVENT"
                             , "BEGIN:VEVENT"
                             , "SUMMARY:Event 2"
+                            , "UID:event-2"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
                             , "END:VEVENT"
                             , "END:VCALENDAR"
                             , ""
@@ -276,6 +284,8 @@ componentTests =
                             , "BEGIN:VEVENT"
                             , "SUMMARY:Event with alarm"
                             , "UID:alarm-test"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
                             , "BEGIN:VALARM"
                             , "TRIGGER:-PT15M"
                             , "ACTION:DISPLAY"
@@ -292,7 +302,7 @@ componentTests =
                             [ ev ] ->
                                 Expect.all
                                     [ \e -> e.summary |> Expect.equal (Just "Event with alarm")
-                                    , \e -> e.uid |> Expect.equal (Just "alarm-test")
+                                    , \e -> e.uid |> Expect.equal "alarm-test"
                                     ]
                                     ev
 
@@ -312,6 +322,9 @@ componentTests =
                             , "PRODID:-//test//EN"
                             , "BEGIN:VEVENT"
                             , "SUMMARY:Before alarm"
+                            , "UID:before-alarm"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
                             , "BEGIN:VALARM"
                             , "TRIGGER:-PT15M"
                             , "ACTION:DISPLAY"
@@ -356,7 +369,7 @@ componentTests =
                     Ok cal ->
                         Expect.all
                             [ \c -> c.events |> Expect.equal []
-                            , \c -> c.version |> Expect.equal (Just "2.0")
+                            , \c -> c.version |> Expect.equal "2.0"
                             ]
                             cal
 
@@ -416,7 +429,7 @@ endToEndTests =
                                     [ \e -> e.summary |> Expect.equal (Just "Test Event")
                                     , \e -> e.description |> Expect.equal (Just "A test event")
                                     , \e -> e.location |> Expect.equal (Just "Room 101")
-                                    , \e -> e.uid |> Expect.equal (Just "test-1@example.com")
+                                    , \e -> e.uid |> Expect.equal "test-1@example.com"
                                     ]
                                     ev
 
@@ -436,9 +449,15 @@ endToEndTests =
                             , "PRODID:-//test//EN"
                             , "BEGIN:VEVENT"
                             , "SUMMARY:Event 1"
+                            , "UID:event-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
                             , "END:VEVENT"
                             , "BEGIN:VEVENT"
                             , "SUMMARY:Event 2"
+                            , "UID:event-2"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
                             , "END:VEVENT"
                             , "END:VCALENDAR"
                             , ""
@@ -464,6 +483,8 @@ endToEndTests =
                             , "BEGIN:VEVENT"
                             , "DTSTART;VALUE=DATE:20210318"
                             , "DTEND;VALUE=DATE:20210319"
+                            , "UID:allday-1"
+                            , "DTSTAMP:20210318T162044Z"
                             , "SUMMARY:All day"
                             , "END:VEVENT"
                             , "END:VCALENDAR"
@@ -474,9 +495,9 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.dtstart
+                                ev.start
                                     |> Expect.equal
-                                        (Just (Parser.Date (Date.fromCalendarDate 2021 Time.Mar 18)))
+                                        (Parser.Date (Date.fromCalendarDate 2021 Time.Mar 18))
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -494,6 +515,9 @@ endToEndTests =
                             , "PRODID:-//test//EN"
                             , "BEGIN:VEVENT"
                             , "SUMMARY:Meeting"
+                            , "UID:organizer-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
                             , "ORGANIZER;CN=\"Dillon Kearns\":mailto:dillon@example.com"
                             , "END:VEVENT"
                             , "END:VCALENDAR"
@@ -507,8 +531,8 @@ endToEndTests =
                                 ev.organizer
                                     |> Expect.equal
                                         (Just
-                                            { calAddress = "mailto:dillon@example.com"
-                                            , commonName = Just "Dillon Kearns"
+                                            { email = "dillon@example.com"
+                                            , name = Just "Dillon Kearns"
                                             }
                                         )
 
@@ -528,6 +552,9 @@ endToEndTests =
                             , "PRODID:-//test//EN"
                             , "BEGIN:VEVENT"
                             , "SUMMARY:Test"
+                            , "UID:folded-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
                             , "DESCRIPTION:Lorem ipsum dolor sit amet\\, consetetur sadipscing elitr\\, sed "
                             , " diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat"
                             , " \\, sed diam voluptua.\\nbeep boop"
@@ -560,6 +587,9 @@ endToEndTests =
                             , "PRODID:-//test//EN"
                             , "BEGIN:VEVENT"
                             , "SUMMARY:Test"
+                            , "UID:custom-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
                             , "X-CUSTOM-PROP:custom value"
                             , "END:VEVENT"
                             , "END:VCALENDAR"
@@ -570,7 +600,7 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.properties
+                                ev.extraProperties
                                     |> List.filter (\p -> p.name == "X-CUSTOM-PROP")
                                     |> List.map .value
                                     |> Expect.equal [ "custom value" ]
@@ -591,6 +621,8 @@ endToEndTests =
                             , "PRODID:-//test//EN"
                             , "BEGIN:VEVENT"
                             , "DTSTART;TZID=America/New_York:19970714T133000"
+                            , "UID:tzid-1"
+                            , "DTSTAMP:20210318T162044Z"
                             , "SUMMARY:Meeting"
                             , "END:VEVENT"
                             , "END:VCALENDAR"
@@ -601,19 +633,16 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.dtstart
+                                ev.start
                                     |> Expect.equal
-                                        (Just
-                                            (Parser.LocalDateTime
-                                                { year = 1997
-                                                , month = 7
-                                                , day = 14
-                                                , hour = 13
-                                                , minute = 30
-                                                , second = 0
-                                                }
-                                                (Parser.Tzid "America/New_York")
-                                            )
+                                        (Parser.FloatingDateTime
+                                            { year = 1997
+                                            , month = 7
+                                            , day = 14
+                                            , hour = 13
+                                            , minute = 30
+                                            , second = 0
+                                            }
                                         )
 
                             _ ->
@@ -632,6 +661,9 @@ endToEndTests =
                             , "PRODID:-//test//EN"
                             , "BEGIN:VEVENT"
                             , "SUMMARY:Test"
+                            , "UID:status-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
                             , "STATUS:CONFIRMED"
                             , "TRANSP:TRANSPARENT"
                             , "END:VEVENT"
@@ -644,8 +676,8 @@ endToEndTests =
                         case cal.events of
                             [ ev ] ->
                                 Expect.all
-                                    [ \e -> e.status |> Expect.equal (Just "CONFIRMED")
-                                    , \e -> e.transp |> Expect.equal (Just "TRANSPARENT")
+                                    [ \e -> e.status |> Expect.equal (Just Parser.Confirmed)
+                                    , \e -> e.transparency |> Expect.equal (Just Parser.Transparent)
                                     ]
                                     ev
 
@@ -665,6 +697,8 @@ endToEndTests =
                             , "PRODID:-//test//EN"
                             , "BEGIN:VEVENT"
                             , "DTSTART:20210318T162044Z"
+                            , "UID:utc-1"
+                            , "DTSTAMP:20210318T162044Z"
                             , "SUMMARY:Test"
                             , "END:VEVENT"
                             , "END:VCALENDAR"
@@ -675,9 +709,9 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.dtstart
+                                ev.start
                                     |> Expect.equal
-                                        (Just (Parser.UtcDateTime (toIso8601 "2021-03-18T16:20:44.000Z")))
+                                        (Parser.DateTime { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing })
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -695,6 +729,8 @@ endToEndTests =
                             , "PRODID:-//test//EN"
                             , "BEGIN:VEVENT"
                             , "DTSTART;VALUE=DATE-TIME:20210318T162044Z"
+                            , "UID:date-time-1"
+                            , "DTSTAMP:20210318T162044Z"
                             , "SUMMARY:Test"
                             , "END:VEVENT"
                             , "END:VCALENDAR"
@@ -705,9 +741,9 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.dtstart
+                                ev.start
                                     |> Expect.equal
-                                        (Just (Parser.UtcDateTime (toIso8601 "2021-03-18T16:20:44.000Z")))
+                                        (Parser.DateTime { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing })
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -725,6 +761,8 @@ endToEndTests =
                             , "PRODID:-//test//EN"
                             , "BEGIN:VEVENT"
                             , "DTSTART;tzid=America/Chicago:19970714T133000"
+                            , "UID:lowercase-1"
+                            , "DTSTAMP:20210318T162044Z"
                             , "SUMMARY:Test"
                             , "END:VEVENT"
                             , "END:VCALENDAR"
@@ -735,13 +773,10 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.dtstart
+                                ev.start
                                     |> Expect.equal
-                                        (Just
-                                            (Parser.LocalDateTime
-                                                { year = 1997, month = 7, day = 14, hour = 13, minute = 30, second = 0 }
-                                                (Parser.Tzid "America/Chicago")
-                                            )
+                                        (Parser.FloatingDateTime
+                                            { year = 1997, month = 7, day = 14, hour = 13, minute = 30, second = 0 }
                                         )
 
                             _ ->
@@ -760,6 +795,9 @@ endToEndTests =
                             , "PRODID:-//test//EN"
                             , "BEGIN:VEVENT"
                             , "SUMMARY:Weekly meeting"
+                            , "UID:rrule-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
                             , "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"
                             , "END:VEVENT"
                             , "END:VCALENDAR"
@@ -770,7 +808,7 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.properties
+                                ev.extraProperties
                                     |> List.filter (\p -> p.name == "RRULE")
                                     |> List.map .value
                                     |> Expect.equal [ "FREQ=WEEKLY;BYDAY=MO,WE,FR" ]
@@ -791,6 +829,8 @@ endToEndTests =
                             , "PRODID:-//test//EN"
                             , "BEGIN:VEVENT"
                             , "DTSTART:20210318T162044"
+                            , "UID:floating-1"
+                            , "DTSTAMP:20210318T162044Z"
                             , "SUMMARY:Test"
                             , "END:VEVENT"
                             , "END:VCALENDAR"
@@ -801,13 +841,10 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.dtstart
+                                ev.start
                                     |> Expect.equal
-                                        (Just
-                                            (Parser.LocalDateTime
-                                                { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
-                                                Parser.Floating
-                                            )
+                                        (Parser.FloatingDateTime
+                                            { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
                                         )
 
                             _ ->
@@ -858,7 +895,7 @@ roundTripTests =
                                     [ \e -> e.summary |> Expect.equal (Just "Round-trip test")
                                     , \e -> e.description |> Expect.equal (Just "A description with, commas; semicolons\nand newlines")
                                     , \e -> e.location |> Expect.equal (Just "Room 42")
-                                    , \e -> e.uid |> Expect.equal (Just "rt-1@test.com")
+                                    , \e -> e.uid |> Expect.equal "rt-1@test.com"
                                     ]
                                     ev
 
@@ -896,8 +933,8 @@ roundTripTests =
                             [ ev ] ->
                                 Expect.all
                                     [ \e -> e.summary |> Expect.equal (Just "All day round-trip")
-                                    , \e -> e.dtstart |> Expect.equal (Just (Parser.Date (Date.fromCalendarDate 2021 Time.Mar 18)))
-                                    , \e -> e.dtend |> Expect.equal (Just (Parser.Date (Date.fromCalendarDate 2021 Time.Mar 19)))
+                                    , \e -> e.start |> Expect.equal (Parser.Date (Date.fromCalendarDate 2021 Time.Mar 18))
+                                    , \e -> e.end |> Expect.equal (Just (Parser.Date (Date.fromCalendarDate 2021 Time.Mar 19)))
                                     ]
                                     ev
 
@@ -937,8 +974,8 @@ roundTripTests =
                                 case ev.organizer of
                                     Just org ->
                                         Expect.all
-                                            [ \o -> o.calAddress |> Expect.equal "mailto:dillon@example.com"
-                                            , \o -> o.commonName |> Expect.equal (Just "Dillon Kearns")
+                                            [ \o -> o.email |> Expect.equal "dillon@example.com"
+                                            , \o -> o.name |> Expect.equal (Just "Dillon Kearns")
                                             ]
                                             org
 
@@ -1017,8 +1054,8 @@ roundTripTests =
                 case Parser.parse icsString of
                     Ok cal ->
                         Expect.all
-                            [ \c -> c.version |> Expect.equal (Just "2.0")
-                            , \c -> c.prodId |> Expect.equal (Just "-//myapp//cal//EN")
+                            [ \c -> c.version |> Expect.equal "2.0"
+                            , \c -> c.prodId |> Expect.equal "-//myapp//cal//EN"
                             ]
                             cal
 

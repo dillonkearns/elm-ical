@@ -51,8 +51,8 @@ encodeElmParsed ics =
         Ok cal ->
             Json.Encode.object
                 [ ( "ok", Json.Encode.bool True )
-                , ( "version", encodeMaybe Json.Encode.string cal.version )
-                , ( "prodId", encodeMaybe Json.Encode.string cal.prodId )
+                , ( "version", Json.Encode.string cal.version )
+                , ( "prodId", Json.Encode.string cal.prodId )
                 , ( "events", Json.Encode.list encodeEvent cal.events )
                 ]
 
@@ -67,24 +67,27 @@ encodeEvent : Parser.Event -> Json.Encode.Value
 encodeEvent ev =
     Json.Encode.object
         (List.filterMap identity
-            [ Just ( "uid", encodeMaybe Json.Encode.string ev.uid )
+            [ Just ( "uid", Json.Encode.string ev.uid )
             , Just ( "summary", encodeMaybe Json.Encode.string ev.summary )
             , Just ( "description", encodeMaybe Json.Encode.string ev.description )
             , Just ( "location", encodeMaybe Json.Encode.string ev.location )
-            , Just ( "status", encodeMaybe Json.Encode.string ev.status )
-            , Just ( "transp", encodeMaybe Json.Encode.string ev.transp )
+            , Just ( "status", encodeMaybe encodeStatus ev.status )
+            , Just ( "transp", encodeMaybe encodeTransparency ev.transparency )
             , ev.organizer
                 |> Maybe.map
                     (\org ->
                         ( "organizer"
                         , Json.Encode.object
-                            [ ( "calAddress", Json.Encode.string org.calAddress )
-                            , ( "commonName", encodeMaybe Json.Encode.string org.commonName )
+                            [ ( "email", Json.Encode.string org.email )
+                            , ( "name", encodeMaybe Json.Encode.string org.name )
                             ]
                         )
                     )
-            , ev.dtstart |> Maybe.map (\dt -> ( "dtstart", encodeDateTimeValue dt ))
-            , ev.dtend |> Maybe.map (\dt -> ( "dtend", encodeDateTimeValue dt ))
+            , Just ( "dtstart", encodeDateTimeValue ev.start )
+            , ev.end |> Maybe.map (\dt -> ( "dtend", encodeDateTimeValue dt ))
+            , Just ( "dtstamp", encodePosix ev.stamp )
+            , ev.created |> Maybe.map (\posix -> ( "created", encodePosix posix ))
+            , ev.lastModified |> Maybe.map (\posix -> ( "lastModified", encodePosix posix ))
             ]
         )
 
@@ -100,38 +103,75 @@ encodeDateTimeValue dtv =
                 , ( "day", Json.Encode.int (Date.day date) )
                 ]
 
-        Parser.UtcDateTime posix ->
+        Parser.DateTime { posix, timeZoneName } ->
             Json.Encode.object
-                [ ( "type", Json.Encode.string "datetime-utc" )
-                , ( "year", Json.Encode.int (Time.toYear Time.utc posix) )
-                , ( "month", Json.Encode.int (monthToInt (Time.toMonth Time.utc posix)) )
-                , ( "day", Json.Encode.int (Time.toDay Time.utc posix) )
-                , ( "hour", Json.Encode.int (Time.toHour Time.utc posix) )
-                , ( "minute", Json.Encode.int (Time.toMinute Time.utc posix) )
-                , ( "second", Json.Encode.int (Time.toSecond Time.utc posix) )
+                ([ ( "type", Json.Encode.string "datetime-utc" )
+                 , ( "year", Json.Encode.int (Time.toYear Time.utc posix) )
+                 , ( "month", Json.Encode.int (monthToInt (Time.toMonth Time.utc posix)) )
+                 , ( "day", Json.Encode.int (Time.toDay Time.utc posix) )
+                 , ( "hour", Json.Encode.int (Time.toHour Time.utc posix) )
+                 , ( "minute", Json.Encode.int (Time.toMinute Time.utc posix) )
+                 , ( "second", Json.Encode.int (Time.toSecond Time.utc posix) )
+                 ]
+                    ++ (case timeZoneName of
+                            Just tz ->
+                                [ ( "timeZoneName", Json.Encode.string tz ) ]
+
+                            Nothing ->
+                                []
+                       )
+                )
+
+        Parser.FloatingDateTime { year, month, day, hour, minute, second } ->
+            Json.Encode.object
+                [ ( "type", Json.Encode.string "datetime-local" )
+                , ( "year", Json.Encode.int year )
+                , ( "month", Json.Encode.int month )
+                , ( "day", Json.Encode.int day )
+                , ( "hour", Json.Encode.int hour )
+                , ( "minute", Json.Encode.int minute )
+                , ( "second", Json.Encode.int second )
                 ]
 
-        Parser.LocalDateTime { year, month, day, hour, minute, second } timezone ->
-            let
-                ( typeName, tzFields ) =
-                    case timezone of
-                        Parser.Floating ->
-                            ( "datetime-local", [] )
 
-                        Parser.Tzid tz ->
-                            ( "datetime-tzid", [ ( "tzid", Json.Encode.string tz ) ] )
-            in
-            Json.Encode.object
-                ([ ( "type", Json.Encode.string typeName )
-                 , ( "year", Json.Encode.int year )
-                 , ( "month", Json.Encode.int month )
-                 , ( "day", Json.Encode.int day )
-                 , ( "hour", Json.Encode.int hour )
-                 , ( "minute", Json.Encode.int minute )
-                 , ( "second", Json.Encode.int second )
-                 ]
-                    ++ tzFields
-                )
+encodePosix : Time.Posix -> Json.Encode.Value
+encodePosix posix =
+    Json.Encode.object
+        [ ( "type", Json.Encode.string "datetime-utc" )
+        , ( "year", Json.Encode.int (Time.toYear Time.utc posix) )
+        , ( "month", Json.Encode.int (monthToInt (Time.toMonth Time.utc posix)) )
+        , ( "day", Json.Encode.int (Time.toDay Time.utc posix) )
+        , ( "hour", Json.Encode.int (Time.toHour Time.utc posix) )
+        , ( "minute", Json.Encode.int (Time.toMinute Time.utc posix) )
+        , ( "second", Json.Encode.int (Time.toSecond Time.utc posix) )
+        ]
+
+
+encodeStatus : Parser.Status -> Json.Encode.Value
+encodeStatus status =
+    Json.Encode.string
+        (case status of
+            Parser.Tentative ->
+                "TENTATIVE"
+
+            Parser.Confirmed ->
+                "CONFIRMED"
+
+            Parser.Cancelled ->
+                "CANCELLED"
+        )
+
+
+encodeTransparency : Parser.Transparency -> Json.Encode.Value
+encodeTransparency transparency =
+    Json.Encode.string
+        (case transparency of
+            Parser.Opaque ->
+                "OPAQUE"
+
+            Parser.Transparent ->
+                "TRANSPARENT"
+        )
 
 
 monthToInt : Time.Month -> Int
