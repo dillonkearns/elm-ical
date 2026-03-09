@@ -220,7 +220,7 @@ withByDay days (Rule r) =
 
 
 {-| Set which days of the month the rule applies to. Valid values are
-\-31 to -1 and 1 to 31. Negative values count from the end of the month
+-31 to -1 and 1 to 31. Negative values count from the end of the month
 (e.g. -1 is the last day).
 -}
 withByMonthDay : List Int -> Rule -> Rule
@@ -622,18 +622,41 @@ formatRule r =
 monthToInt : Time.Month -> String
 monthToInt month =
     case month of
-        Time.Jan -> "1"
-        Time.Feb -> "2"
-        Time.Mar -> "3"
-        Time.Apr -> "4"
-        Time.May -> "5"
-        Time.Jun -> "6"
-        Time.Jul -> "7"
-        Time.Aug -> "8"
-        Time.Sep -> "9"
-        Time.Oct -> "10"
-        Time.Nov -> "11"
-        Time.Dec -> "12"
+        Time.Jan ->
+            "1"
+
+        Time.Feb ->
+            "2"
+
+        Time.Mar ->
+            "3"
+
+        Time.Apr ->
+            "4"
+
+        Time.May ->
+            "5"
+
+        Time.Jun ->
+            "6"
+
+        Time.Jul ->
+            "7"
+
+        Time.Aug ->
+            "8"
+
+        Time.Sep ->
+            "9"
+
+        Time.Oct ->
+            "10"
+
+        Time.Nov ->
+            "11"
+
+        Time.Dec ->
+            "12"
 
 
 formatDaySpec : Recurrence.DaySpec -> String
