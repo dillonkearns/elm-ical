@@ -1,16 +1,74 @@
 module Ical exposing
-    ( Config, config, withName, withCalendarDescription, withUrl
+    ( generate, generateEvent
+    , Config, config, withName, withCalendarDescription, withUrl
     , Event, event, EventTime, allDay, withTime, Organizer
     , withDescription, withLocation, withOrganizer, withHtmlDescription
     , withStatus, Status(..), withTransparency, Transparency(..)
     , withCreated, withLastModified
+    , withRecurrenceRule, withAttendee
     , Rule, rule, withRuleInterval, withCount, withUntilDate, withUntilDateTime
     , withByDay, withByMonthDay, withByMonth, withBySetPos, withWeekStart
-    , withRecurrenceRule, withAttendee
-    , generate, generateEvent
     )
 
-{-| Generate iCal ([RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545)) calendar feeds.
+{-| Generate iCal ([RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545)) calendar feeds
+from typed Elm values.
+
+    import Date
+    import Ical
+    import Ical.Recurrence as Recurrence
+    import Time
+
+    teamCalendar : Time.Posix -> String
+    teamCalendar now =
+        let
+            standup =
+                Ical.event
+                    { id = "standup"
+                    , stamp = now
+                    , time =
+                        Ical.withTime
+                            { start = Time.millisToPosix 1616065200000 -- 2021-03-18T10:00Z
+                            , end = Time.millisToPosix 1616068800000 -- 2021-03-18T11:00Z
+                            }
+                    , summary = "Daily Standup"
+                    }
+                    |> Ical.withRecurrenceRule
+                        (Ical.rule Recurrence.Daily
+                            |> Ical.withByDay
+                                [ { ordinal = Nothing, weekday = Time.Mon }
+                                , { ordinal = Nothing, weekday = Time.Tue }
+                                , { ordinal = Nothing, weekday = Time.Wed }
+                                , { ordinal = Nothing, weekday = Time.Thu }
+                                , { ordinal = Nothing, weekday = Time.Fri }
+                                ]
+                        )
+
+            offsite =
+                Ical.event
+                    { id = "offsite-q2"
+                    , stamp = now
+                    , time =
+                        Ical.allDay
+                            { start = Date.fromCalendarDate 2021 Time.Jun 14
+                            , end = Date.fromCalendarDate 2021 Time.Jun 16
+                            }
+                    , summary = "Q2 Team Offsite"
+                    }
+                    |> Ical.withLocation "Portland, OR"
+        in
+        Ical.generate
+            (Ical.config { id = "//mycompany//team//EN", domain = "mycompany.com" }
+                |> Ical.withName "Engineering Team"
+            )
+            [ standup, offsite ]
+
+All generation types are opaque with builder functions. Invalid inputs like
+reversed start/end times or negative intervals are silently normalized.
+
+
+## Generating output
+
+@docs generate, generateEvent
 
 
 ## Calendar configuration
@@ -24,18 +82,13 @@ module Ical exposing
 @docs withDescription, withLocation, withOrganizer, withHtmlDescription
 @docs withStatus, Status, withTransparency, Transparency
 @docs withCreated, withLastModified
+@docs withRecurrenceRule, withAttendee
 
 
 ## Recurrence rules
 
 @docs Rule, rule, withRuleInterval, withCount, withUntilDate, withUntilDateTime
 @docs withByDay, withByMonthDay, withByMonth, withBySetPos, withWeekStart
-
-
-## Generating output
-
-@docs withRecurrenceRule, withAttendee
-@docs generate, generateEvent
 
 -}
 
@@ -54,7 +107,7 @@ type EventTime
     | WithTime { start : Time.Posix, end : Time.Posix }
 
 
-{-| Create an all-day event time span. The `end` date is **inclusive** — a
+{-| Create an all-day event time span. The `end` date is **inclusive**. A
 single-day event on March 18 should use
 `allDay { start = march18, end = march18 }`. The library automatically adds one
 day to produce the exclusive DTEND required by iCal.

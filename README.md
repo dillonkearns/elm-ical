@@ -19,69 +19,94 @@ import Ical.Recurrence as Recurrence
 import Time
 
 
-calendarFeed : String
-calendarFeed =
+teamCalendar : Time.Posix -> String
+teamCalendar now =
     let
-        calendarConfig =
-            Ical.config
-                { id = "//myapp//calendar//EN"
-                , domain = "example.com"
-                }
-                |> Ical.withName "My Calendar"
-
-        meeting =
+        standup =
             Ical.event
-                { id = "meeting-123"
-                , stamp = Time.millisToPosix 1633388093000
+                { id = "standup"
+                , stamp = now
                 , time =
                     Ical.withTime
-                        { start = Time.millisToPosix 1633384770000
-                        , end = Time.millisToPosix 1633388370000
+                        { start = Time.millisToPosix 1616065200000 -- 2021-03-18T10:00Z
+                        , end = Time.millisToPosix 1616068800000 -- 2021-03-18T11:00Z
                         }
-                , summary = "Team Meeting"
+                , summary = "Daily Standup"
                 }
-                |> Ical.withDescription "Weekly sync"
-                |> Ical.withLocation "Conference Room A"
                 |> Ical.withRecurrenceRule
-                    (Ical.rule Recurrence.Weekly
+                    (Ical.rule Recurrence.Daily
                         |> Ical.withByDay
                             [ { ordinal = Nothing, weekday = Time.Mon }
+                            , { ordinal = Nothing, weekday = Time.Tue }
                             , { ordinal = Nothing, weekday = Time.Wed }
+                            , { ordinal = Nothing, weekday = Time.Thu }
+                            , { ordinal = Nothing, weekday = Time.Fri }
                             ]
-                        |> Ical.withCount 10
                     )
 
-        holiday =
+        offsite =
             Ical.event
-                { id = "holiday-456"
-                , stamp = Time.millisToPosix 1633388093000
+                { id = "offsite-q2"
+                , stamp = now
                 , time =
                     Ical.allDay
-                        { start = Date.fromCalendarDate 2021 Time.Dec 25
-                        , end = Date.fromCalendarDate 2021 Time.Dec 25
+                        { start = Date.fromCalendarDate 2021 Time.Jun 14
+                        , end = Date.fromCalendarDate 2021 Time.Jun 16
                         }
-                , summary = "Christmas Day"
+                , summary = "Q2 Team Offsite"
                 }
-                |> Ical.withStatus Ical.Confirmed
-                |> Ical.withTransparency Ical.Transparent
+                |> Ical.withLocation "Portland, OR"
     in
-    Ical.generate calendarConfig [ meeting, holiday ]
+    Ical.generate
+        (Ical.config { id = "//mycompany//team//EN", domain = "mycompany.com" }
+            |> Ical.withName "Engineering Team"
+        )
+        [ standup, offsite ]
 ```
 
 ## Parsing
 
 ```elm
+import Date
 import Ical.Parser as Parser
 
 
-parseCalendar : String -> Result String (List String)
-parseCalendar icsString =
+type alias Holiday =
+    { name : String
+    , date : Date.Date
+    , weekday : Time.Weekday
+    }
+
+
+upcomingHolidays :
+    String
+    -> Result String (List Holiday)
+upcomingHolidays icsString =
     Parser.parse icsString
         |> Result.map
             (\cal ->
-                List.filterMap .summary cal.events
+                cal.events
+                    |> List.filterMap toHoliday
+                    |> List.sortBy
+                        (.date >> Date.toRataDie)
             )
+
+
+toHoliday : Parser.Event -> Maybe Holiday
+toHoliday event =
+    case ( event.summary, event.time ) of
+        ( Just name, Parser.AllDay { start } ) ->
+            Just
+                { name = name
+                , date = start
+                , weekday = Date.weekday start
+                }
+
+        _ ->
+            Nothing
 ```
+
+See [`examples/`](examples/) for a full runnable version of this using [elm-pages scripts](https://elm-pages.com/docs/elm-pages-scripts/).
 
 ## What You Get
 
@@ -111,7 +136,7 @@ parseCalendar icsString =
   - UTC date-time events
 - Recurrence rules via opaque `Rule` builder:
   - `FREQ`, `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYSETPOS`, `WKST`
-  - `BYMONTH` uses `Time.Month` values — invalid months are impossible at the type level
+  - `BYMONTH` uses `Time.Month` values, so invalid months are impossible at the type level
 
 ### Parsing (`Ical.Parser`)
 

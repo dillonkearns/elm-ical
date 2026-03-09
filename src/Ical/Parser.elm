@@ -8,11 +8,68 @@ module Ical.Parser exposing
     , Occurrence, expand, expandNext
     )
 
-{-| Parse iCal ([RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545)) calendar strings.
+{-| Parse iCal ([RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545)) calendar strings
+into typed Elm data.
+
+    import Date
+    import Ical.Parser as Parser
+
+
+    type alias Holiday =
+        { name : String
+        , date : Date.Date
+        , weekday : Time.Weekday
+        }
+
+
+    upcomingHolidays :
+        String
+        -> Result String (List Holiday)
+    upcomingHolidays icsString =
+        Parser.parse icsString
+            |> Result.map
+                (\cal ->
+                    cal.events
+                        |> List.filterMap toHoliday
+                        |> List.sortBy
+                            (.date >> Date.toRataDie)
+                )
+
+
+    toHoliday : Parser.Event -> Maybe Holiday
+    toHoliday event =
+        case ( event.summary, event.time ) of
+            ( Just name, Parser.AllDay { start } ) ->
+                Just
+                    { name = name
+                    , date = start
+                    , weekday = Date.weekday start
+                    }
+
+            _ ->
+                Nothing
+
+See the [`examples/` folder](https://github.com/dillonkearns/elm-ical/tree/main/examples)
+for a full runnable version of this script.
+
+Parsing is strict: malformed content lines, invalid dates and times, bad
+`RRULE` values, and a `TZID` without a matching `VTIMEZONE` all return `Err`.
+Parsed types are transparent record aliases so you can read fields directly.
+
+
+## Parsing
 
 @docs parse
 @docs Calendar, Event
+
+
+## Event times
+
 @docs EventTime, ResolvedTime, LocalDateTime
+
+
+## Enums and metadata
+
 @docs Status, Transparency
 @docs Organizer, RawProperty
 @docs Attendee, AttendeeRole, ParticipationStatus
@@ -81,9 +138,9 @@ type alias Event =
 [RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.2.2)
 requirement that DTSTART and DTEND share the same value type.
 
-  - `AllDay` — `VALUE=DATE`; the event spans whole days.
-  - `WithTime` — a resolved instant in time (UTC or TZID resolved via VTIMEZONE).
-  - `FloatingTime` — a local date-time with no timezone; interpreted in the
+  - `AllDay`: `VALUE=DATE`; the event spans whole days.
+  - `WithTime`: a resolved instant in time (UTC or TZID resolved via VTIMEZONE).
+  - `FloatingTime`: a local date-time with no timezone; interpreted in the
     viewer's local time.
 
 -}
@@ -141,7 +198,7 @@ type alias Organizer =
     }
 
 
-{-| An uninterpreted property — name, parameters, and raw value string.
+{-| An uninterpreted property: name, parameters, and raw value string.
 Unknown properties and extension properties (`X-*`) are preserved here.
 -}
 type alias RawProperty =
