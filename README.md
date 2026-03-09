@@ -15,6 +15,7 @@ It is not a complete RFC 5545 implementation yet. The current scope is calendar/
 ```elm
 import Date
 import Ical
+import Ical.Recurrence as Recurrence
 import Time
 
 
@@ -33,7 +34,7 @@ calendarFeed =
                 { id = "meeting-123"
                 , stamp = Time.millisToPosix 1633388093000
                 , time =
-                    Ical.WithTime
+                    Ical.withTime
                         { start = Time.millisToPosix 1633384770000
                         , end = Time.millisToPosix 1633388370000
                         }
@@ -41,13 +42,21 @@ calendarFeed =
                 }
                 |> Ical.withDescription "Weekly sync"
                 |> Ical.withLocation "Conference Room A"
+                |> Ical.withRecurrenceRule
+                    (Ical.rule Recurrence.Weekly
+                        |> Ical.withByDay
+                            [ { ordinal = Nothing, weekday = Time.Mon }
+                            , { ordinal = Nothing, weekday = Time.Wed }
+                            ]
+                        |> Ical.withCount 10
+                    )
 
         holiday =
             Ical.event
                 { id = "holiday-456"
                 , stamp = Time.millisToPosix 1633388093000
                 , time =
-                    Ical.AllDay
+                    Ical.allDay
                         { start = Date.fromCalendarDate 2021 Time.Dec 25
                         , end = Date.fromCalendarDate 2021 Time.Dec 25
                         }
@@ -76,15 +85,16 @@ parseCalendar icsString =
 
 ## What You Get
 
-- Strict parsing. Malformed content lines, invalid dates/times/durations/RRULE values, and invalid `DTEND`/`DURATION` combinations return `Err`.
+- Strict parsing. Malformed content lines, invalid dates/times/durations/RRULE values, and invalid `DTEND`/`DURATION` combinations return `Err`. A `TZID` parameter without a matching `VTIMEZONE` definition is a hard parse error.
 - Typed event times. Parsed events are `AllDay`, `WithTime`, or `FloatingTime`.
-- TZID-aware parsing. `DATE-TIME` values can be resolved through matching `VTIMEZONE` data.
+- TZID-aware parsing. `DATE-TIME` values with a `TZID` parameter are resolved through matching `VTIMEZONE` data.
 - Typed enums. `STATUS`, `TRANSP`, attendee role, and participation status are decoded into Elm union types.
 - Unknown-property preservation. Unhandled and extension properties are kept in `extraProperties`.
+- Invalid states prevented. Generation-side types like `EventTime` and `Rule` are opaque with builder functions that normalize inputs (e.g. reversed start/end dates are swapped, negative intervals are clamped to 1).
 
 ## Important Semantics
 
-- `Ical.EventTime.AllDay` uses an inclusive end date when generating.
+- `Ical.allDay` uses an inclusive end date when generating.
 - `Ical.Parser.EventTime.AllDay` uses RFC-style exclusive end semantics when parsing.
 - If a parsed `VEVENT` omits both `DTEND` and `DURATION`, the parser applies the RFC default:
   - all-day events end on the following date
@@ -99,6 +109,9 @@ parseCalendar icsString =
 - Event times:
   - all-day events
   - UTC date-time events
+- Recurrence rules via opaque `Rule` builder:
+  - `FREQ`, `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYSETPOS`, `WKST`
+  - `BYMONTH` uses `Time.Month` values — invalid months are impossible at the type level
 
 ### Parsing (`Ical.Parser`)
 
@@ -133,6 +146,4 @@ parseCalendar icsString =
 
 ## Known Limitations
 
-- If a `TZID` value does not have a matching `VTIMEZONE`, it is currently kept as a `FloatingTime` value instead of being resolved through IANA data.
-- `VTIMEZONE` support is intended for practical real-world feeds, but it is still not a complete implementation of every valid observance rule shape allowed by RFC 5545.
-- The generation API still exposes some invalid states directly, notably `EventTime(..)` and the raw `RecurrenceRule` record in `Ical.Recurrence`.
+- `VTIMEZONE` support is intended for practical real-world feeds, but it is still not a complete implementation of every valid observance rule shape allowed by RFC 5545. The common yearly pattern (`FREQ=YEARLY;BYMONTH=...;BYDAY=...`) is supported, along with `RDATE`, `UNTIL`, and historical observance chains.
