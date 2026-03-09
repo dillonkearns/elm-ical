@@ -829,7 +829,7 @@ endToEndTests =
 
                     Err err ->
                         Expect.fail err
-        , test "parse event with TZID parameter on DTSTART" <|
+        , test "TZID without matching VTIMEZONE is a hard parse error" <|
             \() ->
                 let
                     input : String
@@ -849,37 +849,13 @@ endToEndTests =
                             ]
                 in
                 case Parser.parse input of
-                    Ok cal ->
-                        case cal.events of
-                            [ ev ] ->
-                                ev.time
-                                    |> Expect.equal
-                                        (Parser.FloatingTime
-                                            { start =
-                                                { year = 1997
-                                                , month = 7
-                                                , day = 14
-                                                , hour = 13
-                                                , minute = 30
-                                                , second = 0
-                                                }
-                                            , end =
-                                                Just
-                                                    { year = 1997
-                                                    , month = 7
-                                                    , day = 14
-                                                    , hour = 13
-                                                    , minute = 30
-                                                    , second = 0
-                                                    }
-                                            }
-                                        )
-
-                            _ ->
-                                Expect.fail "Expected 1 event"
+                    Ok _ ->
+                        Expect.fail "Expected parse error for TZID without VTIMEZONE"
 
                     Err err ->
-                        Expect.fail err
+                        err
+                            |> String.contains "America/New_York"
+                            |> Expect.equal True
         , test "parse event with status and transparency" <|
             \() ->
                 let
@@ -1024,7 +1000,7 @@ endToEndTests =
 
                     Err err ->
                         Expect.fail err
-        , test "lowercase parameter names are matched case-insensitively" <|
+        , test "lowercase tzid parameter is still recognized (case-insensitive) and rejected without VTIMEZONE" <|
             \() ->
                 let
                     input : String
@@ -1044,22 +1020,13 @@ endToEndTests =
                             ]
                 in
                 case Parser.parse input of
-                    Ok cal ->
-                        case cal.events of
-                            [ ev ] ->
-                                ev.time
-                                    |> Expect.equal
-                                        (Parser.FloatingTime
-                                            { start = { year = 1997, month = 7, day = 14, hour = 13, minute = 30, second = 0 }
-                                            , end = Just { year = 1997, month = 7, day = 14, hour = 13, minute = 30, second = 0 }
-                                            }
-                                        )
-
-                            _ ->
-                                Expect.fail "Expected 1 event"
+                    Ok _ ->
+                        Expect.fail "Expected parse error for TZID without VTIMEZONE"
 
                     Err err ->
-                        Expect.fail err
+                        err
+                            |> String.contains "America/Chicago"
+                            |> Expect.equal True
         , test "invalid DTSTART value fails parsing" <|
             \() ->
                 let

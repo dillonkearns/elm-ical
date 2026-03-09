@@ -811,8 +811,7 @@ dateTimePartsToValue timezones maybeTzid parts =
                         |> Result.map (\posix -> IDateTime { posix = posix, timeZoneName = Just tz })
 
                 Nothing ->
-                    -- No VTIMEZONE found for this TZID, keep as floating
-                    Ok (IFloating dt)
+                    Err ("TZID \"" ++ tz ++ "\" has no matching VTIMEZONE definition")
 
         Nothing ->
             if parts.isUtc then
