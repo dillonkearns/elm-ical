@@ -280,10 +280,19 @@ withAttendee attendee (Event e) =
 -}
 generate : Config -> List Event -> String
 generate ((Config c) as cfg) events =
+    let
+        eventSection : String
+        eventSection =
+            case List.map (generateEvent cfg) events of
+                [] ->
+                    ""
+
+                generatedEvents ->
+                    "\u{000D}\n" ++ String.join "\u{000D}\n" generatedEvents
+    in
     "BEGIN:VCALENDAR\u{000D}\n"
         ++ calendarProperties c
-        ++ "\u{000D}\n"
-        ++ String.join "\u{000D}\n" (List.map (generateEvent cfg) events)
+        ++ eventSection
         ++ "\u{000D}\nEND:VCALENDAR\u{000D}\n"
 
 

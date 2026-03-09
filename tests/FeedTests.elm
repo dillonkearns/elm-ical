@@ -350,6 +350,19 @@ END:VEVENT"""
                     , \o -> o |> String.contains "URL:" |> Expect.equal False
                     ]
                     output
+        , test "empty calendar has no blank line before END:VCALENDAR" <|
+            \() ->
+                Ical.generate
+                    (Ical.config
+                        { id = "//test//test//EN"
+                        , domain = "test.com"
+                        }
+                    )
+                    []
+                    |> expectEqualLines """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//test//test//EN
+END:VCALENDAR"""
         , test "multi-day all-day event uses inclusive end date" <|
             \() ->
                 Ical.event

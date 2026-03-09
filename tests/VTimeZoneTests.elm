@@ -1,5 +1,6 @@
 module VTimeZoneTests exposing (suite)
 
+import ContentLine
 import Date
 import Expect
 import Ical.Parser as Parser
@@ -23,22 +24,26 @@ suite =
 offsetParsingTests : Test
 offsetParsingTests =
     describe "UTC offset parsing"
-        [ test "parse -0500 as -300 minutes" <|
+        [ test "parse -0500 as -18000 seconds" <|
             \() ->
                 VTimeZone.parseOffset "-0500"
-                    |> Expect.equal (Ok -300)
-        , test "parse +0530 as 330 minutes" <|
+                    |> Expect.equal (Ok -18000)
+        , test "parse +0530 as 19800 seconds" <|
             \() ->
                 VTimeZone.parseOffset "+0530"
-                    |> Expect.equal (Ok 330)
-        , test "parse +0000 as 0 minutes" <|
+                    |> Expect.equal (Ok 19800)
+        , test "parse +0000 as 0 seconds" <|
             \() ->
                 VTimeZone.parseOffset "+0000"
                     |> Expect.equal (Ok 0)
-        , test "parse -0400 as -240 minutes" <|
+        , test "parse -0400 as -14400 seconds" <|
             \() ->
                 VTimeZone.parseOffset "-0400"
-                    |> Expect.equal (Ok -240)
+                    |> Expect.equal (Ok -14400)
+        , test "parse +013045 as 5445 seconds" <|
+            \() ->
+                VTimeZone.parseOffset "+013045"
+                    |> Expect.equal (Ok 5445)
         , test "invalid offset returns error" <|
             \() ->
                 VTimeZone.parseOffset "invalid"
@@ -98,19 +103,22 @@ transitionDateTests =
 -}
 easternTimeZone : VTimeZone.ZoneDefinition
 easternTimeZone =
-    { standardOffset = -300
-    , standardTransition =
-        Just
-            { rule = { byMonth = 11, weekdayOrdinal = 1, weekday = Time.Sun }
-            , transitionTime = { hour = 2, minute = 0, second = 0 }
-            }
-    , daylightOffset = -240
-    , daylightTransition =
-        Just
-            { rule = { byMonth = 3, weekdayOrdinal = 2, weekday = Time.Sun }
-            , transitionTime = { hour = 2, minute = 0, second = 0 }
-            }
-    }
+    parseZone
+        [ "TZID:America/New_York"
+        , "BEGIN:DAYLIGHT"
+        , "TZOFFSETFROM:-0500"
+        , "TZOFFSETTO:-0400"
+        , "DTSTART:19700308T020000"
+        , "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU"
+        , "END:DAYLIGHT"
+        , "BEGIN:STANDARD"
+        , "TZOFFSETFROM:-0400"
+        , "TZOFFSETTO:-0500"
+        , "DTSTART:19701101T020000"
+        , "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU"
+        , "END:STANDARD"
+        , "END:VTIMEZONE"
+        ]
 
 
 resolveTests : Test
@@ -139,6 +147,14 @@ resolveTests =
                 -- March 10, 2024 at 3:30 AM Eastern = 7:30 AM UTC (EDT, -4h)
                 VTimeZone.resolve easternTimeZone
                     { year = 2024, month = 3, day = 10, hour = 3, minute = 30, second = 0 }
+                    |> Expect.equal (Ok (toIso8601 "2024-03-10T07:30:00.000Z"))
+        , test "nonexistent spring-forward time uses offset before the gap" <|
+            \() ->
+                -- March 10, 2024 at 2:30 AM Eastern does not exist.
+                -- RFC 5545 says to interpret it using the UTC offset before the gap,
+                -- which resolves to 2024-03-10T07:30:00Z.
+                VTimeZone.resolve easternTimeZone
+                    { year = 2024, month = 3, day = 10, hour = 2, minute = 30, second = 0 }
                     |> Expect.equal (Ok (toIso8601 "2024-03-10T07:30:00.000Z"))
         , test "fall-back ambiguous time resolves to first occurrence (daylight)" <|
             \() ->
@@ -194,7 +210,11 @@ integrationTests =
                             [ ev ] ->
                                 ev.time
                                     |> Expect.equal
-                                        (Parser.WithTime { start = { posix = toIso8601 "2024-06-15T18:30:00.000Z", timeZoneName = Just "America/New_York" }, end = Nothing })
+                                        (Parser.WithTime
+                                            { start = { posix = toIso8601 "2024-06-15T18:30:00.000Z", timeZoneName = Just "America/New_York" }
+                                            , end = Just { posix = toIso8601 "2024-06-15T18:30:00.000Z", timeZoneName = Just "America/New_York" }
+                                            }
+                                        )
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -241,7 +261,93 @@ integrationTests =
                             [ ev ] ->
                                 ev.time
                                     |> Expect.equal
-                                        (Parser.WithTime { start = { posix = toIso8601 "2024-12-15T19:30:00.000Z", timeZoneName = Just "America/New_York" }, end = Nothing })
+                                        (Parser.WithTime
+                                            { start = { posix = toIso8601 "2024-12-15T19:30:00.000Z", timeZoneName = Just "America/New_York" }
+                                            , end = Just { posix = toIso8601 "2024-12-15T19:30:00.000Z", timeZoneName = Just "America/New_York" }
+                                            }
+                                        )
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "historical VTIMEZONE rules are used for pre-2007 New York dates" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VTIMEZONE"
+                            , "TZID:America/New_York"
+                            , "BEGIN:DAYLIGHT"
+                            , "TZOFFSETFROM:-0500"
+                            , "TZOFFSETTO:-0400"
+                            , "DTSTART:19670430T020000"
+                            , "RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=-1SU;UNTIL=19730429T070000Z"
+                            , "END:DAYLIGHT"
+                            , "BEGIN:DAYLIGHT"
+                            , "TZOFFSETFROM:-0500"
+                            , "TZOFFSETTO:-0400"
+                            , "DTSTART:19760425T020000"
+                            , "RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=-1SU;UNTIL=19860427T070000Z"
+                            , "END:DAYLIGHT"
+                            , "BEGIN:DAYLIGHT"
+                            , "TZOFFSETFROM:-0500"
+                            , "TZOFFSETTO:-0400"
+                            , "DTSTART:19870405T020000"
+                            , "RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU;UNTIL=20060402T070000Z"
+                            , "END:DAYLIGHT"
+                            , "BEGIN:DAYLIGHT"
+                            , "TZOFFSETFROM:-0500"
+                            , "TZOFFSETTO:-0400"
+                            , "DTSTART:20070311T020000"
+                            , "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU"
+                            , "END:DAYLIGHT"
+                            , "BEGIN:STANDARD"
+                            , "TZOFFSETFROM:-0400"
+                            , "TZOFFSETTO:-0500"
+                            , "DTSTART:19671029T020000"
+                            , "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU;UNTIL=20061029T060000Z"
+                            , "END:STANDARD"
+                            , "BEGIN:STANDARD"
+                            , "TZOFFSETFROM:-0400"
+                            , "TZOFFSETTO:-0500"
+                            , "DTSTART:20071104T020000"
+                            , "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU"
+                            , "END:STANDARD"
+                            , "END:VTIMEZONE"
+                            , "BEGIN:VEVENT"
+                            , "UID:historic-ny-1@test"
+                            , "DTSTAMP:20240101T000000Z"
+                            , "DTSTART;TZID=America/New_York:20061101T120000"
+                            , "SUMMARY:Historic New York meeting"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.time
+                                    |> Expect.equal
+                                        (Parser.WithTime
+                                            { start =
+                                                { posix = toIso8601 "2006-11-01T17:00:00.000Z"
+                                                , timeZoneName = Just "America/New_York"
+                                                }
+                                            , end =
+                                                Just
+                                                    { posix = toIso8601 "2006-11-01T17:00:00.000Z"
+                                                    , timeZoneName = Just "America/New_York"
+                                                    }
+                                            }
+                                        )
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -259,3 +365,30 @@ toIso8601 string =
 
         Err error ->
             Debug.todo (Debug.toString error)
+
+
+parseZone : List String -> VTimeZone.ZoneDefinition
+parseZone lines =
+    let
+        contentLines : List ContentLine.ContentLine
+        contentLines =
+            lines
+                |> List.map
+                    (\line ->
+                        case ContentLine.parse line of
+                            Ok contentLine ->
+                                contentLine
+
+                            Err err ->
+                                Debug.todo err
+                    )
+    in
+    case VTimeZone.parseFromContentLines contentLines of
+        Ok ( _, zone, [] ) ->
+            zone
+
+        Ok _ ->
+            Debug.todo "Unexpected remaining content lines when parsing test timezone"
+
+        Err err ->
+            Debug.todo err

@@ -37,7 +37,11 @@ parseDate input =
             )
         of
             ( Just year, Just month, Just day ) ->
-                Ok { year = year, month = month, day = day }
+                if isValidDate year month day then
+                    Ok { year = year, month = month, day = day }
+
+                else
+                    Err ("Invalid DATE: " ++ input)
 
             _ ->
                 Err ("Invalid DATE: " ++ input)
@@ -83,15 +87,19 @@ parseDateTime input =
                         )
                     of
                         ( Just hour, Just minute, Just second ) ->
-                            Ok
-                                { year = year
-                                , month = month
-                                , day = day
-                                , hour = hour
-                                , minute = minute
-                                , second = second
-                                , isUtc = hasZ
-                                }
+                            if isValidDate year month day && isValidTime hour minute second then
+                                Ok
+                                    { year = year
+                                    , month = month
+                                    , day = day
+                                    , hour = hour
+                                    , minute = minute
+                                    , second = second
+                                    , isUtc = hasZ
+                                    }
+
+                            else
+                                Err ("Invalid DATE-TIME: " ++ input)
 
                         _ ->
                             Err ("Invalid DATE-TIME: " ++ input)
@@ -122,8 +130,7 @@ parseDuration input =
                 String.dropLeft 1 input
 
             else if String.startsWith "-" input then
-                -- Negative durations exist in spec but we treat as positive
-                String.dropLeft 1 input
+                ""
 
             else
                 input
@@ -139,49 +146,65 @@ parseDuration input =
         in
         if String.contains "W" afterP then
             -- Week form: P<n>W
-            case String.toInt (String.replace "W" "" afterP) of
-                Just w ->
-                    Ok { weeks = w, days = 0, hours = 0, minutes = 0, seconds = 0 }
+            if String.endsWith "W" afterP && isDigits (String.dropRight 1 afterP) then
+                case String.toInt (String.dropRight 1 afterP) of
+                    Just w ->
+                        Ok { weeks = w, days = 0, hours = 0, minutes = 0, seconds = 0 }
 
-                Nothing ->
-                    Err ("Invalid DURATION: " ++ input)
+                    Nothing ->
+                        Err ("Invalid DURATION: " ++ input)
+
+            else
+                Err ("Invalid DURATION: " ++ input)
 
         else
             case String.split "T" afterP of
                 [ datePart, timePart ] ->
-                    let
-                        days : Int
-                        days =
-                            parseDurationDays datePart
-                    in
-                    case parseDurationTime timePart of
-                        Ok time ->
-                            Ok { weeks = 0, days = days, hours = time.hours, minutes = time.minutes, seconds = time.seconds }
-
-                        Err err ->
-                            Err err
+                    parseDurationDays datePart
+                        |> Result.andThen
+                            (\days ->
+                                parseDurationTime timePart
+                                    |> Result.map
+                                        (\time ->
+                                            { weeks = 0
+                                            , days = days
+                                            , hours = time.hours
+                                            , minutes = time.minutes
+                                            , seconds = time.seconds
+                                            }
+                                        )
+                            )
 
                 [ datePart ] ->
                     if String.isEmpty datePart then
                         Err ("Invalid DURATION: " ++ input)
 
                     else
-                        Ok { weeks = 0, days = parseDurationDays datePart, hours = 0, minutes = 0, seconds = 0 }
+                        parseDurationDays datePart
+                            |> Result.map
+                                (\days ->
+                                    { weeks = 0, days = days, hours = 0, minutes = 0, seconds = 0 }
+                                )
 
                 _ ->
                     Err ("Invalid DURATION: " ++ input)
 
 
-parseDurationDays : String -> Int
+parseDurationDays : String -> Result String Int
 parseDurationDays part =
     if String.isEmpty part then
-        0
+        Ok 0
+
+    else if String.endsWith "D" part && isDigits (String.dropRight 1 part) then
+        case String.toInt (String.dropRight 1 part) of
+            Just days ->
+                Ok days
+
+            Nothing ->
+                Err ("Invalid DURATION day part: " ++ part)
 
     else
-        part
-            |> String.replace "D" ""
-            |> String.toInt
-            |> Maybe.withDefault 0
+        Err ("Invalid DURATION day part: " ++ part)
 
 
 parseDurationTime : String -> Result String { hours : Int, minutes : Int, seconds : Int }
@@ -190,31 +213,63 @@ parseDurationTime part =
         Err "Empty time part in DURATION"
 
     else
-        Ok (parseDurationTimeHelp part { hours = 0, minutes = 0, seconds = 0 })
+        parseDurationTimeHelp part 0 { hours = 0, minutes = 0, seconds = 0 }
 
 
-parseDurationTimeHelp : String -> { hours : Int, minutes : Int, seconds : Int } -> { hours : Int, minutes : Int, seconds : Int }
-parseDurationTimeHelp remaining acc =
+parseDurationTimeHelp :
+    String
+    -> Int
+    -> { hours : Int, minutes : Int, seconds : Int }
+    -> Result String { hours : Int, minutes : Int, seconds : Int }
+parseDurationTimeHelp remaining lastUnitRank acc =
     if String.isEmpty remaining then
-        acc
+        Ok acc
 
     else
         let
             ( digits, rest ) =
                 spanDigits remaining
+
+            unit : String
+            unit =
+                String.left 1 rest
+
+            maybeRank : Maybe Int
+            maybeRank =
+                case unit of
+                    "H" ->
+                        Just 1
+
+                    "M" ->
+                        Just 2
+
+                    "S" ->
+                        Just 3
+
+                    _ ->
+                        Nothing
         in
-        case ( String.toInt digits, String.left 1 rest ) of
-            ( Just n, "H" ) ->
-                parseDurationTimeHelp (String.dropLeft 1 rest) { acc | hours = n }
+        case ( String.toInt digits, maybeRank ) of
+            ( Just n, Just rank ) ->
+                if String.isEmpty digits || rank < lastUnitRank then
+                    Err ("Invalid DURATION time part: " ++ remaining)
 
-            ( Just n, "M" ) ->
-                parseDurationTimeHelp (String.dropLeft 1 rest) { acc | minutes = n }
+                else
+                    case unit of
+                        "H" ->
+                            parseDurationTimeHelp (String.dropLeft 1 rest) rank { acc | hours = n }
 
-            ( Just n, "S" ) ->
-                parseDurationTimeHelp (String.dropLeft 1 rest) { acc | seconds = n }
+                        "M" ->
+                            parseDurationTimeHelp (String.dropLeft 1 rest) rank { acc | minutes = n }
+
+                        "S" ->
+                            parseDurationTimeHelp (String.dropLeft 1 rest) rank { acc | seconds = n }
+
+                        _ ->
+                            Err ("Invalid DURATION time part: " ++ remaining)
 
             _ ->
-                acc
+                Err ("Invalid DURATION time part: " ++ remaining)
 
 
 spanDigits : String -> ( String, String )
@@ -234,6 +289,85 @@ spanDigitsHelp remaining acc =
 
         [] ->
             ( String.fromList (List.reverse acc), "" )
+
+
+isDigits : String -> Bool
+isDigits input =
+    not (String.isEmpty input) && String.all Char.isDigit input
+
+
+isValidDate : Int -> Int -> Int -> Bool
+isValidDate year month day =
+    case daysInMonth year month of
+        Just maxDay ->
+            day >= 1 && day <= maxDay
+
+        Nothing ->
+            False
+
+
+isValidTime : Int -> Int -> Int -> Bool
+isValidTime hour minute second =
+    hour >= 0
+        && hour <= 23
+        && minute >= 0
+        && minute <= 59
+        && second >= 0
+        && second <= 60
+
+
+daysInMonth : Int -> Int -> Maybe Int
+daysInMonth year month =
+    case month of
+        1 ->
+            Just 31
+
+        2 ->
+            Just
+                (if isLeapYear year then
+                    29
+
+                 else
+                    28
+                )
+
+        3 ->
+            Just 31
+
+        4 ->
+            Just 30
+
+        5 ->
+            Just 31
+
+        6 ->
+            Just 30
+
+        7 ->
+            Just 31
+
+        8 ->
+            Just 31
+
+        9 ->
+            Just 30
+
+        10 ->
+            Just 31
+
+        11 ->
+            Just 30
+
+        12 ->
+            Just 31
+
+        _ ->
+            Nothing
+
+
+isLeapYear : Int -> Bool
+isLeapYear year =
+    modBy 4 year == 0 && (modBy 100 year /= 0 || modBy 400 year == 0)
 
 
 {-| Unescape iCal TEXT values per RFC 5545 Section 3.3.11.
@@ -314,34 +448,41 @@ parseRecurrenceRule input =
                     Err ("Invalid RRULE: unknown FREQ=" ++ freqStr)
 
                 Just frequency ->
-                    let
-                        interval : Int
-                        interval =
-                            getParam "INTERVAL"
-                                |> Maybe.andThen String.toInt
-                                |> Maybe.withDefault 1
-
-                        weekStart : Time.Weekday
-                        weekStart =
-                            getParam "WKST"
-                                |> Maybe.andThen parseWeekday
-                                |> Maybe.withDefault Time.Mon
-                    in
-                    parseRecurrenceEnd (getParam "COUNT") (getParam "UNTIL")
+                    parseInterval (getParam "INTERVAL")
                         |> Result.andThen
-                            (\end ->
-                                parseDaySpecs (getParam "BYDAY")
-                                    |> Result.map
-                                        (\byDay ->
-                                            { frequency = frequency
-                                            , interval = interval
-                                            , end = end
-                                            , byDay = byDay
-                                            , byMonthDay = parseIntList (getParam "BYMONTHDAY")
-                                            , byMonth = parseIntList (getParam "BYMONTH")
-                                            , bySetPos = parseIntList (getParam "BYSETPOS")
-                                            , weekStart = weekStart
-                                            }
+                            (\interval ->
+                                parseWeekStart (getParam "WKST")
+                                    |> Result.andThen
+                                        (\weekStart ->
+                                            parseRecurrenceEnd (getParam "COUNT") (getParam "UNTIL")
+                                                |> Result.andThen
+                                                    (\end ->
+                                                        parseDaySpecs (getParam "BYDAY")
+                                                            |> Result.andThen
+                                                                (\byDay ->
+                                                                    parseIntList "BYMONTHDAY" isValidMonthDay (getParam "BYMONTHDAY")
+                                                                        |> Result.andThen
+                                                                            (\byMonthDay ->
+                                                                                parseIntList "BYMONTH" isValidMonth (getParam "BYMONTH")
+                                                                                    |> Result.andThen
+                                                                                        (\byMonth ->
+                                                                                            parseIntList "BYSETPOS" isValidSetPos (getParam "BYSETPOS")
+                                                                                                |> Result.map
+                                                                                                    (\bySetPos ->
+                                                                                                        { frequency = frequency
+                                                                                                        , interval = interval
+                                                                                                        , end = end
+                                                                                                        , byDay = byDay
+                                                                                                        , byMonthDay = byMonthDay
+                                                                                                        , byMonth = byMonth
+                                                                                                        , bySetPos = bySetPos
+                                                                                                        , weekStart = weekStart
+                                                                                                        }
+                                                                                                    )
+                                                                                        )
+                                                                            )
+                                                                )
+                                                    )
                                         )
                             )
 
@@ -371,7 +512,11 @@ parseRecurrenceEnd maybeCount maybeUntil =
         ( Just countStr, Nothing ) ->
             case String.toInt countStr of
                 Just n ->
-                    Ok (Count n)
+                    if n > 0 then
+                        Ok (Count n)
+
+                    else
+                        Err ("Invalid COUNT: " ++ countStr)
 
                 Nothing ->
                     Err ("Invalid COUNT: " ++ countStr)
@@ -384,6 +529,83 @@ parseRecurrenceEnd maybeCount maybeUntil =
 
         ( Just _, Just _ ) ->
             Err "RRULE cannot have both COUNT and UNTIL"
+
+
+parseInterval : Maybe String -> Result String Int
+parseInterval maybeValue =
+    case maybeValue of
+        Nothing ->
+            Ok 1
+
+        Just intervalStr ->
+            case String.toInt intervalStr of
+                Just interval ->
+                    if interval > 0 then
+                        Ok interval
+
+                    else
+                        Err ("Invalid INTERVAL: " ++ intervalStr)
+
+                Nothing ->
+                    Err ("Invalid INTERVAL: " ++ intervalStr)
+
+
+parseWeekStart : Maybe String -> Result String Time.Weekday
+parseWeekStart maybeValue =
+    case maybeValue of
+        Nothing ->
+            Ok Time.Mon
+
+        Just weekStartStr ->
+            case parseWeekday weekStartStr of
+                Just weekday ->
+                    Ok weekday
+
+                Nothing ->
+                    Err ("Invalid WKST: " ++ weekStartStr)
+
+
+parseIntList : String -> (Int -> Bool) -> Maybe String -> Result String (List Int)
+parseIntList fieldName isValid maybeStr =
+    case maybeStr of
+        Nothing ->
+            Ok []
+
+        Just str ->
+            str
+                |> String.split ","
+                |> List.foldr
+                    (\part acc ->
+                        case ( String.toInt part, acc ) of
+                            ( Just value, Ok values ) ->
+                                if isValid value then
+                                    Ok (value :: values)
+
+                                else
+                                    Err ("Invalid " ++ fieldName ++ ": " ++ part)
+
+                            ( Nothing, _ ) ->
+                                Err ("Invalid " ++ fieldName ++ ": " ++ part)
+
+                            ( _, Err err ) ->
+                                Err err
+                    )
+                    (Ok [])
+
+
+isValidMonthDay : Int -> Bool
+isValidMonthDay value =
+    value /= 0 && value >= -31 && value <= 31
+
+
+isValidMonth : Int -> Bool
+isValidMonth value =
+    value >= 1 && value <= 12
+
+
+isValidSetPos : Int -> Bool
+isValidSetPos value =
+    value /= 0 && value >= -366 && value <= 366
 
 
 parseUntilValue : String -> Result String RecurrenceEnd
@@ -499,17 +721,6 @@ parseWeekday str =
 
         _ ->
             Nothing
-
-
-parseIntList : Maybe String -> List Int
-parseIntList maybeStr =
-    case maybeStr of
-        Nothing ->
-            []
-
-        Just str ->
-            String.split "," str
-                |> List.filterMap String.toInt
 
 
 intToMonth : Int -> Time.Month

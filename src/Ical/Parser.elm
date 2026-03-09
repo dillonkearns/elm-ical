@@ -51,7 +51,10 @@ Parsing will fail if DTSTART is missing from a VEVENT.
 
 The `end` inside `time` is populated from either DTEND or DURATION (which are
 [mutually exclusive](https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.1)
-per the spec). When neither is present, `end` is `Nothing`.
+per the spec). When neither is present, the parser applies the RFC default:
+
+  - DATE events end on the following date
+  - DATE-TIME events end at the same instant they start
 
 -}
 type alias Event =
@@ -215,21 +218,23 @@ splitLines input =
 
 parseLines : List String -> Result String Calendar
 parseLines lines =
-    let
-        contentLines : List ContentLine
-        contentLines =
-            List.filterMap
-                (\line ->
-                    case ContentLine.parse line of
-                        Ok cl ->
-                            Just cl
+    parseContentLines lines []
+        |> Result.andThen parseCalendar
 
-                        Err _ ->
-                            Nothing
-                )
-                lines
-    in
-    parseCalendar contentLines
+
+parseContentLines : List String -> List ContentLine -> Result String (List ContentLine)
+parseContentLines remaining acc =
+    case remaining of
+        [] ->
+            Ok (List.reverse acc)
+
+        line :: rest ->
+            case ContentLine.parse line of
+                Ok contentLine ->
+                    parseContentLines rest (contentLine :: acc)
+
+                Err err ->
+                    Err err
 
 
 type alias ParseState =
@@ -362,6 +367,7 @@ type alias EventAccum =
     , exclusions : List Time.Posix
     , attendees : List Attendee
     , extraProperties : List RawProperty
+    , errors : List String
     }
 
 
@@ -384,106 +390,117 @@ emptyEventAccum =
     , exclusions = []
     , attendees = []
     , extraProperties = []
+    , errors = []
     }
 
 
 finalizeEvent : EventAccum -> Result String Event
 finalizeEvent accum =
-    case ( accum.uid, accum.dtstamp, accum.dtstart ) of
-        ( Just uid, Just dtstamp, Just dtstart ) ->
-            extractPosix "DTSTAMP" dtstamp
-                |> Result.andThen
-                    (\stamp ->
-                        buildEventTime dtstart accum.dtend accum.duration
-                            |> Result.andThen
-                                (\time ->
-                                    extractMaybePosix "CREATED" accum.created
-                                        |> Result.andThen
-                                            (\created ->
-                                                extractMaybePosix "LAST-MODIFIED" accum.lastModified
-                                                    |> Result.map
-                                                        (\lastModified ->
-                                                            { uid = uid
-                                                            , stamp = stamp
-                                                            , time = time
-                                                            , created = created
-                                                            , lastModified = lastModified
-                                                            , summary = accum.summary
-                                                            , description = accum.description
-                                                            , location = accum.location
-                                                            , organizer = accum.organizer
-                                                            , status = accum.status
-                                                            , transparency = accum.transparency
-                                                            , recurrenceRules = List.reverse accum.recurrenceRules
-                                                            , exclusions = List.reverse accum.exclusions
-                                                            , attendees = List.reverse accum.attendees
-                                                            , extraProperties = List.reverse accum.extraProperties
-                                                            }
-                                                        )
-                                            )
-                                )
-                    )
+    case List.reverse accum.errors of
+        firstError :: _ ->
+            Err firstError
 
-        ( Nothing, _, _ ) ->
-            Err "VEVENT missing required UID"
+        [] ->
+            case ( accum.uid, accum.dtstamp, accum.dtstart ) of
+                ( Just uid, Just dtstamp, Just dtstart ) ->
+                    extractPosix "DTSTAMP" dtstamp
+                        |> Result.andThen
+                            (\stamp ->
+                                buildEventTime dtstart accum.dtend accum.duration
+                                    |> Result.andThen
+                                        (\time ->
+                                            extractMaybePosix "CREATED" accum.created
+                                                |> Result.andThen
+                                                    (\created ->
+                                                        extractMaybePosix "LAST-MODIFIED" accum.lastModified
+                                                            |> Result.map
+                                                                (\lastModified ->
+                                                                    { uid = uid
+                                                                    , stamp = stamp
+                                                                    , time = time
+                                                                    , created = created
+                                                                    , lastModified = lastModified
+                                                                    , summary = accum.summary
+                                                                    , description = accum.description
+                                                                    , location = accum.location
+                                                                    , organizer = accum.organizer
+                                                                    , status = accum.status
+                                                                    , transparency = accum.transparency
+                                                                    , recurrenceRules = List.reverse accum.recurrenceRules
+                                                                    , exclusions = List.reverse accum.exclusions
+                                                                    , attendees = List.reverse accum.attendees
+                                                                    , extraProperties = List.reverse accum.extraProperties
+                                                                    }
+                                                                )
+                                                    )
+                                        )
+                            )
 
-        ( _, Nothing, _ ) ->
-            Err "VEVENT missing required DTSTAMP"
+                ( Nothing, _, _ ) ->
+                    Err "VEVENT missing required UID"
 
-        ( _, _, Nothing ) ->
-            Err "VEVENT missing required DTSTART"
+                ( _, Nothing, _ ) ->
+                    Err "VEVENT missing required DTSTAMP"
+
+                ( _, _, Nothing ) ->
+                    Err "VEVENT missing required DTSTART"
 
 
 buildEventTime : InternalDateTimeValue -> Maybe InternalDateTimeValue -> Maybe ValueParser.Duration -> Result String EventTime
 buildEventTime dtstart maybeDtend maybeDuration =
-    case dtstart of
-        IDate startDate ->
-            case maybeDtend of
-                Just (IDate endDate) ->
-                    Ok (AllDay { start = startDate, end = Just endDate })
+    case ( maybeDtend, maybeDuration ) of
+        ( Just _, Just _ ) ->
+            Err "VEVENT must not contain both DTEND and DURATION"
 
-                Just _ ->
-                    Err "DTEND value type must match DTSTART (expected DATE)"
+        _ ->
+            case dtstart of
+                IDate startDate ->
+                    case maybeDtend of
+                        Just (IDate endDate) ->
+                            Ok (AllDay { start = startDate, end = Just endDate })
 
-                Nothing ->
-                    case maybeDuration of
-                        Just dur ->
-                            Ok (AllDay { start = startDate, end = Just (addDurationToDate dur startDate) })
-
-                        Nothing ->
-                            Ok (AllDay { start = startDate, end = Nothing })
-
-        IDateTime startResolved ->
-            case maybeDtend of
-                Just (IDateTime endResolved) ->
-                    Ok (WithTime { start = startResolved, end = Just endResolved })
-
-                Just _ ->
-                    Err "DTEND value type must match DTSTART (expected DATE-TIME)"
-
-                Nothing ->
-                    case maybeDuration of
-                        Just dur ->
-                            Ok (WithTime { start = startResolved, end = Just (addDurationToResolved dur startResolved) })
+                        Just _ ->
+                            Err "DTEND value type must match DTSTART (expected DATE)"
 
                         Nothing ->
-                            Ok (WithTime { start = startResolved, end = Nothing })
+                            case maybeDuration of
+                                Just dur ->
+                                    Ok (AllDay { start = startDate, end = Just (addDurationToDate dur startDate) })
 
-        IFloating startLocal ->
-            case maybeDtend of
-                Just (IFloating endLocal) ->
-                    Ok (FloatingTime { start = startLocal, end = Just endLocal })
+                                Nothing ->
+                                    Ok (AllDay { start = startDate, end = Just (Date.add Date.Days 1 startDate) })
 
-                Just _ ->
-                    Err "DTEND value type must match DTSTART (expected local DATE-TIME)"
+                IDateTime startResolved ->
+                    case maybeDtend of
+                        Just (IDateTime endResolved) ->
+                            Ok (WithTime { start = startResolved, end = Just endResolved })
 
-                Nothing ->
-                    case maybeDuration of
-                        Just dur ->
-                            Ok (FloatingTime { start = startLocal, end = Just (addDurationToLocal dur startLocal) })
+                        Just _ ->
+                            Err "DTEND value type must match DTSTART (expected DATE-TIME)"
 
                         Nothing ->
-                            Ok (FloatingTime { start = startLocal, end = Nothing })
+                            case maybeDuration of
+                                Just dur ->
+                                    Ok (WithTime { start = startResolved, end = Just (addDurationToResolved dur startResolved) })
+
+                                Nothing ->
+                                    Ok (WithTime { start = startResolved, end = Just startResolved })
+
+                IFloating startLocal ->
+                    case maybeDtend of
+                        Just (IFloating endLocal) ->
+                            Ok (FloatingTime { start = startLocal, end = Just endLocal })
+
+                        Just _ ->
+                            Err "DTEND value type must match DTSTART (expected local DATE-TIME)"
+
+                        Nothing ->
+                            case maybeDuration of
+                                Just dur ->
+                                    Ok (FloatingTime { start = startLocal, end = Just (addDurationToLocal dur startLocal) })
+
+                                Nothing ->
+                                    Ok (FloatingTime { start = startLocal, end = Just startLocal })
 
 
 addDurationToDate : ValueParser.Duration -> Date.Date -> Date.Date
@@ -613,22 +630,52 @@ applyEventProperty timezones line accum =
             { accum | uid = Just line.value }
 
         "DTSTAMP" ->
-            { accum | dtstamp = parseDateTimeValue timezones line |> Result.toMaybe }
+            case parseDateTimeValue timezones line of
+                Ok dtstamp ->
+                    { accum | dtstamp = Just dtstamp }
+
+                Err err ->
+                    addEventError ("Invalid DTSTAMP: " ++ err) accum
 
         "DTSTART" ->
-            { accum | dtstart = parseDateTimeValue timezones line |> Result.toMaybe }
+            case parseDateTimeValue timezones line of
+                Ok dtstart ->
+                    { accum | dtstart = Just dtstart }
+
+                Err err ->
+                    addEventError ("Invalid DTSTART: " ++ err) accum
 
         "DTEND" ->
-            { accum | dtend = parseDateTimeValue timezones line |> Result.toMaybe }
+            case parseDateTimeValue timezones line of
+                Ok dtend ->
+                    { accum | dtend = Just dtend }
+
+                Err err ->
+                    addEventError ("Invalid DTEND: " ++ err) accum
 
         "DURATION" ->
-            { accum | duration = ValueParser.parseDuration line.value |> Result.toMaybe }
+            case ValueParser.parseDuration line.value of
+                Ok duration ->
+                    { accum | duration = Just duration }
+
+                Err err ->
+                    addEventError ("Invalid DURATION: " ++ err) accum
 
         "CREATED" ->
-            { accum | created = parseDateTimeValue timezones line |> Result.toMaybe }
+            case parseDateTimeValue timezones line of
+                Ok created ->
+                    { accum | created = Just created }
+
+                Err err ->
+                    addEventError ("Invalid CREATED: " ++ err) accum
 
         "LAST-MODIFIED" ->
-            { accum | lastModified = parseDateTimeValue timezones line |> Result.toMaybe }
+            case parseDateTimeValue timezones line of
+                Ok lastModified ->
+                    { accum | lastModified = Just lastModified }
+
+                Err err ->
+                    addEventError ("Invalid LAST-MODIFIED: " ++ err) accum
 
         "SUMMARY" ->
             { accum | summary = Just (ValueParser.unescapeText line.value) }
@@ -663,8 +710,8 @@ applyEventProperty timezones line accum =
                 Ok rule ->
                     { accum | recurrenceRules = rule :: accum.recurrenceRules }
 
-                Err _ ->
-                    { accum | extraProperties = rawProp :: accum.extraProperties }
+                Err err ->
+                    addEventError ("Invalid RRULE: " ++ err) accum
 
         "EXDATE" ->
             { accum | exclusions = List.reverse (parseExdateValues timezones line) ++ accum.exclusions }
@@ -674,6 +721,11 @@ applyEventProperty timezones line accum =
 
         _ ->
             { accum | extraProperties = rawProp :: accum.extraProperties }
+
+
+addEventError : String -> EventAccum -> EventAccum
+addEventError error accum =
+    { accum | errors = error :: accum.errors }
 
 
 parseStatus : String -> Maybe Status
@@ -940,12 +992,26 @@ parseExdateValues timezones line =
                         }
                 in
                 case parseDateTimeValue timezones fakeLine of
+                    Ok (IDate date) ->
+                        Just (dateToUtcMidnight date)
+
                     Ok (IDateTime { posix }) ->
                         Just posix
+
+                    Ok (IFloating localDateTime) ->
+                        Just
+                            (dateToUtcMidnight
+                                (Date.fromCalendarDate localDateTime.year (intToMonth localDateTime.month) localDateTime.day)
+                            )
 
                     _ ->
                         Nothing
             )
+
+
+dateToUtcMidnight : Date.Date -> Time.Posix
+dateToUtcMidnight date =
+    Time.millisToPosix ((Date.toRataDie date - 719163) * 86400 * 1000)
 
 
 skipComponent : String -> List ContentLine -> Result String (List ContentLine)
@@ -1072,7 +1138,7 @@ expandNextChunked rule seed fromRD needed event chunkYears acc =
 
         candidates : List Date.Date
         candidates =
-            generateCandidates rule seed rangeEndRD
+            generateCandidates rule event.time seed rangeEndRD
 
         filtered : List Date.Date
         filtered =
@@ -1122,7 +1188,7 @@ expandRule range event rule =
 
         candidates : List Date.Date
         candidates =
-            generateCandidates rule seed rangeEndRD
+            generateCandidates rule event.time seed rangeEndRD
 
         filtered : List Date.Date
         filtered =
@@ -1134,13 +1200,13 @@ expandRule range event rule =
         |> List.map (\d -> { event = event, time = shiftTime event.time seed d })
 
 
-generateCandidates : RecurrenceRule -> Date.Date -> Int -> List Date.Date
-generateCandidates rule seed rangeEndRD =
-    generateLoop rule seed rangeEndRD 0 0 []
+generateCandidates : RecurrenceRule -> EventTime -> Date.Date -> Int -> List Date.Date
+generateCandidates rule originalTime seed rangeEndRD =
+    generateLoop rule originalTime seed rangeEndRD 0 0 []
 
 
-generateLoop : RecurrenceRule -> Date.Date -> Int -> Int -> Int -> List Date.Date -> List Date.Date
-generateLoop rule seed rangeEndRD stepIndex emittedCount acc =
+generateLoop : RecurrenceRule -> EventTime -> Date.Date -> Int -> Int -> Int -> List Date.Date -> List Date.Date
+generateLoop rule originalTime seed rangeEndRD stepIndex emittedCount acc =
     let
         intervalDate : Date.Date
         intervalDate =
@@ -1156,7 +1222,7 @@ generateLoop rule seed rangeEndRD stepIndex emittedCount acc =
             List.reverse acc
 
         else
-            generateLoop rule seed rangeEndRD (stepIndex + 1) emittedCount acc
+            generateLoop rule originalTime seed rangeEndRD (stepIndex + 1) emittedCount acc
 
     else
         let
@@ -1171,18 +1237,18 @@ generateLoop rule seed rangeEndRD stepIndex emittedCount acc =
             List.reverse acc
 
         else
-            collectCandidates rule seed rangeEndRD stepIndex emittedCount acc candidates
+            collectCandidates rule originalTime seed rangeEndRD stepIndex emittedCount acc candidates
 
 
-collectCandidates : RecurrenceRule -> Date.Date -> Int -> Int -> Int -> List Date.Date -> List Date.Date -> List Date.Date
-collectCandidates rule seed rangeEndRD stepIndex emittedCount acc candidates =
+collectCandidates : RecurrenceRule -> EventTime -> Date.Date -> Int -> Int -> Int -> List Date.Date -> List Date.Date -> List Date.Date
+collectCandidates rule originalTime seed rangeEndRD stepIndex emittedCount acc candidates =
     case candidates of
         [] ->
-            generateLoop rule seed rangeEndRD (stepIndex + 1) emittedCount acc
+            generateLoop rule originalTime seed rangeEndRD (stepIndex + 1) emittedCount acc
 
         c :: rest ->
             if Date.toRataDie c < Date.toRataDie seed then
-                collectCandidates rule seed rangeEndRD stepIndex emittedCount acc rest
+                collectCandidates rule originalTime seed rangeEndRD stepIndex emittedCount acc rest
 
             else
                 case rule.end of
@@ -1191,33 +1257,44 @@ collectCandidates rule seed rangeEndRD stepIndex emittedCount acc candidates =
                             List.reverse acc
 
                         else
-                            collectCandidates rule seed rangeEndRD stepIndex (emittedCount + 1) (c :: acc) rest
+                            collectCandidates rule originalTime seed rangeEndRD stepIndex (emittedCount + 1) (c :: acc) rest
 
                     UntilDate untilDate ->
                         if Date.compare c untilDate == GT then
                             List.reverse acc
 
                         else
-                            collectCandidates rule seed rangeEndRD stepIndex (emittedCount + 1) (c :: acc) rest
+                            collectCandidates rule originalTime seed rangeEndRD stepIndex (emittedCount + 1) (c :: acc) rest
 
                     UntilDateTime untilPosix ->
-                        let
-                            untilDate : Date.Date
-                            untilDate =
-                                Date.fromPosix Time.utc untilPosix
-                        in
-                        if Date.compare c untilDate == GT then
+                        if occurrenceStartsAfterUntil originalTime seed c untilPosix then
                             List.reverse acc
 
                         else
-                            collectCandidates rule seed rangeEndRD stepIndex (emittedCount + 1) (c :: acc) rest
+                            collectCandidates rule originalTime seed rangeEndRD stepIndex (emittedCount + 1) (c :: acc) rest
 
                     Forever ->
                         if Date.toRataDie c > rangeEndRD then
                             List.reverse acc
 
                         else
-                            collectCandidates rule seed rangeEndRD stepIndex (emittedCount + 1) (c :: acc) rest
+                            collectCandidates rule originalTime seed rangeEndRD stepIndex (emittedCount + 1) (c :: acc) rest
+
+
+occurrenceStartsAfterUntil : EventTime -> Date.Date -> Date.Date -> Time.Posix -> Bool
+occurrenceStartsAfterUntil originalTime seed candidateDate untilPosix =
+    case shiftTime originalTime seed candidateDate of
+        WithTime { start } ->
+            Time.posixToMillis start.posix > Time.posixToMillis untilPosix
+
+        AllDay { start } ->
+            Date.compare start (Date.fromPosix Time.utc untilPosix) == GT
+
+        FloatingTime { start } ->
+            Date.compare
+                (Date.fromCalendarDate start.year (intToMonth start.month) start.day)
+                (Date.fromPosix Time.utc untilPosix)
+                == GT
 
 
 isCountLimited : RecurrenceEnd -> Bool

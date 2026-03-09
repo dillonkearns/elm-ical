@@ -167,6 +167,31 @@ suite =
                             , Date.fromCalendarDate 2021 Time.Mar 19
                             , Date.fromCalendarDate 2021 Time.Mar 20
                             ]
+            , test "DAILY with UNTIL datetime excludes later same-day occurrences" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "Daily until precise time"
+                                , start = Time.millisToPosix 1616065200000 -- 2021-03-18T10:00:00Z
+                                , end = Time.millisToPosix 1616068800000 -- 2021-03-18T11:00:00Z
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Daily
+                                    , interval = 1
+                                    , end = Recurrence.UntilDateTime (Time.millisToPosix 1616144400000) -- 2021-03-19T09:00:00Z
+                                    , byDay = []
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , weekStart = Time.Mon
+                                    }
+                    in
+                    Parser.expand yearRange event
+                        |> List.map (occurrenceDate Time.utc)
+                        |> Expect.equal
+                            [ Date.fromCalendarDate 2021 Time.Mar 18 ]
             , test "DAILY with BYDAY filters to specified weekdays" <|
                 \() ->
                     let
@@ -583,6 +608,52 @@ suite =
                             , Date.fromCalendarDate 2021 Time.Mar 20
                             , Date.fromCalendarDate 2021 Time.Mar 22
                             ]
+            , test "EXDATE with VALUE=DATE excludes all-day occurrences" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            "BEGIN:VCALENDAR\u{000D}\nVERSION:2.0\u{000D}\nPRODID:-//Test//EN\u{000D}\nBEGIN:VEVENT\u{000D}\nUID:all-day-exdate@test\u{000D}\nDTSTAMP:20210318T000000Z\u{000D}\nDTSTART;VALUE=DATE:20210318\u{000D}\nRRULE:FREQ=DAILY;COUNT=3\u{000D}\nEXDATE;VALUE=DATE:20210319\u{000D}\nEND:VEVENT\u{000D}\nEND:VCALENDAR\u{000D}\n"
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            case cal.events of
+                                [ event ] ->
+                                    Parser.expand yearRange event
+                                        |> List.map (occurrenceDate Time.utc)
+                                        |> Expect.equal
+                                            [ Date.fromCalendarDate 2021 Time.Mar 18
+                                            , Date.fromCalendarDate 2021 Time.Mar 20
+                                            ]
+
+                                _ ->
+                                    Expect.fail "Expected 1 event"
+
+                        Err err ->
+                            Expect.fail err
+            , test "floating EXDATE excludes floating occurrences" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            "BEGIN:VCALENDAR\u{000D}\nVERSION:2.0\u{000D}\nPRODID:-//Test//EN\u{000D}\nBEGIN:VEVENT\u{000D}\nUID:floating-exdate@test\u{000D}\nDTSTAMP:20210318T000000Z\u{000D}\nDTSTART:20210318T100000\u{000D}\nRRULE:FREQ=DAILY;COUNT=3\u{000D}\nEXDATE:20210319T100000\u{000D}\nEND:VEVENT\u{000D}\nEND:VCALENDAR\u{000D}\n"
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            case cal.events of
+                                [ event ] ->
+                                    Parser.expand yearRange event
+                                        |> List.map occurrenceStartDateForFloating
+                                        |> Expect.equal
+                                            [ Date.fromCalendarDate 2021 Time.Mar 18
+                                            , Date.fromCalendarDate 2021 Time.Mar 20
+                                            ]
+
+                                _ ->
+                                    Expect.fail "Expected 1 event"
+
+                        Err err ->
+                            Expect.fail err
             ]
         , describe "BYSETPOS"
             [ test "MONTHLY BYDAY=MO,TU,WE,TH,FR BYSETPOS=-1 (last weekday) COUNT=3" <|
@@ -1134,6 +1205,16 @@ makeTimedEvent { summary, start, end } =
     , attendees = []
     , extraProperties = []
     }
+
+
+occurrenceStartDateForFloating : Parser.Occurrence -> Date.Date
+occurrenceStartDateForFloating occurrence =
+    case occurrence.time of
+        Parser.FloatingTime { start } ->
+            Date.fromCalendarDate start.year (intToMonth start.month) start.day
+
+        _ ->
+            occurrenceDate Time.utc occurrence
 
 
 addRule : Recurrence.RecurrenceRule -> Parser.Event -> Parser.Event

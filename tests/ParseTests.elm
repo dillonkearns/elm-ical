@@ -178,6 +178,10 @@ valueParserTests =
                 ValueParser.parseDate "20210318"
                     |> Expect.equal
                         (Ok { year = 2021, month = 3, day = 18 })
+        , test "reject DATE with out-of-range month/day" <|
+            \() ->
+                ValueParser.parseDate "20211340"
+                    |> Expect.err
         , test "parse DATE-TIME with Z" <|
             \() ->
                 ValueParser.parseDateTime "20210318T162044Z"
@@ -192,6 +196,10 @@ valueParserTests =
                         (Ok
                             { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44, isUtc = False }
                         )
+        , test "reject DATE-TIME with out-of-range time" <|
+            \() ->
+                ValueParser.parseDateTime "20210318T256199Z"
+                    |> Expect.err
         , test "TEXT unescaping" <|
             \() ->
                 ValueParser.unescapeText "hello\\nworld\\\\foo\\,bar\\;baz"
@@ -231,6 +239,10 @@ valueParserTests =
         , test "invalid DURATION returns error" <|
             \() ->
                 ValueParser.parseDuration "invalid"
+                    |> Expect.err
+        , test "malformed DURATION tokens return error" <|
+            \() ->
+                ValueParser.parseDuration "PTXM"
                     |> Expect.err
         ]
 
@@ -277,6 +289,10 @@ recurrenceRuleTests =
                 ValueParser.parseRecurrenceRule "FREQ=DAILY;INTERVAL=2"
                     |> Result.map .interval
                     |> Expect.equal (Ok 2)
+        , test "invalid INTERVAL returns error" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=DAILY;INTERVAL=foo"
+                    |> Expect.err
         , test "parse with COUNT" <|
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=WEEKLY;COUNT=10"
@@ -317,6 +333,14 @@ recurrenceRuleTests =
                 ValueParser.parseRecurrenceRule "FREQ=WEEKLY;WKST=SU"
                     |> Result.map .weekStart
                     |> Expect.equal (Ok Time.Sun)
+        , test "invalid WKST returns error" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=WEEKLY;WKST=XX"
+                    |> Expect.err
+        , test "invalid BYMONTH returns error" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=YEARLY;BYMONTH=13"
+                    |> Expect.err
         , test "parse complex rule" <|
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=MONTHLY;INTERVAL=2;BYDAY=1MO;COUNT=6;WKST=SU"
@@ -523,6 +547,27 @@ componentTests =
                 in
                 Parser.parse input
                     |> Expect.err
+        , test "malformed content line returns error instead of being ignored" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "UID:test-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
+                            , "BAD!LINE:boom"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                Parser.parse input
+                    |> Expect.err
         ]
 
 
@@ -620,6 +665,42 @@ endToEndTests =
                             , "UID:allday-1"
                             , "DTSTAMP:20210318T162044Z"
                             , "SUMMARY:All day"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.time
+                                    |> Expect.equal
+                                        (Parser.AllDay
+                                            { start = Date.fromCalendarDate 2021 Time.Mar 18
+                                            , end = Just (Date.fromCalendarDate 2021 Time.Mar 19)
+                                            }
+                                        )
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "all-day DTSTART without DTEND defaults to one day" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "DTSTART;VALUE=DATE:20210318"
+                            , "UID:allday-default-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "SUMMARY:All day default"
                             , "END:VEVENT"
                             , "END:VCALENDAR"
                             , ""
@@ -782,7 +863,15 @@ endToEndTests =
                                                 , minute = 30
                                                 , second = 0
                                                 }
-                                            , end = Nothing
+                                            , end =
+                                                Just
+                                                    { year = 1997
+                                                    , month = 7
+                                                    , day = 14
+                                                    , hour = 13
+                                                    , minute = 30
+                                                    , second = 0
+                                                    }
                                             }
                                         )
 
@@ -852,7 +941,47 @@ endToEndTests =
                             [ ev ] ->
                                 ev.time
                                     |> Expect.equal
-                                        (Parser.WithTime { start = { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing }, end = Nothing })
+                                        (Parser.WithTime
+                                            { start = { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing }
+                                            , end = Just { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing }
+                                            }
+                                        )
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "date-time DTSTART without DTEND defaults to same instant" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "DTSTART:20210318T162044Z"
+                            , "UID:utc-default-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "SUMMARY:Instant event"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.time
+                                    |> Expect.equal
+                                        (Parser.WithTime
+                                            { start = { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing }
+                                            , end = Just { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing }
+                                            }
+                                        )
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -884,7 +1013,11 @@ endToEndTests =
                             [ ev ] ->
                                 ev.time
                                     |> Expect.equal
-                                        (Parser.WithTime { start = { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing }, end = Nothing })
+                                        (Parser.WithTime
+                                            { start = { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing }
+                                            , end = Just { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing }
+                                            }
+                                        )
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -918,7 +1051,7 @@ endToEndTests =
                                     |> Expect.equal
                                         (Parser.FloatingTime
                                             { start = { year = 1997, month = 7, day = 14, hour = 13, minute = 30, second = 0 }
-                                            , end = Nothing
+                                            , end = Just { year = 1997, month = 7, day = 14, hour = 13, minute = 30, second = 0 }
                                             }
                                         )
 
@@ -927,6 +1060,94 @@ endToEndTests =
 
                     Err err ->
                         Expect.fail err
+        , test "invalid DTSTART value fails parsing" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "DTSTART:20211318T162044Z"
+                            , "UID:bad-start"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "SUMMARY:Test"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                Parser.parse input
+                    |> Expect.err
+        , test "invalid DTEND value fails parsing" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "DTSTART:20210318T162044Z"
+                            , "DTEND:not-a-date"
+                            , "UID:bad-end"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "SUMMARY:Test"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                Parser.parse input
+                    |> Expect.err
+        , test "VEVENT with both DTEND and DURATION fails parsing" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "DTSTART:20210318T162044Z"
+                            , "DTEND:20210318T172044Z"
+                            , "DURATION:PT1H"
+                            , "UID:bad-both"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "SUMMARY:Test"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                Parser.parse input
+                    |> Expect.err
+        , test "invalid RRULE value fails parsing" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "DTSTART:20210318T162044Z"
+                            , "UID:bad-rrule"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "SUMMARY:Test"
+                            , "RRULE:FREQ=DAILY;INTERVAL=foo"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                Parser.parse input
+                    |> Expect.err
         , test "RRULE parsed into structured recurrenceRules" <|
             \() ->
                 let
@@ -1193,7 +1414,43 @@ endToEndTests =
                                     |> Expect.equal
                                         (Parser.FloatingTime
                                             { start = { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
-                                            , end = Nothing
+                                            , end = Just { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
+                                            }
+                                        )
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "floating DTSTART without DTEND defaults to same local instant" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "DTSTART:20210318T162044"
+                            , "UID:floating-default-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "SUMMARY:Floating instant"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.time
+                                    |> Expect.equal
+                                        (Parser.FloatingTime
+                                            { start = { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
+                                            , end = Just { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
                                             }
                                         )
 

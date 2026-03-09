@@ -1,6 +1,14 @@
 # elm-ical
 
-Generate and parse [iCal (RFC 5545)](https://datatracker.ietf.org/doc/html/rfc5545) calendar feeds in Elm.
+Generate and parse a practical subset of [iCalendar (RFC 5545)](https://datatracker.ietf.org/doc/html/rfc5545) in Elm.
+
+`elm-ical` is currently optimized for:
+
+- generating `VCALENDAR` / `VEVENT` feeds from typed Elm values
+- parsing `VEVENT` feeds strictly into typed Elm data
+- expanding the common `RRULE` subset directly in Elm
+
+It is not a complete RFC 5545 implementation yet. The current scope is calendar/event feeds plus the recurrence and timezone pieces needed to work with them reliably.
 
 ## Generating
 
@@ -66,44 +74,65 @@ parseCalendar icsString =
             )
 ```
 
-The parser returns precise types:
+## What You Get
 
-- **`EventTime`** enforces that start and end share the same value type (`AllDay`, `WithTime`, or `FloatingTime`)
-- **VTIMEZONE** datetimes are automatically resolved to `Time.Posix`
-- **DURATION** is resolved into an end time (same semantics as DTEND)
-- **`Status`** and **`Transparency`** are typed enums, not raw strings
-- Unknown and extension properties (`X-*`) are preserved in `extraProperties`
+- Strict parsing. Malformed content lines, invalid dates/times/durations/RRULE values, and invalid `DTEND`/`DURATION` combinations return `Err`.
+- Typed event times. Parsed events are `AllDay`, `WithTime`, or `FloatingTime`.
+- TZID-aware parsing. `DATE-TIME` values can be resolved through matching `VTIMEZONE` data.
+- Typed enums. `STATUS`, `TRANSP`, attendee role, and participation status are decoded into Elm union types.
+- Unknown-property preservation. Unhandled and extension properties are kept in `extraProperties`.
 
-## Supported Properties
+## Important Semantics
 
-### Calendar (VCALENDAR)
+- `Ical.EventTime.AllDay` uses an inclusive end date when generating.
+- `Ical.Parser.EventTime.AllDay` uses RFC-style exclusive end semantics when parsing.
+- If a parsed `VEVENT` omits both `DTEND` and `DURATION`, the parser applies the RFC default:
+  - all-day events end on the following date
+  - timed and floating events end at the same instant they start
 
-- `VERSION` (always 2.0)
-- `PRODID`
-- `NAME`
-- `DESCRIPTION`
-- `URL`
+## Supported Today
 
-### Event (VEVENT)
+### Generation (`Ical`)
 
-- `DTSTART` / `DTEND` (DATE or DATE-TIME)
-- `DTSTAMP`
-- `DURATION` (parsing only — resolved into end time)
-- `UID`
-- `SUMMARY`
-- `DESCRIPTION`
-- `LOCATION`
-- `ORGANIZER` (with CN parameter)
-- `X-ALT-DESC` (HTML description with FMTTYPE parameter, generation only)
-- `STATUS` (TENTATIVE, CONFIRMED, CANCELLED)
-- `TRANSP` (OPAQUE, TRANSPARENT)
-- `CREATED`
-- `LAST-MODIFIED`
-- `VTIMEZONE` (parsing only — used to resolve TZID datetimes)
+- Calendar properties: `VERSION`, `PRODID`, `NAME` (non-standard but widely used), `DESCRIPTION`, `URL`
+- Event properties: `DTSTART`, `DTEND`, `DTSTAMP`, `UID`, `SUMMARY`, `DESCRIPTION`, `LOCATION`, `ORGANIZER`, `X-ALT-DESC`, `STATUS`, `TRANSP`, `CREATED`, `LAST-MODIFIED`, `RRULE`, `ATTENDEE`
+- Event times:
+  - all-day events
+  - UTC date-time events
 
-## Not Yet Supported
+### Parsing (`Ical.Parser`)
 
-- `RRULE` (recurrence rules — preserved in `extraProperties` when parsing)
-- `VALARM` (alarms/reminders — skipped when parsing)
-- `ATTENDEE`
-- `VTODO` / `VJOURNAL`
+- Calendar properties: `PRODID`, `VERSION`, plus unknown calendar properties in `extraProperties`
+- Event properties: `DTSTART`, `DTEND`, `DTSTAMP`, `DURATION`, `UID`, `SUMMARY`, `DESCRIPTION`, `LOCATION`, `ORGANIZER`, `STATUS`, `TRANSP`, `CREATED`, `LAST-MODIFIED`, `RRULE`, `EXDATE`, `ATTENDEE`
+- Event times:
+  - all-day dates
+  - UTC date-times
+  - floating local date-times
+  - `TZID` date-times resolved through matching `VTIMEZONE`
+- Attendees:
+  - generation emits `CN` + `mailto:`
+  - parsing reads `CN`, `ROLE`, `PARTSTAT`, and `RSVP`
+
+### Recurrence Subset
+
+- Frequencies: `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`
+- Rule parts: `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYSETPOS`, `WKST`
+- Exception dates: `EXDATE` for all-day, floating, and resolved date-time events
+- Expansion helpers: `Ical.Parser.expand` and `Ical.Parser.expandNext`
+
+## Not Supported Yet
+
+- Generating floating local times
+- Generating `TZID` date-times or `VTIMEZONE` components
+- `SECONDLY`, `MINUTELY`, `HOURLY`
+- `BYSECOND`, `BYMINUTE`, `BYHOUR`, `BYYEARDAY`, `BYWEEKNO`
+- Event-level `RDATE`
+- `RECURRENCE-ID` and overridden instances
+- Typed `VALARM` extraction
+- `VTODO`, `VJOURNAL`, and `VFREEBUSY`
+
+## Known Limitations
+
+- If a `TZID` value does not have a matching `VTIMEZONE`, it is currently kept as a `FloatingTime` value instead of being resolved through IANA data.
+- `VTIMEZONE` support is intended for practical real-world feeds, but it is still not a complete implementation of every valid observance rule shape allowed by RFC 5545.
+- The generation API still exposes some invalid states directly, notably `EventTime(..)` and the raw `RecurrenceRule` record in `Ical.Recurrence`.
