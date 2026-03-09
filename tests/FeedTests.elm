@@ -3,6 +3,7 @@ module FeedTests exposing (suite)
 import Date
 import Expect exposing (Expectation)
 import Ical
+import Ical.Recurrence as Recurrence
 import Iso8601
 import Test exposing (..)
 import Time
@@ -374,6 +375,105 @@ DTSTAMP:20210318T162044Z
 UID:multi-day@test.com
 SUMMARY:3-day event
 END:VEVENT"""
+        , test "generate event with RRULE" <|
+            \() ->
+                Ical.event
+                    { id = "recurring-1"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.WithTime
+                            { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T11:00:00.000Z"
+                            }
+                    , summary = "Weekly standup"
+                    }
+                    |> Ical.withRecurrenceRule
+                        { frequency = Recurrence.Weekly
+                        , interval = 1
+                        , end = Recurrence.Forever
+                        , byDay = [ { ordinal = Nothing, weekday = Time.Mon }, { ordinal = Nothing, weekday = Time.Wed }, { ordinal = Nothing, weekday = Time.Fri } ]
+                        , byMonthDay = []
+                        , byMonth = []
+                        , bySetPos = []
+                        , weekStart = Time.Mon
+                        }
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T100000Z
+DTEND:20210318T110000Z
+DTSTAMP:20210318T162044Z
+UID:recurring-1@test.com
+SUMMARY:Weekly standup
+RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR
+END:VEVENT"""
+        , test "generate RRULE with COUNT" <|
+            \() ->
+                Ical.event
+                    { id = "count-1"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.WithTime
+                            { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T11:00:00.000Z"
+                            }
+                    , summary = "Limited series"
+                    }
+                    |> Ical.withRecurrenceRule
+                        { frequency = Recurrence.Daily
+                        , interval = 2
+                        , end = Recurrence.Count 10
+                        , byDay = []
+                        , byMonthDay = []
+                        , byMonth = []
+                        , bySetPos = []
+                        , weekStart = Time.Mon
+                        }
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T100000Z
+DTEND:20210318T110000Z
+DTSTAMP:20210318T162044Z
+UID:count-1@test.com
+SUMMARY:Limited series
+RRULE:FREQ=DAILY;INTERVAL=2;COUNT=10
+END:VEVENT"""
+        , test "generate event with ATTENDEE" <|
+            \() ->
+                Ical.event
+                    { id = "meeting-1"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.WithTime
+                            { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T11:00:00.000Z"
+                            }
+                    , summary = "Team meeting"
+                    }
+                    |> Ical.withAttendee { email = "jane@example.com", name = "Jane Smith" }
+                    |> Ical.withAttendee { email = "bob@example.com", name = "Bob Jones" }
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> (\output ->
+                            Expect.all
+                                [ \o -> o |> String.contains "ATTENDEE;CN=Jane Smith:mailto:jane@example.com" |> Expect.equal True
+                                , \o -> o |> String.contains "ATTENDEE;CN=Bob Jones:mailto:bob@example.com" |> Expect.equal True
+                                ]
+                                output
+                       )
         ]
 
 

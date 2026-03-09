@@ -6,6 +6,7 @@ import Expect
 import Fuzz
 import Ical
 import Ical.Parser as Parser
+import Ical.Recurrence as Recurrence
 import Iso8601
 import Test exposing (..)
 import Time
@@ -18,6 +19,7 @@ suite =
         [ unfoldTests
         , contentLineTests
         , valueParserTests
+        , recurrenceRuleTests
         , componentTests
         , endToEndTests
         , roundTripTests
@@ -229,6 +231,110 @@ valueParserTests =
         , test "invalid DURATION returns error" <|
             \() ->
                 ValueParser.parseDuration "invalid"
+                    |> Expect.err
+        ]
+
+
+recurrenceRuleTests : Test
+recurrenceRuleTests =
+    describe "recurrence rule parsing"
+        [ test "parse FREQ=DAILY" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=DAILY"
+                    |> Expect.equal
+                        (Ok
+                            { frequency = Recurrence.Daily
+                            , interval = 1
+                            , end = Recurrence.Forever
+                            , byDay = []
+                            , byMonthDay = []
+                            , byMonth = []
+                            , bySetPos = []
+                            , weekStart = Time.Mon
+                            }
+                        )
+        , test "parse FREQ=WEEKLY with BYDAY" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=WEEKLY;BYDAY=MO,WE,FR"
+                    |> Expect.equal
+                        (Ok
+                            { frequency = Recurrence.Weekly
+                            , interval = 1
+                            , end = Recurrence.Forever
+                            , byDay =
+                                [ { ordinal = Nothing, weekday = Time.Mon }
+                                , { ordinal = Nothing, weekday = Time.Wed }
+                                , { ordinal = Nothing, weekday = Time.Fri }
+                                ]
+                            , byMonthDay = []
+                            , byMonth = []
+                            , bySetPos = []
+                            , weekStart = Time.Mon
+                            }
+                        )
+        , test "parse with INTERVAL" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=DAILY;INTERVAL=2"
+                    |> Result.map .interval
+                    |> Expect.equal (Ok 2)
+        , test "parse with COUNT" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=WEEKLY;COUNT=10"
+                    |> Result.map .end
+                    |> Expect.equal (Ok (Recurrence.Count 10))
+        , test "parse with UNTIL date" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=DAILY;UNTIL=20210401"
+                    |> Result.map .end
+                    |> Expect.equal (Ok (Recurrence.UntilDate (Date.fromCalendarDate 2021 Time.Apr 1)))
+        , test "parse with UNTIL datetime" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=DAILY;UNTIL=20210401T000000Z"
+                    |> Result.map .end
+                    |> Expect.equal (Ok (Recurrence.UntilDateTime (toIso8601 "2021-04-01T00:00:00.000Z")))
+        , test "parse MONTHLY with BYMONTHDAY" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=MONTHLY;BYMONTHDAY=15"
+                    |> Result.map .byMonthDay
+                    |> Expect.equal (Ok [ 15 ])
+        , test "parse YEARLY with BYMONTH" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=YEARLY;BYMONTH=3,6,9,12"
+                    |> Result.map .byMonth
+                    |> Expect.equal (Ok [ 3, 6, 9, 12 ])
+        , test "parse ordinal BYDAY (2nd Sunday)" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=MONTHLY;BYDAY=2SU"
+                    |> Result.map .byDay
+                    |> Expect.equal (Ok [ { ordinal = Just 2, weekday = Time.Sun } ])
+        , test "parse negative ordinal BYDAY (last Friday)" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=MONTHLY;BYDAY=-1FR"
+                    |> Result.map .byDay
+                    |> Expect.equal (Ok [ { ordinal = Just -1, weekday = Time.Fri } ])
+        , test "parse with WKST" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=WEEKLY;WKST=SU"
+                    |> Result.map .weekStart
+                    |> Expect.equal (Ok Time.Sun)
+        , test "parse complex rule" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=MONTHLY;INTERVAL=2;BYDAY=1MO;COUNT=6;WKST=SU"
+                    |> Expect.equal
+                        (Ok
+                            { frequency = Recurrence.Monthly
+                            , interval = 2
+                            , end = Recurrence.Count 6
+                            , byDay = [ { ordinal = Just 1, weekday = Time.Mon } ]
+                            , byMonthDay = []
+                            , byMonth = []
+                            , bySetPos = []
+                            , weekStart = Time.Sun
+                            }
+                        )
+        , test "missing FREQ returns error" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "INTERVAL=2;BYDAY=MO"
                     |> Expect.err
         ]
 
@@ -821,7 +927,7 @@ endToEndTests =
 
                     Err err ->
                         Expect.fail err
-        , test "RRULE preserved in event properties" <|
+        , test "RRULE parsed into structured recurrenceRules" <|
             \() ->
                 let
                     input : String
@@ -845,10 +951,119 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.extraProperties
-                                    |> List.filter (\p -> p.name == "RRULE")
-                                    |> List.map .value
-                                    |> Expect.equal [ "FREQ=WEEKLY;BYDAY=MO,WE,FR" ]
+                                ev.recurrenceRules
+                                    |> Expect.equal
+                                        [ { frequency = Recurrence.Weekly
+                                          , interval = 1
+                                          , end = Recurrence.Forever
+                                          , byDay =
+                                                [ { ordinal = Nothing, weekday = Time.Mon }
+                                                , { ordinal = Nothing, weekday = Time.Wed }
+                                                , { ordinal = Nothing, weekday = Time.Fri }
+                                                ]
+                                          , byMonthDay = []
+                                          , byMonth = []
+                                          , bySetPos = []
+                                          , weekStart = Time.Mon
+                                          }
+                                        ]
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "EXDATE parsed into exclusions list" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Weekly meeting"
+                            , "UID:exdate-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
+                            , "RRULE:FREQ=WEEKLY;BYDAY=MO"
+                            , "EXDATE:20210325T162044Z,20210401T162044Z"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.exclusions
+                                    |> Expect.equal
+                                        [ toIso8601 "2021-03-25T16:20:44.000Z"
+                                        , toIso8601 "2021-04-01T16:20:44.000Z"
+                                        ]
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "ATTENDEE parsed into attendees list" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Team meeting"
+                            , "UID:attendee-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
+                            , "ATTENDEE;CN=\"Jane Smith\";ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;RSVP=TRUE:mailto:jane@example.com"
+                            , "ATTENDEE;CN=\"Bob Jones\":mailto:bob@example.com"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                Expect.all
+                                    [ \e ->
+                                        e.attendees
+                                            |> List.length
+                                            |> Expect.equal 2
+                                    , \e ->
+                                        e.attendees
+                                            |> List.map .email
+                                            |> Expect.equal [ "jane@example.com", "bob@example.com" ]
+                                    , \e ->
+                                        e.attendees
+                                            |> List.map .name
+                                            |> Expect.equal [ Just "Jane Smith", Just "Bob Jones" ]
+                                    , \e ->
+                                        e.attendees
+                                            |> List.head
+                                            |> Maybe.map .role
+                                            |> Expect.equal (Just Parser.Required)
+                                    , \e ->
+                                        e.attendees
+                                            |> List.head
+                                            |> Maybe.map .participationStatus
+                                            |> Expect.equal (Just Parser.Accepted)
+                                    , \e ->
+                                        e.attendees
+                                            |> List.head
+                                            |> Maybe.map .rsvp
+                                            |> Expect.equal (Just True)
+                                    ]
+                                    ev
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -1199,6 +1414,101 @@ roundTripTests =
                             , \c -> c.prodId |> Expect.equal "-//myapp//cal//EN"
                             ]
                             cal
+
+                    Err err ->
+                        Expect.fail err
+        , test "round-trip event with RRULE" <|
+            \() ->
+                let
+                    icsString : String
+                    icsString =
+                        [ Ical.event
+                            { id = "rt-rrule"
+                            , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                            , time =
+                                Ical.WithTime
+                                    { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                                    , end = toIso8601 "2021-03-18T11:00:00.000Z"
+                                    }
+                            , summary = "Weekly standup"
+                            }
+                            |> Ical.withRecurrenceRule
+                                { frequency = Recurrence.Weekly
+                                , interval = 1
+                                , end = Recurrence.Count 10
+                                , byDay = [ { ordinal = Nothing, weekday = Time.Mon }, { ordinal = Nothing, weekday = Time.Wed } ]
+                                , byMonthDay = []
+                                , byMonth = []
+                                , bySetPos = []
+                                , weekStart = Time.Mon
+                                }
+                        ]
+                            |> Ical.generate
+                                (Ical.config
+                                    { id = "//test//test//EN"
+                                    , domain = "test.com"
+                                    }
+                                )
+                in
+                case Parser.parse icsString of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                case ev.recurrenceRules of
+                                    [ rule ] ->
+                                        Expect.all
+                                            [ \r -> r.frequency |> Expect.equal Recurrence.Weekly
+                                            , \r -> r.end |> Expect.equal (Recurrence.Count 10)
+                                            , \r -> r.byDay |> List.map .weekday |> Expect.equal [ Time.Mon, Time.Wed ]
+                                            ]
+                                            rule
+
+                                    _ ->
+                                        Expect.fail ("Expected 1 recurrence rule, got " ++ String.fromInt (List.length ev.recurrenceRules))
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "round-trip event with ATTENDEE" <|
+            \() ->
+                let
+                    icsString : String
+                    icsString =
+                        [ Ical.event
+                            { id = "rt-attendee"
+                            , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                            , time =
+                                Ical.WithTime
+                                    { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                                    , end = toIso8601 "2021-03-18T11:00:00.000Z"
+                                    }
+                            , summary = "Meeting with attendees"
+                            }
+                            |> Ical.withAttendee { name = "Alice", email = "alice@example.com" }
+                            |> Ical.withAttendee { name = "Bob", email = "bob@example.com" }
+                        ]
+                            |> Ical.generate
+                                (Ical.config
+                                    { id = "//test//test//EN"
+                                    , domain = "test.com"
+                                    }
+                                )
+                in
+                case Parser.parse icsString of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                Expect.all
+                                    [ \e -> e.attendees |> List.length |> Expect.equal 2
+                                    , \e -> e.attendees |> List.map .email |> Expect.equal [ "alice@example.com", "bob@example.com" ]
+                                    , \e -> e.attendees |> List.map .name |> Expect.equal [ Just "Alice", Just "Bob" ]
+                                    ]
+                                    ev
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
 
                     Err err ->
                         Expect.fail err

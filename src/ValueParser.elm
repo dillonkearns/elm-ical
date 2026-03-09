@@ -1,7 +1,11 @@
-module ValueParser exposing (DateTimeParts, Duration, parseDate, parseDateTime, parseDuration, unescapeText)
+module ValueParser exposing (DateTimeParts, Duration, parseDate, parseDateTime, parseDuration, parseRecurrenceRule, unescapeText)
 
-{-| Parsers for iCal value types: DATE, DATE-TIME, and TEXT unescaping.
+{-| Parsers for iCal value types: DATE, DATE-TIME, DURATION, RECUR, and TEXT unescaping.
 -}
+
+import Date
+import Ical.Recurrence exposing (DaySpec, Frequency(..), RecurrenceEnd(..), RecurrenceRule)
+import Time
 
 
 {-| Intermediate parsed date-time parts. The caller decides whether to wrap
@@ -267,3 +271,282 @@ unescapeHelp remaining acc =
 
         c :: rest ->
             unescapeHelp rest (c :: acc)
+
+
+{-| Parse an iCal RECUR value (RFC 5545 Section 3.3.10) into a RecurrenceRule.
+-}
+parseRecurrenceRule : String -> Result String RecurrenceRule
+parseRecurrenceRule input =
+    let
+        parts : List ( String, String )
+        parts =
+            String.split ";" input
+                |> List.filterMap
+                    (\part ->
+                        case String.split "=" part of
+                            [ k, v ] ->
+                                Just ( String.toUpper k, v )
+
+                            _ ->
+                                Nothing
+                    )
+
+        getParam : String -> Maybe String
+        getParam key =
+            parts
+                |> List.filterMap
+                    (\( k, v ) ->
+                        if k == key then
+                            Just v
+
+                        else
+                            Nothing
+                    )
+                |> List.head
+    in
+    case getParam "FREQ" of
+        Nothing ->
+            Err ("Invalid RRULE: missing FREQ in " ++ input)
+
+        Just freqStr ->
+            case parseFrequency freqStr of
+                Nothing ->
+                    Err ("Invalid RRULE: unknown FREQ=" ++ freqStr)
+
+                Just frequency ->
+                    let
+                        interval : Int
+                        interval =
+                            getParam "INTERVAL"
+                                |> Maybe.andThen String.toInt
+                                |> Maybe.withDefault 1
+
+                        weekStart : Time.Weekday
+                        weekStart =
+                            getParam "WKST"
+                                |> Maybe.andThen parseWeekday
+                                |> Maybe.withDefault Time.Mon
+                    in
+                    parseRecurrenceEnd (getParam "COUNT") (getParam "UNTIL")
+                        |> Result.andThen
+                            (\end ->
+                                parseDaySpecs (getParam "BYDAY")
+                                    |> Result.map
+                                        (\byDay ->
+                                            { frequency = frequency
+                                            , interval = interval
+                                            , end = end
+                                            , byDay = byDay
+                                            , byMonthDay = parseIntList (getParam "BYMONTHDAY")
+                                            , byMonth = parseIntList (getParam "BYMONTH")
+                                            , bySetPos = parseIntList (getParam "BYSETPOS")
+                                            , weekStart = weekStart
+                                            }
+                                        )
+                            )
+
+
+parseFrequency : String -> Maybe Frequency
+parseFrequency str =
+    case String.toUpper str of
+        "DAILY" ->
+            Just Daily
+
+        "WEEKLY" ->
+            Just Weekly
+
+        "MONTHLY" ->
+            Just Monthly
+
+        "YEARLY" ->
+            Just Yearly
+
+        _ ->
+            Nothing
+
+
+parseRecurrenceEnd : Maybe String -> Maybe String -> Result String RecurrenceEnd
+parseRecurrenceEnd maybeCount maybeUntil =
+    case ( maybeCount, maybeUntil ) of
+        ( Just countStr, Nothing ) ->
+            case String.toInt countStr of
+                Just n ->
+                    Ok (Count n)
+
+                Nothing ->
+                    Err ("Invalid COUNT: " ++ countStr)
+
+        ( Nothing, Just untilStr ) ->
+            parseUntilValue untilStr
+
+        ( Nothing, Nothing ) ->
+            Ok Forever
+
+        ( Just _, Just _ ) ->
+            Err "RRULE cannot have both COUNT and UNTIL"
+
+
+parseUntilValue : String -> Result String RecurrenceEnd
+parseUntilValue str =
+    if String.length str == 8 then
+        -- DATE format: YYYYMMDD
+        parseDate str
+            |> Result.map
+                (\{ year, month, day } ->
+                    UntilDate (Date.fromCalendarDate year (intToMonth month) day)
+                )
+
+    else
+        -- DATE-TIME format
+        parseDateTime str
+            |> Result.map
+                (\parts ->
+                    let
+                        date : Date.Date
+                        date =
+                            Date.fromCalendarDate parts.year (intToMonth parts.month) parts.day
+
+                        daysSinceEpoch : Int
+                        daysSinceEpoch =
+                            Date.toRataDie date - 719163
+
+                        totalSeconds : Int
+                        totalSeconds =
+                            daysSinceEpoch * 86400 + parts.hour * 3600 + parts.minute * 60 + parts.second
+                    in
+                    UntilDateTime (Time.millisToPosix (totalSeconds * 1000))
+                )
+
+
+parseDaySpecs : Maybe String -> Result String (List DaySpec)
+parseDaySpecs maybeStr =
+    case maybeStr of
+        Nothing ->
+            Ok []
+
+        Just str ->
+            String.split "," str
+                |> List.foldr
+                    (\part acc ->
+                        case acc of
+                            Err err ->
+                                Err err
+
+                            Ok specs ->
+                                case parseDaySpec part of
+                                    Ok spec ->
+                                        Ok (spec :: specs)
+
+                                    Err err ->
+                                        Err err
+                    )
+                    (Ok [])
+
+
+parseDaySpec : String -> Result String DaySpec
+parseDaySpec str =
+    let
+        trimmed : String
+        trimmed =
+            String.trim str
+    in
+    -- Try to extract ordinal prefix (e.g., "2SU", "-1FR", "MO")
+    case parseWeekday (String.right 2 trimmed) of
+        Just weekday ->
+            let
+                prefix : String
+                prefix =
+                    String.dropRight 2 trimmed
+            in
+            if String.isEmpty prefix then
+                Ok { ordinal = Nothing, weekday = weekday }
+
+            else
+                case String.toInt prefix of
+                    Just n ->
+                        Ok { ordinal = Just n, weekday = weekday }
+
+                    Nothing ->
+                        Err ("Invalid BYDAY: " ++ str)
+
+        Nothing ->
+            Err ("Invalid BYDAY: " ++ str)
+
+
+parseWeekday : String -> Maybe Time.Weekday
+parseWeekday str =
+    case String.toUpper str of
+        "MO" ->
+            Just Time.Mon
+
+        "TU" ->
+            Just Time.Tue
+
+        "WE" ->
+            Just Time.Wed
+
+        "TH" ->
+            Just Time.Thu
+
+        "FR" ->
+            Just Time.Fri
+
+        "SA" ->
+            Just Time.Sat
+
+        "SU" ->
+            Just Time.Sun
+
+        _ ->
+            Nothing
+
+
+parseIntList : Maybe String -> List Int
+parseIntList maybeStr =
+    case maybeStr of
+        Nothing ->
+            []
+
+        Just str ->
+            String.split "," str
+                |> List.filterMap String.toInt
+
+
+intToMonth : Int -> Time.Month
+intToMonth m =
+    case m of
+        1 ->
+            Time.Jan
+
+        2 ->
+            Time.Feb
+
+        3 ->
+            Time.Mar
+
+        4 ->
+            Time.Apr
+
+        5 ->
+            Time.May
+
+        6 ->
+            Time.Jun
+
+        7 ->
+            Time.Jul
+
+        8 ->
+            Time.Aug
+
+        9 ->
+            Time.Sep
+
+        10 ->
+            Time.Oct
+
+        11 ->
+            Time.Nov
+
+        _ ->
+            Time.Dec

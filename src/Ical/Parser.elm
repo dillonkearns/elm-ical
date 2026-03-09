@@ -4,6 +4,7 @@ module Ical.Parser exposing
     , EventTime(..), ResolvedTime, LocalDateTime
     , Status(..), Transparency(..)
     , Organizer, RawProperty
+    , Attendee, AttendeeRole(..), ParticipationStatus(..)
     )
 
 {-| Parse iCal ([RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545)) calendar strings.
@@ -13,12 +14,14 @@ module Ical.Parser exposing
 @docs EventTime, ResolvedTime, LocalDateTime
 @docs Status, Transparency
 @docs Organizer, RawProperty
+@docs Attendee, AttendeeRole, ParticipationStatus
 
 -}
 
 import ContentLine exposing (ContentLine)
 import Date
 import Dict exposing (Dict)
+import Ical.Recurrence exposing (RecurrenceRule)
 import Time
 import VTimeZone
 import ValueParser
@@ -57,6 +60,9 @@ type alias Event =
     , organizer : Maybe Organizer
     , status : Maybe Status
     , transparency : Maybe Transparency
+    , recurrenceRules : List RecurrenceRule
+    , exclusions : List Time.Posix
+    , attendees : List Attendee
     , extraProperties : List RawProperty
     }
 
@@ -134,6 +140,38 @@ type alias RawProperty =
     , parameters : List ( String, String )
     , value : String
     }
+
+
+{-| A parsed ATTENDEE property.
+-}
+type alias Attendee =
+    { email : String
+    , name : Maybe String
+    , role : AttendeeRole
+    , participationStatus : ParticipationStatus
+    , rsvp : Bool
+    }
+
+
+{-| Attendee role per
+[RFC 5545 Section 3.2.16](https://datatracker.ietf.org/doc/html/rfc5545#section-3.2.16).
+-}
+type AttendeeRole
+    = Chair
+    | Required
+    | Optional
+    | NonParticipant
+
+
+{-| Attendee participation status per
+[RFC 5545 Section 3.2.12](https://datatracker.ietf.org/doc/html/rfc5545#section-3.2.12).
+-}
+type ParticipationStatus
+    = NeedsAction
+    | Accepted
+    | Declined
+    | TentativeParticipation
+    | Delegated
 
 
 {-| Parse an iCal string into a Calendar.
@@ -314,6 +352,9 @@ type alias EventAccum =
     , organizer : Maybe Organizer
     , status : Maybe Status
     , transparency : Maybe Transparency
+    , recurrenceRules : List RecurrenceRule
+    , exclusions : List Time.Posix
+    , attendees : List Attendee
     , extraProperties : List RawProperty
     }
 
@@ -333,6 +374,9 @@ emptyEventAccum =
     , organizer = Nothing
     , status = Nothing
     , transparency = Nothing
+    , recurrenceRules = []
+    , exclusions = []
+    , attendees = []
     , extraProperties = []
     }
 
@@ -364,6 +408,9 @@ finalizeEvent accum =
                                                             , organizer = accum.organizer
                                                             , status = accum.status
                                                             , transparency = accum.transparency
+                                                            , recurrenceRules = List.reverse accum.recurrenceRules
+                                                            , exclusions = List.reverse accum.exclusions
+                                                            , attendees = List.reverse accum.attendees
                                                             , extraProperties = List.reverse accum.extraProperties
                                                             }
                                                         )
@@ -605,6 +652,20 @@ applyEventProperty timezones line accum =
                 Nothing ->
                     { accum | extraProperties = rawProp :: accum.extraProperties }
 
+        "RRULE" ->
+            case ValueParser.parseRecurrenceRule line.value of
+                Ok rule ->
+                    { accum | recurrenceRules = rule :: accum.recurrenceRules }
+
+                Err _ ->
+                    { accum | extraProperties = rawProp :: accum.extraProperties }
+
+        "EXDATE" ->
+            { accum | exclusions = List.reverse (parseExdateValues timezones line) ++ accum.exclusions }
+
+        "ATTENDEE" ->
+            { accum | attendees = parseAttendee line :: accum.attendees }
+
         _ ->
             { accum | extraProperties = rawProp :: accum.extraProperties }
 
@@ -783,6 +844,102 @@ parseOrganizer line =
     { email = email
     , name = cn
     }
+
+
+parseAttendee : ContentLine -> Attendee
+parseAttendee line =
+    let
+        getParam : String -> Maybe String
+        getParam key =
+            line.parameters
+                |> List.filterMap
+                    (\( k, v ) ->
+                        if String.toUpper k == key then
+                            Just v
+
+                        else
+                            Nothing
+                    )
+                |> List.head
+
+        email : String
+        email =
+            if String.startsWith "mailto:" (String.toLower line.value) then
+                String.dropLeft 7 line.value
+
+            else
+                line.value
+
+        role : AttendeeRole
+        role =
+            case Maybe.map String.toUpper (getParam "ROLE") of
+                Just "CHAIR" ->
+                    Chair
+
+                Just "OPT-PARTICIPANT" ->
+                    Optional
+
+                Just "NON-PARTICIPANT" ->
+                    NonParticipant
+
+                _ ->
+                    Required
+
+        partStat : ParticipationStatus
+        partStat =
+            case Maybe.map String.toUpper (getParam "PARTSTAT") of
+                Just "ACCEPTED" ->
+                    Accepted
+
+                Just "DECLINED" ->
+                    Declined
+
+                Just "TENTATIVE" ->
+                    TentativeParticipation
+
+                Just "DELEGATED" ->
+                    Delegated
+
+                _ ->
+                    NeedsAction
+
+        rsvp : Bool
+        rsvp =
+            case Maybe.map String.toUpper (getParam "RSVP") of
+                Just "TRUE" ->
+                    True
+
+                _ ->
+                    False
+    in
+    { email = email
+    , name = getParam "CN"
+    , role = role
+    , participationStatus = partStat
+    , rsvp = rsvp
+    }
+
+
+parseExdateValues : Dict String VTimeZone.ZoneDefinition -> ContentLine -> List Time.Posix
+parseExdateValues timezones line =
+    String.split "," line.value
+        |> List.filterMap
+            (\val ->
+                let
+                    fakeLine : ContentLine
+                    fakeLine =
+                        { name = "EXDATE"
+                        , parameters = line.parameters
+                        , value = val
+                        }
+                in
+                case parseDateTimeValue timezones fakeLine of
+                    Ok (IDateTime { posix }) ->
+                        Just posix
+
+                    _ ->
+                        Nothing
+            )
 
 
 skipComponent : String -> List ContentLine -> Result String (List ContentLine)

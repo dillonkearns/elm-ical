@@ -4,6 +4,7 @@ module Ical exposing
     , withDescription, withLocation, withOrganizer, withHtmlDescription
     , withStatus, Status(..), withTransparency, Transparency(..)
     , withCreated, withLastModified
+    , withRecurrenceRule, withAttendee
     , generate, generateEvent
     )
 
@@ -25,11 +26,14 @@ module Ical exposing
 
 ## Generating output
 
+@docs withRecurrenceRule, withAttendee
 @docs generate, generateEvent
 
 -}
 
 import Date exposing (Date)
+import Ical.Recurrence as Recurrence exposing (RecurrenceRule)
+import IcalDateTime
 import Property exposing (Parameter(..), ValueData(..))
 import Time
 
@@ -67,6 +71,8 @@ type alias EventData =
     , status : Maybe Status
     , created : Maybe Time.Posix
     , lastModified : Maybe Time.Posix
+    , recurrenceRule : Maybe RecurrenceRule
+    , attendees : List Organizer
     }
 
 
@@ -190,6 +196,8 @@ event { id, stamp, time, summary } =
         , status = Nothing
         , created = Nothing
         , lastModified = Nothing
+        , recurrenceRule = Nothing
+        , attendees = []
         }
 
 
@@ -249,6 +257,21 @@ withLastModified lastModified (Event e) =
     Event { e | lastModified = Just lastModified }
 
 
+{-| Add a recurrence rule (RRULE) to the event. See [`Ical.Recurrence`](Ical-Recurrence)
+for the `RecurrenceRule` type.
+-}
+withRecurrenceRule : RecurrenceRule -> Event -> Event
+withRecurrenceRule rule (Event e) =
+    Event { e | recurrenceRule = Just rule }
+
+
+{-| Add an attendee to the event (ATTENDEE property with CN parameter).
+-}
+withAttendee : { email : String, name : String } -> Event -> Event
+withAttendee attendee (Event e) =
+    Event { e | attendees = e.attendees ++ [ { name = attendee.name, email = attendee.email } ] }
+
+
 
 -- Generating output
 
@@ -295,9 +318,25 @@ eventProperties c details =
                         , [ Parameter ( "CN", organizer.name ) ]
                         )
                     )
+            , details.recurrenceRule
+                |> Maybe.map
+                    (\rule ->
+                        ( "RRULE"
+                        , Uri (formatRecurrenceRule rule)
+                        , []
+                        )
+                    )
             ]
                 |> List.filterMap identity
            )
+        ++ List.map
+            (\attendee ->
+                ( "ATTENDEE"
+                , CalAddress attendee.email
+                , [ Parameter ( "CN", attendee.name ) ]
+                )
+            )
+            details.attendees
 
 
 timeProperties : EventTime -> List ( String, ValueData, List Parameter )
@@ -340,6 +379,118 @@ transparencyToString transparency =
 
         Opaque ->
             "OPAQUE"
+
+
+formatRecurrenceRule : RecurrenceRule -> String
+formatRecurrenceRule rule =
+    let
+        freq : String
+        freq =
+            "FREQ="
+                ++ (case rule.frequency of
+                        Recurrence.Daily ->
+                            "DAILY"
+
+                        Recurrence.Weekly ->
+                            "WEEKLY"
+
+                        Recurrence.Monthly ->
+                            "MONTHLY"
+
+                        Recurrence.Yearly ->
+                            "YEARLY"
+                   )
+
+        parts : List (Maybe String)
+        parts =
+            [ Just freq
+            , if rule.interval > 1 then
+                Just ("INTERVAL=" ++ String.fromInt rule.interval)
+
+              else
+                Nothing
+            , case rule.end of
+                Recurrence.Forever ->
+                    Nothing
+
+                Recurrence.Count n ->
+                    Just ("COUNT=" ++ String.fromInt n)
+
+                Recurrence.UntilDate date ->
+                    Just ("UNTIL=" ++ IcalDateTime.formatDate date)
+
+                Recurrence.UntilDateTime posix ->
+                    Just ("UNTIL=" ++ IcalDateTime.format posix)
+            , if List.isEmpty rule.byDay then
+                Nothing
+
+              else
+                Just ("BYDAY=" ++ String.join "," (List.map formatDaySpec rule.byDay))
+            , if List.isEmpty rule.byMonthDay then
+                Nothing
+
+              else
+                Just ("BYMONTHDAY=" ++ String.join "," (List.map String.fromInt rule.byMonthDay))
+            , if List.isEmpty rule.byMonth then
+                Nothing
+
+              else
+                Just ("BYMONTH=" ++ String.join "," (List.map String.fromInt rule.byMonth))
+            , if List.isEmpty rule.bySetPos then
+                Nothing
+
+              else
+                Just ("BYSETPOS=" ++ String.join "," (List.map String.fromInt rule.bySetPos))
+            , if rule.weekStart /= Time.Mon then
+                Just ("WKST=" ++ weekdayToString rule.weekStart)
+
+              else
+                Nothing
+            ]
+    in
+    parts
+        |> List.filterMap identity
+        |> String.join ";"
+
+
+formatDaySpec : Recurrence.DaySpec -> String
+formatDaySpec spec =
+    let
+        prefix : String
+        prefix =
+            case spec.ordinal of
+                Just n ->
+                    String.fromInt n
+
+                Nothing ->
+                    ""
+    in
+    prefix ++ weekdayToString spec.weekday
+
+
+weekdayToString : Time.Weekday -> String
+weekdayToString weekday =
+    case weekday of
+        Time.Mon ->
+            "MO"
+
+        Time.Tue ->
+            "TU"
+
+        Time.Wed ->
+            "WE"
+
+        Time.Thu ->
+            "TH"
+
+        Time.Fri ->
+            "FR"
+
+        Time.Sat ->
+            "SA"
+
+        Time.Sun ->
+            "SU"
 
 
 nonEmpty : String -> Maybe String
