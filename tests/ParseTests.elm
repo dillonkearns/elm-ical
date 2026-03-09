@@ -1445,7 +1445,7 @@ roundTripTests =
                             { id = "rt-1"
                             , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                             , time =
-                                Ical.WithTime
+                                Ical.withTime
                                     { start = toIso8601 "2021-03-18T10:00:00.000Z"
                                     , end = toIso8601 "2021-03-18T11:00:00.000Z"
                                     }
@@ -1487,7 +1487,7 @@ roundTripTests =
                             { id = "rt-allday"
                             , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                             , time =
-                                Ical.AllDay
+                                Ical.allDay
                                     { start = Date.fromCalendarDate 2021 Time.Mar 18
                                     , end = Date.fromCalendarDate 2021 Time.Mar 18
                                     }
@@ -1532,7 +1532,7 @@ roundTripTests =
                             { id = "rt-org"
                             , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                             , time =
-                                Ical.WithTime
+                                Ical.withTime
                                     { start = toIso8601 "2021-03-18T10:00:00.000Z"
                                     , end = toIso8601 "2021-03-18T11:00:00.000Z"
                                     }
@@ -1580,7 +1580,7 @@ roundTripTests =
                             { id = "rt-long"
                             , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                             , time =
-                                Ical.WithTime
+                                Ical.withTime
                                     { start = toIso8601 "2021-03-18T10:00:00.000Z"
                                     , end = toIso8601 "2021-03-18T11:00:00.000Z"
                                     }
@@ -1616,7 +1616,7 @@ roundTripTests =
                             { id = "rt-cal"
                             , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                             , time =
-                                Ical.WithTime
+                                Ical.withTime
                                     { start = toIso8601 "2021-03-18T10:00:00.000Z"
                                     , end = toIso8601 "2021-03-18T11:00:00.000Z"
                                     }
@@ -1650,7 +1650,7 @@ roundTripTests =
                             { id = "rt-rrule"
                             , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                             , time =
-                                Ical.WithTime
+                                Ical.withTime
                                     { start = toIso8601 "2021-03-18T10:00:00.000Z"
                                     , end = toIso8601 "2021-03-18T11:00:00.000Z"
                                     }
@@ -1704,7 +1704,7 @@ roundTripTests =
                             { id = "rt-attendee"
                             , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                             , time =
-                                Ical.WithTime
+                                Ical.withTime
                                     { start = toIso8601 "2021-03-18T10:00:00.000Z"
                                     , end = toIso8601 "2021-03-18T11:00:00.000Z"
                                     }
@@ -1753,7 +1753,7 @@ roundTripTests =
                             { id = "fuzz-1"
                             , stamp = Time.millisToPosix 1616083244000
                             , time =
-                                Ical.WithTime
+                                Ical.withTime
                                     { start = Time.millisToPosix 1616083244000
                                     , end = Time.millisToPosix 1616086844000
                                     }
@@ -1785,7 +1785,7 @@ roundTripTests =
                             { id = "fuzz-2"
                             , stamp = Time.millisToPosix 1616083244000
                             , time =
-                                Ical.WithTime
+                                Ical.withTime
                                     { start = Time.millisToPosix 1616083244000
                                     , end = Time.millisToPosix 1616086844000
                                     }

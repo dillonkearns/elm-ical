@@ -18,7 +18,7 @@ suite =
                     { id = "1"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.WithTime
+                        Ical.withTime
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-06T23:15:00.000Z"
                             }
@@ -29,7 +29,7 @@ suite =
                     { id = "2"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.WithTime
+                        Ical.withTime
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-06T23:15:00.000Z"
                             }
@@ -75,7 +75,7 @@ END:VCALENDAR"""
                     { id = "123"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.WithTime
+                        Ical.withTime
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-04T23:15:00.000Z"
                             }
@@ -110,7 +110,7 @@ END:VCALENDAR"""
                     { id = "123"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.WithTime
+                        Ical.withTime
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-04T23:15:00.000Z"
                             }
@@ -154,7 +154,7 @@ END:VCALENDAR"""
                     { id = "4ot852po37bvri1natdlv4cf6r"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.AllDay
+                        Ical.allDay
                             { start = Date.fromCalendarDate 2021 Time.Mar 18
                             , end = Date.fromCalendarDate 2021 Time.Mar 18
                             }
@@ -189,7 +189,7 @@ END:VEVENT"""
                     { id = "1"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.WithTime
+                        Ical.withTime
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-06T23:15:00.000Z"
                             }
@@ -210,7 +210,7 @@ END:VEVENT"""
                     { id = "1"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.WithTime
+                        Ical.withTime
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-06T23:15:00.000Z"
                             }
@@ -231,7 +231,7 @@ END:VEVENT"""
                     { id = "1"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.WithTime
+                        Ical.withTime
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-06T23:15:00.000Z"
                             }
@@ -255,7 +255,7 @@ END:VEVENT"""
                             { id = "1"
                             , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                             , time =
-                                Ical.WithTime
+                                Ical.withTime
                                     { start = toIso8601 "2013-10-04T22:39:30.000Z"
                                     , end = toIso8601 "2013-10-06T23:15:00.000Z"
                                     }
@@ -281,7 +281,7 @@ END:VEVENT"""
                     { id = "1"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.WithTime
+                        Ical.withTime
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-06T23:15:00.000Z"
                             }
@@ -302,7 +302,7 @@ END:VEVENT"""
                     { id = "1"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.WithTime
+                        Ical.withTime
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-06T23:15:00.000Z"
                             }
@@ -327,7 +327,7 @@ END:VEVENT"""
                             { id = "1"
                             , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                             , time =
-                                Ical.WithTime
+                                Ical.withTime
                                     { start = toIso8601 "2013-10-04T22:39:30.000Z"
                                     , end = toIso8601 "2013-10-06T23:15:00.000Z"
                                     }
@@ -369,7 +369,7 @@ END:VCALENDAR"""
                     { id = "multi-day"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.AllDay
+                        Ical.allDay
                             { start = Date.fromCalendarDate 2021 Time.Mar 18
                             , end = Date.fromCalendarDate 2021 Time.Mar 20
                             }
@@ -388,13 +388,63 @@ DTSTAMP:20210318T162044Z
 UID:multi-day@test.com
 SUMMARY:3-day event
 END:VEVENT"""
+        , test "AllDay with reversed dates normalizes start/end" <|
+            \() ->
+                Ical.event
+                    { id = "reversed"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.allDay
+                            { start = Date.fromCalendarDate 2021 Time.Mar 20
+                            , end = Date.fromCalendarDate 2021 Time.Mar 18
+                            }
+                    , summary = "Reversed dates"
+                    }
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART;VALUE=DATE:20210318
+DTEND;VALUE=DATE:20210321
+DTSTAMP:20210318T162044Z
+UID:reversed@test.com
+SUMMARY:Reversed dates
+END:VEVENT"""
+        , test "WithTime with reversed times normalizes start/end" <|
+            \() ->
+                Ical.event
+                    { id = "reversed-time"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.withTime
+                            { start = toIso8601 "2021-03-18T11:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T10:00:00.000Z"
+                            }
+                    , summary = "Reversed times"
+                    }
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T100000Z
+DTEND:20210318T110000Z
+DTSTAMP:20210318T162044Z
+UID:reversed-time@test.com
+SUMMARY:Reversed times
+END:VEVENT"""
         , test "generate event with RRULE" <|
             \() ->
                 Ical.event
                     { id = "recurring-1"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.WithTime
+                        Ical.withTime
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }
@@ -430,7 +480,7 @@ END:VEVENT"""
                     { id = "count-1"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.WithTime
+                        Ical.withTime
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }
@@ -466,7 +516,7 @@ END:VEVENT"""
                     { id = "meeting-1"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.WithTime
+                        Ical.withTime
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }

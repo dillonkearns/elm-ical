@@ -270,7 +270,7 @@ basicFeed =
         { id = "1"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.WithTime
+            Ical.withTime
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1381100100000
                 }
@@ -281,7 +281,7 @@ basicFeed =
         { id = "2"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.WithTime
+            Ical.withTime
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1381100100000
                 }
@@ -306,7 +306,7 @@ simpleEvent =
         { id = "123"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.WithTime
+            Ical.withTime
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
@@ -329,7 +329,7 @@ longDescription =
         { id = "123"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.WithTime
+            Ical.withTime
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
@@ -353,7 +353,7 @@ allDayEvent =
         { id = "4ot852po37bvri1natdlv4cf6r"
         , stamp = millisToPosix 1616083244000
         , time =
-            Ical.AllDay
+            Ical.allDay
                 { start = Date.fromCalendarDate 2021 Time.Mar 18
                 , end = Date.fromCalendarDate 2021 Time.Mar 18
                 }
@@ -378,7 +378,7 @@ organizerEvent =
         { id = "org-test"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.WithTime
+            Ical.withTime
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
@@ -403,7 +403,7 @@ doubleQuotes =
         { id = "quote-test"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.WithTime
+            Ical.withTime
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
@@ -424,7 +424,7 @@ emojiEvent =
         { id = "emoji-test"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.WithTime
+            Ical.withTime
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
@@ -445,7 +445,7 @@ emptyFieldsEvent =
         { id = "empty-test"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.WithTime
+            Ical.withTime
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
@@ -468,7 +468,7 @@ specialEmailEvent =
         { id = "special-email-test"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.WithTime
+            Ical.withTime
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
@@ -493,7 +493,7 @@ urlWithSpecialChars =
         { id = "url-test"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.WithTime
+            Ical.withTime
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
@@ -515,7 +515,7 @@ emptyCalendarFields =
         { id = "empty-cal-test"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.WithTime
+            Ical.withTime
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }

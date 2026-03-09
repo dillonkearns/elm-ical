@@ -1,6 +1,6 @@
 module Ical exposing
     ( Config, config, withName, withCalendarDescription, withUrl
-    , Event, event, EventTime(..), Organizer
+    , Event, event, EventTime, allDay, withTime, Organizer
     , withDescription, withLocation, withOrganizer, withHtmlDescription
     , withStatus, Status(..), withTransparency, Transparency(..)
     , withCreated, withLastModified
@@ -18,7 +18,7 @@ module Ical exposing
 
 ## Events
 
-@docs Event, event, EventTime, Organizer
+@docs Event, event, EventTime, allDay, withTime, Organizer
 @docs withDescription, withLocation, withOrganizer, withHtmlDescription
 @docs withStatus, Status, withTransparency, Transparency
 @docs withCreated, withLastModified
@@ -39,16 +39,42 @@ import Time
 
 
 {-| Represents the time span of an event. Either all-day (date only) or with
-specific times.
-
-For `AllDay`, the `end` date is **inclusive** — a single-day event on March 18
-should use `AllDay { start = march18, end = march18 }`. The library
-automatically adds one day to produce the exclusive DTEND required by iCal.
-
+specific times. Create values with [`allDay`](#allDay) or [`withTime`](#withTime).
 -}
 type EventTime
     = AllDay { start : Date, end : Date }
     | WithTime { start : Time.Posix, end : Time.Posix }
+
+
+{-| Create an all-day event time span. The `end` date is **inclusive** — a
+single-day event on March 18 should use
+`allDay { start = march18, end = march18 }`. The library automatically adds one
+day to produce the exclusive DTEND required by iCal.
+
+If `end` is before `start`, the dates are swapped automatically.
+
+-}
+allDay : { start : Date, end : Date } -> EventTime
+allDay { start, end } =
+    if Date.compare start end == GT then
+        AllDay { start = end, end = start }
+
+    else
+        AllDay { start = start, end = end }
+
+
+{-| Create a timed event time span with UTC start and end times.
+
+If `end` is before `start`, the times are swapped automatically.
+
+-}
+withTime : { start : Time.Posix, end : Time.Posix } -> EventTime
+withTime { start, end } =
+    if Time.posixToMillis start > Time.posixToMillis end then
+        WithTime { start = end, end = start }
+
+    else
+        WithTime { start = start, end = end }
 
 
 {-| An opaque type representing a calendar event. Create one with [`event`](#event)
@@ -176,7 +202,7 @@ withUrl url (Config c) =
     Ical.event
         { id = "unique-id-123"
         , stamp = timestamp
-        , time = Ical.WithTime { start = startTime, end = endTime }
+        , time = Ical.withTime { start = startTime, end = endTime }
         , summary = "Team Meeting"
         }
 
