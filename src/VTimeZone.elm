@@ -120,12 +120,18 @@ parseOffset input =
 
 isValidOffsetParts : Int -> Int -> Int -> Bool
 isValidOffsetParts hours minutes seconds =
-    hours >= 0
-        && hours <= 23
-        && minutes >= 0
-        && minutes <= 59
-        && seconds >= 0
-        && seconds <= 59
+    hours
+        >= 0
+        && hours
+        <= 23
+        && minutes
+        >= 0
+        && minutes
+        <= 59
+        && seconds
+        >= 0
+        && seconds
+        <= 59
 
 
 {-| Parse a VTIMEZONE RRULE like "FREQ=YEARLY;BYMONTH=3;BYDAY=2SU".
@@ -470,7 +476,8 @@ type alias ObservanceAccum =
 
 parseObservance : String -> List ContentLine -> Result String ( Observance, List ContentLine )
 parseObservance componentName lines =
-    parseObservanceBody componentName lines
+    parseObservanceBody componentName
+        lines
         { offsetFrom = Nothing
         , offsetTo = Nothing
         , rrule = Nothing
@@ -760,9 +767,12 @@ localDateTimeToPseudoSeconds localDateTime =
         date =
             Date.fromCalendarDate localDateTime.year (intToMonth localDateTime.month) localDateTime.day
     in
-    (Date.toRataDie date - 719163) * 86400
-        + localDateTime.hour * 3600
-        + localDateTime.minute * 60
+    (Date.toRataDie date - 719163)
+        * 86400
+        + localDateTime.hour
+        * 3600
+        + localDateTime.minute
+        * 60
         + localDateTime.second
 
 
@@ -775,9 +785,12 @@ dateTimePartsToPosix parts =
 
         totalSeconds : Int
         totalSeconds =
-            (Date.toRataDie date - 719163) * 86400
-                + parts.hour * 3600
-                + parts.minute * 60
+            (Date.toRataDie date - 719163)
+                * 86400
+                + parts.hour
+                * 3600
+                + parts.minute
+                * 60
                 + normalizeSecond parts.second
     in
     Time.millisToPosix (totalSeconds * 1000)

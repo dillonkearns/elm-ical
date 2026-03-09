@@ -308,12 +308,18 @@ isValidDate year month day =
 
 isValidTime : Int -> Int -> Int -> Bool
 isValidTime hour minute second =
-    hour >= 0
-        && hour <= 23
-        && minute >= 0
-        && minute <= 59
-        && second >= 0
-        && second <= 60
+    hour
+        >= 0
+        && hour
+        <= 23
+        && minute
+        >= 0
+        && minute
+        <= 59
+        && second
+        >= 0
+        && second
+        <= 60
 
 
 daysInMonth : Int -> Int -> Maybe Int
