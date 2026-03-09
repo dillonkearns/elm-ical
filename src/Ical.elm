@@ -51,8 +51,10 @@ from typed Elm values.
                     |> Ical.withLocation "Moscone Center, 747 Howard St, San Francisco, CA 94103"
         in
         Ical.generate
-            (Ical.config { id = "//mycompany//team//EN",
-            domain = "mycompany.com" }
+            (Ical.config
+                { id = "//mycompany//team//EN"
+                , domain = "mycompany.com"
+                }
                 |> Ical.withName "Engineering Team"
             )
             [ weeklySync, offsite ]
@@ -657,7 +659,7 @@ formatRule r =
                 Nothing
 
               else
-                Just ("BYMONTH=" ++ String.join "," (List.map monthToInt r.byMonth))
+                Just ("BYMONTH=" ++ String.join "," (List.map (Date.monthToNumber >> String.fromInt) r.byMonth))
             , if List.isEmpty r.bySetPos then
                 Nothing
 
@@ -673,46 +675,6 @@ formatRule r =
     parts
         |> List.filterMap identity
         |> String.join ";"
-
-
-monthToInt : Time.Month -> String
-monthToInt month =
-    case month of
-        Time.Jan ->
-            "1"
-
-        Time.Feb ->
-            "2"
-
-        Time.Mar ->
-            "3"
-
-        Time.Apr ->
-            "4"
-
-        Time.May ->
-            "5"
-
-        Time.Jun ->
-            "6"
-
-        Time.Jul ->
-            "7"
-
-        Time.Aug ->
-            "8"
-
-        Time.Sep ->
-            "9"
-
-        Time.Oct ->
-            "10"
-
-        Time.Nov ->
-            "11"
-
-        Time.Dec ->
-            "12"
 
 
 formatDaySpec : Recurrence.DaySpec -> String

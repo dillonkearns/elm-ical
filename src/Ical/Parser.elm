@@ -14,7 +14,6 @@ into typed Elm data.
     import Date
     import Ical.Parser as Parser
 
-
     holidayFeedToString : String -> String
     holidayFeedToString icsString =
         case Parser.parse icsString of
@@ -33,7 +32,6 @@ into typed Elm data.
 
             Err err ->
                 "Parse error: " ++ err
-
 
     toHoliday :
         Parser.Event
@@ -599,7 +597,7 @@ addDurationToLocal dur dt =
         -- Convert local datetime to a date + seconds-of-day, add duration, convert back
         date : Date.Date
         date =
-            Date.fromCalendarDate dt.year (intToMonth dt.month) dt.day
+            Date.fromCalendarDate dt.year (Date.numberToMonth dt.month) dt.day
 
         secondsOfDay : Int
         secondsOfDay =
@@ -842,7 +840,7 @@ parseDateTimeValue timezones line =
         ValueParser.parseDate line.value
             |> Result.map
                 (\{ year, month, day } ->
-                    IDate (Date.fromCalendarDate year (intToMonth month) day)
+                    IDate (Date.fromCalendarDate year (Date.numberToMonth month) day)
                 )
 
     else
@@ -878,7 +876,7 @@ dateTimePartsToValue timezones maybeTzid parts =
                 let
                     date : Date.Date
                     date =
-                        Date.fromCalendarDate parts.year (intToMonth parts.month) parts.day
+                        Date.fromCalendarDate parts.year (Date.numberToMonth parts.month) parts.day
 
                     daysSinceEpoch : Int
                     daysSinceEpoch =
@@ -892,46 +890,6 @@ dateTimePartsToValue timezones maybeTzid parts =
 
             else
                 Ok (IFloating dt)
-
-
-intToMonth : Int -> Time.Month
-intToMonth m =
-    case m of
-        1 ->
-            Time.Jan
-
-        2 ->
-            Time.Feb
-
-        3 ->
-            Time.Mar
-
-        4 ->
-            Time.Apr
-
-        5 ->
-            Time.May
-
-        6 ->
-            Time.Jun
-
-        7 ->
-            Time.Jul
-
-        8 ->
-            Time.Aug
-
-        9 ->
-            Time.Sep
-
-        10 ->
-            Time.Oct
-
-        11 ->
-            Time.Nov
-
-        _ ->
-            Time.Dec
 
 
 parseOrganizer : ContentLine -> Organizer
@@ -1060,7 +1018,7 @@ parseExdateValues timezones line =
                     Ok (IFloating localDateTime) ->
                         Just
                             (dateToUtcMidnight
-                                (Date.fromCalendarDate localDateTime.year (intToMonth localDateTime.month) localDateTime.day)
+                                (Date.fromCalendarDate localDateTime.year (Date.numberToMonth localDateTime.month) localDateTime.day)
                             )
 
                     _ ->
@@ -1351,7 +1309,7 @@ occurrenceStartsAfterUntil originalTime seed candidateDate untilPosix =
 
         FloatingTime { start } ->
             Date.compare
-                (Date.fromCalendarDate start.year (intToMonth start.month) start.day)
+                (Date.fromCalendarDate start.year (Date.numberToMonth start.month) start.day)
                 (Date.fromPosix Time.utc untilPosix)
                 == GT
 
@@ -1471,7 +1429,15 @@ expandYearly rule seed intervalDate =
                 [ Date.month seed ]
 
             else
-                List.filterMap intToMonth_ rule.byMonth
+                List.filterMap
+                    (\m ->
+                        if m >= 1 && m <= 12 then
+                            Just (Date.numberToMonth m)
+
+                        else
+                            Nothing
+                    )
+                    rule.byMonth
 
         baseDates : List Date.Date
         baseDates =
@@ -1606,7 +1572,7 @@ filterByMonth byMonth dates =
         dates
 
     else
-        List.filter (\d -> List.member (monthToInt (Date.month d)) byMonth) dates
+        List.filter (\d -> List.member (Date.monthToNumber (Date.month d)) byMonth) dates
 
 
 filterByMonthDay : List Int -> List Date.Date -> List Date.Date
@@ -1722,7 +1688,7 @@ occurrenceStartDate eventTime =
             Date.fromPosix Time.utc start.posix
 
         FloatingTime { start } ->
-            Date.fromCalendarDate start.year (intToMonth start.month) start.day
+            Date.fromCalendarDate start.year (Date.numberToMonth start.month) start.day
 
 
 shiftTime : EventTime -> Date.Date -> Date.Date -> EventTime
@@ -1765,14 +1731,14 @@ shiftLocalDateTime dayDelta ldt =
     let
         originalDate : Date.Date
         originalDate =
-            Date.fromCalendarDate ldt.year (intToMonth ldt.month) ldt.day
+            Date.fromCalendarDate ldt.year (Date.numberToMonth ldt.month) ldt.day
 
         newDate : Date.Date
         newDate =
             Date.add Date.Days dayDelta originalDate
     in
     { year = Date.year newDate
-    , month = monthToInt (Date.month newDate)
+    , month = Date.monthToNumber (Date.month newDate)
     , day = Date.day newDate
     , hour = ldt.hour
     , minute = ldt.minute
@@ -1827,55 +1793,6 @@ weekdayToInterval weekday =
 
         Time.Sun ->
             Date.Sunday
-
-
-intToMonth_ : Int -> Maybe Time.Month
-intToMonth_ m =
-    if m >= 1 && m <= 12 then
-        Just (intToMonth m)
-
-    else
-        Nothing
-
-
-monthToInt : Time.Month -> Int
-monthToInt m =
-    case m of
-        Time.Jan ->
-            1
-
-        Time.Feb ->
-            2
-
-        Time.Mar ->
-            3
-
-        Time.Apr ->
-            4
-
-        Time.May ->
-            5
-
-        Time.Jun ->
-            6
-
-        Time.Jul ->
-            7
-
-        Time.Aug ->
-            8
-
-        Time.Sep ->
-            9
-
-        Time.Oct ->
-            10
-
-        Time.Nov ->
-            11
-
-        Time.Dec ->
-            12
 
 
 daysInMonth : Int -> Time.Month -> Int

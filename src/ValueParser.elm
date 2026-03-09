@@ -621,7 +621,7 @@ parseUntilValue str =
         parseDate str
             |> Result.map
                 (\{ year, month, day } ->
-                    UntilDate (Date.fromCalendarDate year (intToMonth month) day)
+                    UntilDate (Date.fromCalendarDate year (Date.numberToMonth month) day)
                 )
 
     else
@@ -632,7 +632,7 @@ parseUntilValue str =
                     let
                         date : Date.Date
                         date =
-                            Date.fromCalendarDate parts.year (intToMonth parts.month) parts.day
+                            Date.fromCalendarDate parts.year (Date.numberToMonth parts.month) parts.day
 
                         daysSinceEpoch : Int
                         daysSinceEpoch =
@@ -727,43 +727,3 @@ parseWeekday str =
 
         _ ->
             Nothing
-
-
-intToMonth : Int -> Time.Month
-intToMonth m =
-    case m of
-        1 ->
-            Time.Jan
-
-        2 ->
-            Time.Feb
-
-        3 ->
-            Time.Mar
-
-        4 ->
-            Time.Apr
-
-        5 ->
-            Time.May
-
-        6 ->
-            Time.Jun
-
-        7 ->
-            Time.Jul
-
-        8 ->
-            Time.Aug
-
-        9 ->
-            Time.Sep
-
-        10 ->
-            Time.Oct
-
-        11 ->
-            Time.Nov
-
-        _ ->
-            Time.Dec

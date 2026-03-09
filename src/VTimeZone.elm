@@ -266,7 +266,7 @@ transitionDate year rule =
     let
         month : Time.Month
         month =
-            intToMonth rule.byMonth
+            Date.numberToMonth rule.byMonth
 
         interval : Date.Interval
         interval =
@@ -320,46 +320,6 @@ weekdayToInterval weekday =
 
         Time.Sun ->
             Date.Sunday
-
-
-intToMonth : Int -> Time.Month
-intToMonth m =
-    case m of
-        1 ->
-            Time.Jan
-
-        2 ->
-            Time.Feb
-
-        3 ->
-            Time.Mar
-
-        4 ->
-            Time.Apr
-
-        5 ->
-            Time.May
-
-        6 ->
-            Time.Jun
-
-        7 ->
-            Time.Jul
-
-        8 ->
-            Time.Aug
-
-        9 ->
-            Time.Sep
-
-        10 ->
-            Time.Oct
-
-        11 ->
-            Time.Nov
-
-        _ ->
-            Time.Dec
 
 
 daysInMonth : Int -> Time.Month -> Int
@@ -765,7 +725,7 @@ localDateTimeToPseudoSeconds localDateTime =
     let
         date : Date.Date
         date =
-            Date.fromCalendarDate localDateTime.year (intToMonth localDateTime.month) localDateTime.day
+            Date.fromCalendarDate localDateTime.year (Date.numberToMonth localDateTime.month) localDateTime.day
     in
     (Date.toRataDie date - 719163)
         * 86400
@@ -781,7 +741,7 @@ dateTimePartsToPosix parts =
     let
         date : Date.Date
         date =
-            Date.fromCalendarDate parts.year (intToMonth parts.month) parts.day
+            Date.fromCalendarDate parts.year (Date.numberToMonth parts.month) parts.day
 
         totalSeconds : Int
         totalSeconds =
