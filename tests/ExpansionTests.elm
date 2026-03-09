@@ -227,6 +227,43 @@ suite =
                             , Date.fromCalendarDate 2021 Time.Mar 23 -- Tue
                             , Date.fromCalendarDate 2021 Time.Mar 24 -- Wed
                             ]
+            , test "DAILY with BYMONTHDAY=-1 filters to last day of each month" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "Last day of month"
+                                , start = Time.millisToPosix 1614556800000 -- 2021-03-01T00:00:00Z
+                                , end = Time.millisToPosix 1614560400000 -- 2021-03-01T01:00:00Z
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Daily
+                                    , interval = 1
+                                    , end = Recurrence.Forever
+                                    , byDay = []
+                                    , byMonthDay = [ -1 ]
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , weekStart = Time.Mon
+                                    }
+
+                        occurrences : List Parser.Occurrence
+                        occurrences =
+                            Parser.expand
+                                { start = Date.fromCalendarDate 2021 Time.Mar 1
+                                , end = Date.fromCalendarDate 2021 Time.Jun 30
+                                }
+                                event
+                    in
+                    occurrences
+                        |> List.map (occurrenceDate Time.utc)
+                        |> Expect.equal
+                            [ Date.fromCalendarDate 2021 Time.Mar 31
+                            , Date.fromCalendarDate 2021 Time.Apr 30
+                            , Date.fromCalendarDate 2021 Time.May 31
+                            , Date.fromCalendarDate 2021 Time.Jun 30
+                            ]
             ]
         , describe "WEEKLY"
             [ test "WEEKLY COUNT=3 produces 3 weekly occurrences" <|

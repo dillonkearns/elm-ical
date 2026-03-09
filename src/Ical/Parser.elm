@@ -1555,7 +1555,37 @@ filterByMonthDay byMonthDay dates =
         dates
 
     else
-        List.filter (\d -> List.member (Date.day d) byMonthDay) dates
+        List.filter
+            (\d ->
+                let
+                    maxDay : Int
+                    maxDay =
+                        daysInMonth (Date.year d) (Date.month d)
+
+                    resolvedDays : List Int
+                    resolvedDays =
+                        List.filterMap
+                            (\day ->
+                                let
+                                    actual : Int
+                                    actual =
+                                        if day < 0 then
+                                            maxDay + day + 1
+
+                                        else
+                                            day
+                                in
+                                if actual >= 1 && actual <= maxDay then
+                                    Just actual
+
+                                else
+                                    Nothing
+                            )
+                            byMonthDay
+                in
+                List.member (Date.day d) resolvedDays
+            )
+            dates
 
 
 filterByDay : List DaySpec -> List Date.Date -> List Date.Date
