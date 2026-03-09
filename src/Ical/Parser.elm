@@ -15,42 +15,45 @@ into typed Elm data.
     import Ical.Parser as Parser
 
 
-    type alias Holiday =
-        { name : String
-        , date : Date.Date
-        , weekday : Time.Weekday
-        }
+    holidayFeedToString : String -> String
+    holidayFeedToString icsString =
+        case Parser.parse icsString of
+            Ok cal ->
+                cal.events
+                    |> List.filterMap toHoliday
+                    |> List.sortBy
+                        (.date >> Date.toRataDie)
+                    |> List.map
+                        (\h ->
+                            Date.format "EEE, MMM d" h.date
+                                ++ " - "
+                                ++ h.name
+                        )
+                    |> String.join "\n"
+
+            Err err ->
+                "Parse error: " ++ err
 
 
-    upcomingHolidays :
-        String
-        -> Result String (List Holiday)
-    upcomingHolidays icsString =
-        Parser.parse icsString
-            |> Result.map
-                (\cal ->
-                    cal.events
-                        |> List.filterMap toHoliday
-                        |> List.sortBy
-                            (.date >> Date.toRataDie)
-                )
-
-
-    toHoliday : Parser.Event -> Maybe Holiday
+    toHoliday :
+        Parser.Event
+        -> Maybe { name : String, date : Date.Date }
     toHoliday event =
         case ( event.summary, event.time ) of
             ( Just name, Parser.AllDay { start } ) ->
-                Just
-                    { name = name
-                    , date = start
-                    , weekday = Date.weekday start
-                    }
+                Just { name = name, date = start }
 
             _ ->
                 Nothing
 
+    -- holidayFeedToString usHolidaysFeed
+    --
+    --   Thu, Jan 1 - New Year's Day
+    --   Mon, Jan 19 - MLK Day
+    --   ...
+
 See the [`examples/` folder](https://github.com/dillonkearns/elm-ical/tree/main/examples)
-for a full runnable version of this script.
+for a full runnable script that fetches and parses a live Google Calendar feed.
 
 Parsing is strict: malformed content lines, invalid dates and times, bad
 `RRULE` values, and a `TZID` without a matching `VTIMEZONE` all return `Err`.

@@ -21,28 +21,22 @@ from typed Elm values.
     teamCalendar : Time.Posix -> String
     teamCalendar now =
         let
-            standup =
+            weeklySync : Ical.Event
+            weeklySync =
                 Ical.event
-                    { id = "standup"
+                    { id = "weekly-sync"
                     , stamp = now
                     , time =
                         Ical.withTime
-                            { start = Time.millisToPosix 1616065200000 -- 2021-03-18T10:00Z
-                            , end = Time.millisToPosix 1616068800000 -- 2021-03-18T11:00Z
+                            { start = mar18at10am
+                            , end = mar18at11am
                             }
-                    , summary = "Daily Standup"
+                    , summary = "Weekly Team Sync"
                     }
                     |> Ical.withRecurrenceRule
-                        (Ical.rule Recurrence.Daily
-                            |> Ical.withByDay
-                                [ { ordinal = Nothing, weekday = Time.Mon }
-                                , { ordinal = Nothing, weekday = Time.Tue }
-                                , { ordinal = Nothing, weekday = Time.Wed }
-                                , { ordinal = Nothing, weekday = Time.Thu }
-                                , { ordinal = Nothing, weekday = Time.Fri }
-                                ]
-                        )
+                        (Ical.rule Recurrence.Weekly)
 
+            offsite : Ical.Event
             offsite =
                 Ical.event
                     { id = "offsite-q2"
@@ -54,13 +48,22 @@ from typed Elm values.
                             }
                     , summary = "Q2 Team Offsite"
                     }
-                    |> Ical.withLocation "Portland, OR"
+                    |> Ical.withLocation "Moscone Center, 747 Howard St, San Francisco, CA 94103"
         in
         Ical.generate
-            (Ical.config { id = "//mycompany//team//EN", domain = "mycompany.com" }
+            (Ical.config { id = "//mycompany//team//EN",
+            domain = "mycompany.com" }
                 |> Ical.withName "Engineering Team"
             )
-            [ standup, offsite ]
+            [ weeklySync, offsite ]
+
+    mar18at10am : Time.Posix
+    mar18at10am =
+        Time.millisToPosix 1616065200000
+
+    mar18at11am : Time.Posix
+    mar18at11am =
+        Time.millisToPosix 1616068800000
 
 All generation types are opaque with builder functions. Invalid inputs like
 reversed start/end times or negative intervals are silently normalized.

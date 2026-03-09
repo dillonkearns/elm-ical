@@ -18,13 +18,7 @@ npm install
 
 ### Running
 
-You can run a script directly from GitHub without cloning:
-
-```sh
-npx elm-pages run https://raw.githubusercontent.com/dillonkearns/elm-ical/main/examples/scripts/src/UsHolidays.elm
-```
-
-Or locally from the `examples/scripts/` directory:
+From the `examples/scripts/` directory:
 
 ```sh
 npx elm-pages run src/UsHolidays.elm

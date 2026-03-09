@@ -22,28 +22,22 @@ import Time
 teamCalendar : Time.Posix -> String
 teamCalendar now =
     let
-        standup =
+        weeklySync : Ical.Event
+        weeklySync =
             Ical.event
-                { id = "standup"
+                { id = "weekly-sync"
                 , stamp = now
                 , time =
                     Ical.withTime
-                        { start = Time.millisToPosix 1616065200000 -- 2021-03-18T10:00Z
-                        , end = Time.millisToPosix 1616068800000 -- 2021-03-18T11:00Z
+                        { start = mar18at10am
+                        , end = mar18at11am
                         }
-                , summary = "Daily Standup"
+                , summary = "Weekly Team Sync"
                 }
                 |> Ical.withRecurrenceRule
-                    (Ical.rule Recurrence.Daily
-                        |> Ical.withByDay
-                            [ { ordinal = Nothing, weekday = Time.Mon }
-                            , { ordinal = Nothing, weekday = Time.Tue }
-                            , { ordinal = Nothing, weekday = Time.Wed }
-                            , { ordinal = Nothing, weekday = Time.Thu }
-                            , { ordinal = Nothing, weekday = Time.Fri }
-                            ]
-                    )
+                    (Ical.rule Recurrence.Weekly)
 
+        offsite : Ical.Event
         offsite =
             Ical.event
                 { id = "offsite-q2"
@@ -55,13 +49,21 @@ teamCalendar now =
                         }
                 , summary = "Q2 Team Offsite"
                 }
-                |> Ical.withLocation "Portland, OR"
+                |> Ical.withLocation "Moscone Center, 747 Howard St, San Francisco, CA 94103"
     in
     Ical.generate
         (Ical.config { id = "//mycompany//team//EN", domain = "mycompany.com" }
             |> Ical.withName "Engineering Team"
         )
-        [ standup, offsite ]
+        [ weeklySync, offsite ]
+
+mar18at10am : Time.Posix
+mar18at10am =
+    Time.millisToPosix 1616065200000
+
+mar18at11am : Time.Posix
+mar18at11am =
+    Time.millisToPosix 1616068800000
 ```
 
 ## Parsing
@@ -71,42 +73,45 @@ import Date
 import Ical.Parser as Parser
 
 
-type alias Holiday =
-    { name : String
-    , date : Date.Date
-    , weekday : Time.Weekday
-    }
+holidayFeedToString : String -> String
+holidayFeedToString icsString =
+    case Parser.parse icsString of
+        Ok cal ->
+            cal.events
+                |> List.filterMap toHoliday
+                |> List.sortBy
+                    (.date >> Date.toRataDie)
+                |> List.map
+                    (\h ->
+                        Date.format "EEE, MMM d" h.date
+                            ++ " - "
+                            ++ h.name
+                    )
+                |> String.join "\n"
+
+        Err err ->
+            "Parse error: " ++ err
 
 
-upcomingHolidays :
-    String
-    -> Result String (List Holiday)
-upcomingHolidays icsString =
-    Parser.parse icsString
-        |> Result.map
-            (\cal ->
-                cal.events
-                    |> List.filterMap toHoliday
-                    |> List.sortBy
-                        (.date >> Date.toRataDie)
-            )
-
-
-toHoliday : Parser.Event -> Maybe Holiday
+toHoliday :
+    Parser.Event
+    -> Maybe { name : String, date : Date.Date }
 toHoliday event =
     case ( event.summary, event.time ) of
         ( Just name, Parser.AllDay { start } ) ->
-            Just
-                { name = name
-                , date = start
-                , weekday = Date.weekday start
-                }
+            Just { name = name, date = start }
 
         _ ->
             Nothing
+
+-- holidayFeedToString usHolidaysFeed
+--
+--   Thu, Jan 1 - New Year's Day
+--   Mon, Jan 19 - MLK Day
+--   ...
 ```
 
-See [`examples/`](examples/) for a full runnable version of this using [elm-pages scripts](https://elm-pages.com/docs/elm-pages-scripts/).
+See [`examples/`](examples/) for a full runnable script that fetches and parses a live Google Calendar feed.
 
 ## What You Get
 

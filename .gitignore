@@ -5,3 +5,4 @@ test/fixtures.json
 docs.json
 .elm-pages/compiled-ports/
 
+examples/scripts/.elm-pages/compiled-ports/

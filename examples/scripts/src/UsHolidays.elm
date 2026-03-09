@@ -32,7 +32,7 @@ run =
                                 |> BackendTask.andThen
                                     (\() ->
                                         upcoming
-                                            |> List.map (\h -> Script.log ("  " ++ Date.toIsoString h.date ++ "  " ++ weekdayToString (Date.weekday h.date) ++ "  " ++ h.name))
+                                            |> List.map (\h -> Script.log ("  " ++ Date.format "y-MM-dd  EEE  " h.date ++ h.name))
                                             |> BackendTask.sequence
                                             |> BackendTask.map (\_ -> ())
                                     )
@@ -47,31 +47,6 @@ type alias Holiday =
     { name : String
     , date : Date.Date
     }
-
-
-weekdayToString : Time.Weekday -> String
-weekdayToString weekday =
-    case weekday of
-        Time.Mon ->
-            "Mon"
-
-        Time.Tue ->
-            "Tue"
-
-        Time.Wed ->
-            "Wed"
-
-        Time.Thu ->
-            "Thu"
-
-        Time.Fri ->
-            "Fri"
-
-        Time.Sat ->
-            "Sat"
-
-        Time.Sun ->
-            "Sun"
 
 
 toHoliday : Parser.Event -> Maybe Holiday
