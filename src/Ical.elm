@@ -417,10 +417,14 @@ withRecurrenceRule rrule (Event e) =
 
 
 {-| Add an attendee to the event (ATTENDEE property with CN parameter).
+
+    Ical.event { ... }
+        |> Ical.withAttendee { name = "Jane Smith", email = "jane@example.com" }
+
 -}
-withAttendee : { email : String, name : String } -> Event -> Event
+withAttendee : Organizer -> Event -> Event
 withAttendee attendee (Event e) =
-    Event { e | attendees = e.attendees ++ [ { name = attendee.name, email = attendee.email } ] }
+    Event { e | attendees = e.attendees ++ [ attendee ] }
 
 
 
@@ -447,7 +451,9 @@ generate ((Config c) as cfg) events =
         ++ "\u{000D}\nEND:VCALENDAR\u{000D}\n"
 
 
-{-| Generate the iCal string for a single VEVENT.
+{-| Generate the iCal string for a single VEVENT component, without the
+surrounding VCALENDAR wrapper. Useful for embedding in a larger calendar
+you are building up. For a complete iCal document, use [`generate`](#generate).
 -}
 generateEvent : Config -> Event -> String
 generateEvent (Config c) (Event details) =

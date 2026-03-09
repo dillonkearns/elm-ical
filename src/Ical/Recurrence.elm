@@ -3,8 +3,10 @@ module Ical.Recurrence exposing (RecurrenceRule, Frequency(..), RecurrenceEnd(..
 {-| Types for iCal recurrence rules
 ([RFC 5545 Section 3.3.10](https://datatracker.ietf.org/doc/html/rfc5545#section-3.3.10)).
 
-These types are shared between generation ([`Ical`](Ical)) and parsing
-([`Ical.Parser`](Ical-Parser)).
+[`RecurrenceRule`](#RecurrenceRule) is the transparent record returned by
+[`Ical.Parser`](Ical-Parser). [`Frequency`](#Frequency) and
+[`DaySpec`](#DaySpec) are also used when building rules for generation
+via [`Ical.Rule`](Ical#Rule).
 
 @docs RecurrenceRule, Frequency, RecurrenceEnd, DaySpec
 
@@ -14,7 +16,9 @@ import Date
 import Time
 
 
-{-| A parsed or constructed recurrence rule (RRULE).
+{-| A parsed recurrence rule (RRULE). This is the transparent record returned
+by [`Ical.Parser`](Ical-Parser) for reading parsed rule data. For constructing
+rules for generation, use [`Ical.Rule`](Ical#Rule) and its builder functions.
 
     { frequency = Weekly
     , interval = 1
