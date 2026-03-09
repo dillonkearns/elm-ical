@@ -4,6 +4,8 @@ module Ical exposing
     , withDescription, withLocation, withOrganizer, withHtmlDescription
     , withStatus, Status(..), withTransparency, Transparency(..)
     , withCreated, withLastModified
+    , Rule, rule, withRuleInterval, withCount, withUntilDate, withUntilDateTime
+    , withByDay, withByMonthDay, withByMonth, withBySetPos, withWeekStart
     , withRecurrenceRule, withAttendee
     , generate, generateEvent
     )
@@ -24,6 +26,12 @@ module Ical exposing
 @docs withCreated, withLastModified
 
 
+## Recurrence rules
+
+@docs Rule, rule, withRuleInterval, withCount, withUntilDate, withUntilDateTime
+@docs withByDay, withByMonthDay, withByMonth, withBySetPos, withWeekStart
+
+
 ## Generating output
 
 @docs withRecurrenceRule, withAttendee
@@ -32,7 +40,7 @@ module Ical exposing
 -}
 
 import Date exposing (Date)
-import Ical.Recurrence as Recurrence exposing (RecurrenceRule)
+import Ical.Recurrence as Recurrence exposing (DaySpec, Frequency(..))
 import IcalDateTime
 import Property exposing (Parameter(..), ValueData(..))
 import Time
@@ -97,7 +105,7 @@ type alias EventData =
     , status : Maybe Status
     , created : Maybe Time.Posix
     , lastModified : Maybe Time.Posix
-    , recurrenceRule : Maybe RecurrenceRule
+    , recurrenceRule : Maybe Rule
     , attendees : List Organizer
     }
 
@@ -133,6 +141,117 @@ type alias Organizer =
     { name : String
     , email : String
     }
+
+
+{-| An opaque recurrence rule. Create one with [`rule`](#rule) and customize
+with the `with*` builder functions.
+
+    Ical.rule Recurrence.Weekly
+        |> Ical.withByDay [ { ordinal = Nothing, weekday = Time.Mon } ]
+        |> Ical.withCount 10
+
+-}
+type Rule
+    = Rule RuleData
+
+
+type alias RuleData =
+    { frequency : Frequency
+    , interval : Int
+    , end : Recurrence.RecurrenceEnd
+    , byDay : List DaySpec
+    , byMonthDay : List Int
+    , byMonth : List Time.Month
+    , bySetPos : List Int
+    , weekStart : Time.Weekday
+    }
+
+
+{-| Create a recurrence rule with the given frequency. All other fields use
+sensible defaults: interval 1, no end, no filters, week starts on Monday.
+-}
+rule : Recurrence.Frequency -> Rule
+rule frequency =
+    Rule
+        { frequency = frequency
+        , interval = 1
+        , end = Recurrence.Forever
+        , byDay = []
+        , byMonthDay = []
+        , byMonth = []
+        , bySetPos = []
+        , weekStart = Time.Mon
+        }
+
+
+{-| Set the repetition interval. Values less than 1 are clamped to 1.
+-}
+withRuleInterval : Int -> Rule -> Rule
+withRuleInterval n (Rule r) =
+    Rule { r | interval = max 1 n }
+
+
+{-| Set a count limit. Values less than 1 are clamped to 1.
+-}
+withCount : Int -> Rule -> Rule
+withCount n (Rule r) =
+    Rule { r | end = Recurrence.Count (max 1 n) }
+
+
+{-| Set the recurrence end to a specific date.
+-}
+withUntilDate : Date -> Rule -> Rule
+withUntilDate date (Rule r) =
+    Rule { r | end = Recurrence.UntilDate date }
+
+
+{-| Set the recurrence end to a specific date-time.
+-}
+withUntilDateTime : Time.Posix -> Rule -> Rule
+withUntilDateTime posix (Rule r) =
+    Rule { r | end = Recurrence.UntilDateTime posix }
+
+
+{-| Set which days of the week the rule applies to.
+-}
+withByDay : List DaySpec -> Rule -> Rule
+withByDay days (Rule r) =
+    Rule { r | byDay = days }
+
+
+{-| Set which days of the month the rule applies to. Valid values are
+\-31 to -1 and 1 to 31. Negative values count from the end of the month
+(e.g. -1 is the last day).
+-}
+withByMonthDay : List Int -> Rule -> Rule
+withByMonthDay days (Rule r) =
+    Rule { r | byMonthDay = days }
+
+
+{-| Set which months the rule applies to.
+
+    Ical.rule Recurrence.Yearly
+        |> Ical.withByMonth [ Time.Jan, Time.Apr, Time.Jul, Time.Oct ]
+
+-}
+withByMonth : List Time.Month -> Rule -> Rule
+withByMonth months (Rule r) =
+    Rule { r | byMonth = months }
+
+
+{-| Set the BYSETPOS filter. Selects the nth occurrence within the set of
+events produced by the rule in each interval.
+-}
+withBySetPos : List Int -> Rule -> Rule
+withBySetPos positions (Rule r) =
+    Rule { r | bySetPos = positions }
+
+
+{-| Set the week start day (default is Monday).
+-}
+withWeekStart : Time.Weekday -> Rule -> Rule
+withWeekStart weekday (Rule r) =
+    Rule { r | weekStart = weekday }
 
 
 {-| An opaque type representing calendar configuration. Create one with
@@ -283,12 +402,18 @@ withLastModified lastModified (Event e) =
     Event { e | lastModified = Just lastModified }
 
 
-{-| Add a recurrence rule (RRULE) to the event. See [`Ical.Recurrence`](Ical-Recurrence)
-for the `RecurrenceRule` type.
+{-| Add a recurrence rule (RRULE) to the event.
+
+    Ical.event { ... }
+        |> Ical.withRecurrenceRule
+            (Ical.rule Recurrence.Weekly
+                |> Ical.withCount 10
+            )
+
 -}
-withRecurrenceRule : RecurrenceRule -> Event -> Event
-withRecurrenceRule rule (Event e) =
-    Event { e | recurrenceRule = Just rule }
+withRecurrenceRule : Rule -> Event -> Event
+withRecurrenceRule rrule (Event e) =
+    Event { e | recurrenceRule = Just rrule }
 
 
 {-| Add an attendee to the event (ATTENDEE property with CN parameter).
@@ -355,9 +480,9 @@ eventProperties c details =
                     )
             , details.recurrenceRule
                 |> Maybe.map
-                    (\rule ->
+                    (\(Rule r) ->
                         ( "RRULE"
-                        , Uri (formatRecurrenceRule rule)
+                        , Uri (formatRule r)
                         , []
                         )
                     )
@@ -416,35 +541,35 @@ transparencyToString transparency =
             "OPAQUE"
 
 
-formatRecurrenceRule : RecurrenceRule -> String
-formatRecurrenceRule rule =
+formatRule : RuleData -> String
+formatRule r =
     let
         freq : String
         freq =
             "FREQ="
-                ++ (case rule.frequency of
-                        Recurrence.Daily ->
+                ++ (case r.frequency of
+                        Daily ->
                             "DAILY"
 
-                        Recurrence.Weekly ->
+                        Weekly ->
                             "WEEKLY"
 
-                        Recurrence.Monthly ->
+                        Monthly ->
                             "MONTHLY"
 
-                        Recurrence.Yearly ->
+                        Yearly ->
                             "YEARLY"
                    )
 
         parts : List (Maybe String)
         parts =
             [ Just freq
-            , if rule.interval > 1 then
-                Just ("INTERVAL=" ++ String.fromInt rule.interval)
+            , if r.interval > 1 then
+                Just ("INTERVAL=" ++ String.fromInt r.interval)
 
               else
                 Nothing
-            , case rule.end of
+            , case r.end of
                 Recurrence.Forever ->
                     Nothing
 
@@ -456,28 +581,28 @@ formatRecurrenceRule rule =
 
                 Recurrence.UntilDateTime posix ->
                     Just ("UNTIL=" ++ IcalDateTime.format posix)
-            , if List.isEmpty rule.byDay then
+            , if List.isEmpty r.byDay then
                 Nothing
 
               else
-                Just ("BYDAY=" ++ String.join "," (List.map formatDaySpec rule.byDay))
-            , if List.isEmpty rule.byMonthDay then
+                Just ("BYDAY=" ++ String.join "," (List.map formatDaySpec r.byDay))
+            , if List.isEmpty r.byMonthDay then
                 Nothing
 
               else
-                Just ("BYMONTHDAY=" ++ String.join "," (List.map String.fromInt rule.byMonthDay))
-            , if List.isEmpty rule.byMonth then
+                Just ("BYMONTHDAY=" ++ String.join "," (List.map String.fromInt r.byMonthDay))
+            , if List.isEmpty r.byMonth then
                 Nothing
 
               else
-                Just ("BYMONTH=" ++ String.join "," (List.map String.fromInt rule.byMonth))
-            , if List.isEmpty rule.bySetPos then
+                Just ("BYMONTH=" ++ String.join "," (List.map monthToInt r.byMonth))
+            , if List.isEmpty r.bySetPos then
                 Nothing
 
               else
-                Just ("BYSETPOS=" ++ String.join "," (List.map String.fromInt rule.bySetPos))
-            , if rule.weekStart /= Time.Mon then
-                Just ("WKST=" ++ weekdayToString rule.weekStart)
+                Just ("BYSETPOS=" ++ String.join "," (List.map String.fromInt r.bySetPos))
+            , if r.weekStart /= Time.Mon then
+                Just ("WKST=" ++ weekdayToString r.weekStart)
 
               else
                 Nothing
@@ -486,6 +611,23 @@ formatRecurrenceRule rule =
     parts
         |> List.filterMap identity
         |> String.join ";"
+
+
+monthToInt : Time.Month -> String
+monthToInt month =
+    case month of
+        Time.Jan -> "1"
+        Time.Feb -> "2"
+        Time.Mar -> "3"
+        Time.Apr -> "4"
+        Time.May -> "5"
+        Time.Jun -> "6"
+        Time.Jul -> "7"
+        Time.Aug -> "8"
+        Time.Sep -> "9"
+        Time.Oct -> "10"
+        Time.Nov -> "11"
+        Time.Dec -> "12"
 
 
 formatDaySpec : Recurrence.DaySpec -> String

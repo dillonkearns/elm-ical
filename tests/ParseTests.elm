@@ -1657,15 +1657,10 @@ roundTripTests =
                             , summary = "Weekly standup"
                             }
                             |> Ical.withRecurrenceRule
-                                { frequency = Recurrence.Weekly
-                                , interval = 1
-                                , end = Recurrence.Count 10
-                                , byDay = [ { ordinal = Nothing, weekday = Time.Mon }, { ordinal = Nothing, weekday = Time.Wed } ]
-                                , byMonthDay = []
-                                , byMonth = []
-                                , bySetPos = []
-                                , weekStart = Time.Mon
-                                }
+                                (Ical.rule Recurrence.Weekly
+                                    |> Ical.withCount 10
+                                    |> Ical.withByDay [ { ordinal = Nothing, weekday = Time.Mon }, { ordinal = Nothing, weekday = Time.Wed } ]
+                                )
                         ]
                             |> Ical.generate
                                 (Ical.config

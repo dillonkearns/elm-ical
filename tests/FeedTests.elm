@@ -451,15 +451,9 @@ END:VEVENT"""
                     , summary = "Weekly standup"
                     }
                     |> Ical.withRecurrenceRule
-                        { frequency = Recurrence.Weekly
-                        , interval = 1
-                        , end = Recurrence.Forever
-                        , byDay = [ { ordinal = Nothing, weekday = Time.Mon }, { ordinal = Nothing, weekday = Time.Wed }, { ordinal = Nothing, weekday = Time.Fri } ]
-                        , byMonthDay = []
-                        , byMonth = []
-                        , bySetPos = []
-                        , weekStart = Time.Mon
-                        }
+                        (Ical.rule Recurrence.Weekly
+                            |> Ical.withByDay [ { ordinal = Nothing, weekday = Time.Mon }, { ordinal = Nothing, weekday = Time.Wed }, { ordinal = Nothing, weekday = Time.Fri } ]
+                        )
                     |> Ical.generateEvent
                         (Ical.config
                             { id = "//test//test//EN"
@@ -487,15 +481,10 @@ END:VEVENT"""
                     , summary = "Limited series"
                     }
                     |> Ical.withRecurrenceRule
-                        { frequency = Recurrence.Daily
-                        , interval = 2
-                        , end = Recurrence.Count 10
-                        , byDay = []
-                        , byMonthDay = []
-                        , byMonth = []
-                        , bySetPos = []
-                        , weekStart = Time.Mon
-                        }
+                        (Ical.rule Recurrence.Daily
+                            |> Ical.withRuleInterval 2
+                            |> Ical.withCount 10
+                        )
                     |> Ical.generateEvent
                         (Ical.config
                             { id = "//test//test//EN"
@@ -509,6 +498,67 @@ DTSTAMP:20210318T162044Z
 UID:count-1@test.com
 SUMMARY:Limited series
 RRULE:FREQ=DAILY;INTERVAL=2;COUNT=10
+END:VEVENT"""
+        , test "negative interval clamps to 1" <|
+            \() ->
+                Ical.event
+                    { id = "clamped"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.withTime
+                            { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T11:00:00.000Z"
+                            }
+                    , summary = "Clamped"
+                    }
+                    |> Ical.withRecurrenceRule
+                        (Ical.rule Recurrence.Daily
+                            |> Ical.withRuleInterval -3
+                            |> Ical.withCount -5
+                        )
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T100000Z
+DTEND:20210318T110000Z
+DTSTAMP:20210318T162044Z
+UID:clamped@test.com
+SUMMARY:Clamped
+RRULE:FREQ=DAILY;COUNT=1
+END:VEVENT"""
+        , test "generate RRULE with BYMONTH using Time.Month" <|
+            \() ->
+                Ical.event
+                    { id = "bymonth-1"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.withTime
+                            { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T11:00:00.000Z"
+                            }
+                    , summary = "Quarterly"
+                    }
+                    |> Ical.withRecurrenceRule
+                        (Ical.rule Recurrence.Yearly
+                            |> Ical.withByMonth [ Time.Jan, Time.Apr, Time.Jul, Time.Oct ]
+                        )
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T100000Z
+DTEND:20210318T110000Z
+DTSTAMP:20210318T162044Z
+UID:bymonth-1@test.com
+SUMMARY:Quarterly
+RRULE:FREQ=YEARLY;BYMONTH=1,4,7,10
 END:VEVENT"""
         , test "generate event with ATTENDEE" <|
             \() ->
