@@ -85,12 +85,18 @@ encodeParameter (Parameter ( key, value )) =
 quoted : String -> String
 quoted string =
     let
+        escaped : String
+        escaped =
+            string
+                |> String.replace "^" "^^"
+                |> String.replace "\"" "^'"
+
         needsQuotes : Bool
         needsQuotes =
-            (string |> String.contains ":") || (string |> String.contains ";") || (string |> String.contains ",")
+            (escaped |> String.contains ":") || (escaped |> String.contains ";") || (escaped |> String.contains ",")
     in
     if needsQuotes then
-        "\"" ++ string ++ "\""
+        "\"" ++ escaped ++ "\""
 
     else
-        string
+        escaped
