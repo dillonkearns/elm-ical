@@ -168,7 +168,7 @@ type alias EventData =
     }
 
 
-{-| <https://tools.ietf.org/html/rfc5545#section-3.8.2.7>
+{-| <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.2.7>
 
 "OPAQUE" - Blocks or opaque on busy time searches.
 "TRANSPARENT" - Transparent on busy time searches.
@@ -180,7 +180,7 @@ type Transparency
     | Transparent
 
 
-{-| <https://tools.ietf.org/html/rfc5545#section-3.8.1.11>
+{-| <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.1.11>
 
        statvalue-event = "TENTATIVE"    ;Indicates event is tentative.
                        / "CONFIRMED"    ;Indicates event is definite.

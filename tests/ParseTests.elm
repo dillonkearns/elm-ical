@@ -1510,7 +1510,7 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.rdates
+                                ev.recurrenceDates
                                     |> Expect.equal
                                         [ toIso8601 "2021-03-25T16:20:44.000Z"
                                         , toIso8601 "2021-04-01T16:20:44.000Z"
@@ -1545,7 +1545,7 @@ endToEndTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.rdates
+                                ev.recurrenceDates
                                     |> List.map (\posix -> Date.fromPosix Time.utc posix)
                                     |> Expect.equal
                                         [ Date.fromCalendarDate 2021 Time.Mar 25

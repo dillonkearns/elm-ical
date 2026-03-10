@@ -29,7 +29,7 @@ suite =
                                 { start = Date.fromCalendarDate 2021 Time.Jan 1
                                 , end = Date.fromCalendarDate 2021 Time.Dec 31
                                 }
-                                event
+                                [ event ]
                     in
                     Expect.all
                         [ \os -> List.length os |> Expect.equal 1
@@ -57,7 +57,7 @@ suite =
                                 { start = Date.fromCalendarDate 2022 Time.Jan 1
                                 , end = Date.fromCalendarDate 2022 Time.Dec 31
                                 }
-                                event
+                                [ event ]
                     in
                     List.length occurrences |> Expect.equal 0
             ]
@@ -89,7 +89,7 @@ suite =
                                 { start = Date.fromCalendarDate 2021 Time.Jan 1
                                 , end = Date.fromCalendarDate 2021 Time.Dec 31
                                 }
-                                event
+                                [ event ]
                     in
                     Expect.all
                         [ \os -> List.length os |> Expect.equal 3
@@ -126,7 +126,7 @@ suite =
 
                         occurrences : List Parser.Occurrence
                         occurrences =
-                            Parser.expand yearRange event
+                            Parser.expand yearRange [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -158,7 +158,7 @@ suite =
 
                         occurrences : List Parser.Occurrence
                         occurrences =
-                            Parser.expand yearRange event
+                            Parser.expand yearRange [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -188,7 +188,7 @@ suite =
                                     , weekStart = Time.Mon
                                     }
                     in
-                    Parser.expand yearRange event
+                    Parser.expand yearRange [ event ]
                         |> List.map (occurrenceDate Time.utc)
                         |> Expect.equal
                             [ Date.fromCalendarDate 2021 Time.Mar 18 ]
@@ -216,7 +216,7 @@ suite =
 
                         occurrences : List Parser.Occurrence
                         occurrences =
-                            Parser.expand yearRange event
+                            Parser.expand yearRange [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -254,7 +254,7 @@ suite =
                                 { start = Date.fromCalendarDate 2021 Time.Mar 1
                                 , end = Date.fromCalendarDate 2021 Time.Jun 30
                                 }
-                                event
+                                [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -289,7 +289,7 @@ suite =
 
                         occurrences : List Parser.Occurrence
                         occurrences =
-                            Parser.expand yearRange event
+                            Parser.expand yearRange [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -322,7 +322,7 @@ suite =
 
                         occurrences : List Parser.Occurrence
                         occurrences =
-                            Parser.expand yearRange event
+                            Parser.expand yearRange [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -358,7 +358,7 @@ suite =
 
                         occurrences : List Parser.Occurrence
                         occurrences =
-                            Parser.expand yearRange event
+                            Parser.expand yearRange [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -392,7 +392,7 @@ suite =
 
                         occurrences : List Parser.Occurrence
                         occurrences =
-                            Parser.expand yearRange event
+                            Parser.expand yearRange [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -424,7 +424,7 @@ suite =
 
                         occurrences : List Parser.Occurrence
                         occurrences =
-                            Parser.expand yearRange event
+                            Parser.expand yearRange [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -458,7 +458,7 @@ suite =
 
                         occurrences : List Parser.Occurrence
                         occurrences =
-                            Parser.expand yearRange event
+                            Parser.expand yearRange [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -491,7 +491,7 @@ suite =
 
                         occurrences : List Parser.Occurrence
                         occurrences =
-                            Parser.expand yearRange event
+                            Parser.expand yearRange [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -523,7 +523,7 @@ suite =
 
                         occurrences : List Parser.Occurrence
                         occurrences =
-                            Parser.expand yearRange event
+                            Parser.expand yearRange [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -561,7 +561,7 @@ suite =
                                 { start = Date.fromCalendarDate 2021 Time.Jan 1
                                 , end = Date.fromCalendarDate 2025 Time.Dec 31
                                 }
-                                event
+                                [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -597,7 +597,7 @@ suite =
                                 { start = Date.fromCalendarDate 2021 Time.Jan 1
                                 , end = Date.fromCalendarDate 2025 Time.Dec 31
                                 }
-                                event
+                                [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -636,7 +636,7 @@ suite =
                         -- 2021-03-21
                         occurrences : List Parser.Occurrence
                         occurrences =
-                            Parser.expand yearRange event
+                            Parser.expand yearRange [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -656,7 +656,7 @@ suite =
                         Ok cal ->
                             case cal.events of
                                 [ event ] ->
-                                    Parser.expand yearRange event
+                                    Parser.expand yearRange [ event ]
                                         |> List.map (occurrenceDate Time.utc)
                                         |> Expect.equal
                                             [ Date.fromCalendarDate 2021 Time.Mar 18
@@ -679,7 +679,7 @@ suite =
                         Ok cal ->
                             case cal.events of
                                 [ event ] ->
-                                    Parser.expand yearRange event
+                                    Parser.expand yearRange [ event ]
                                         |> List.map occurrenceStartDateForFloating
                                         |> Expect.equal
                                             [ Date.fromCalendarDate 2021 Time.Mar 18
@@ -704,7 +704,7 @@ suite =
                         Ok cal ->
                             case cal.events of
                                 [ event ] ->
-                                    Parser.expand yearRange event
+                                    Parser.expand yearRange [ event ]
                                         |> List.map (occurrenceDate Time.utc)
                                         |> Expect.equal
                                             [ Date.fromCalendarDate 2021 Time.Mar 18
@@ -729,7 +729,7 @@ suite =
                         Ok cal ->
                             case cal.events of
                                 [ event ] ->
-                                    Parser.expand yearRange event
+                                    Parser.expand yearRange [ event ]
                                         |> List.map (occurrenceDate Time.utc)
                                         |> Expect.equal
                                             [ Date.fromCalendarDate 2021 Time.Mar 18
@@ -755,7 +755,7 @@ suite =
                                 [ event ] ->
                                     Parser.expandNext 5
                                         (Date.fromCalendarDate 2021 Time.Mar 18)
-                                        event
+                                        [ event ]
                                         |> List.map (occurrenceDate Time.utc)
                                         |> Expect.equal
                                             [ Date.fromCalendarDate 2021 Time.Mar 18
@@ -800,7 +800,7 @@ suite =
 
                         occurrences : List Parser.Occurrence
                         occurrences =
-                            Parser.expand yearRange event
+                            Parser.expand yearRange [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -834,7 +834,7 @@ suite =
 
                         occurrences : List Parser.Occurrence
                         occurrences =
-                            Parser.expand yearRange event
+                            Parser.expand yearRange [ event ]
                     in
                     Expect.all
                         [ \os -> List.length os |> Expect.equal 3
@@ -887,7 +887,7 @@ suite =
 
                         occurrences : List Parser.Occurrence
                         occurrences =
-                            Parser.expand yearRange event
+                            Parser.expand yearRange [ event ]
                     in
                     case occurrences of
                         [ _, second ] ->
@@ -940,7 +940,7 @@ suite =
                                 { start = Date.fromCalendarDate 2021 Time.Mar 18
                                 , end = Date.fromCalendarDate 2021 Time.Mar 22
                                 }
-                                event
+                                [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -981,7 +981,7 @@ suite =
                                 { start = Date.fromCalendarDate 2021 Time.Mar 25
                                 , end = Date.fromCalendarDate 2021 Time.Dec 31
                                 }
-                                event
+                                [ event ]
                     in
                     occurrences
                         |> List.map (occurrenceDate Time.utc)
@@ -1010,7 +1010,7 @@ suite =
                                                 { start = Date.fromCalendarDate 2021 Time.Jan 1
                                                 , end = Date.fromCalendarDate 2021 Time.Dec 31
                                                 }
-                                                ev
+                                                [ ev ]
                                     in
                                     Expect.all
                                         [ \os -> List.length os |> Expect.equal 4
@@ -1051,7 +1051,7 @@ suite =
                                     let
                                         occurrences : List Parser.Occurrence
                                         occurrences =
-                                            Parser.expand yearRange ev
+                                            Parser.expand yearRange [ ev ]
                                     in
                                     occurrences
                                         |> List.map (occurrenceDate Time.utc)
@@ -1091,7 +1091,7 @@ suite =
                     in
                     Parser.expandNext 3
                         (Date.fromCalendarDate 2021 Time.Mar 18)
-                        event
+                        [ event ]
                         |> List.map (occurrenceDate Time.utc)
                         |> Expect.equal
                             [ Date.fromCalendarDate 2021 Time.Mar 18
@@ -1121,7 +1121,7 @@ suite =
                     in
                     Parser.expandNext 3
                         (Date.fromCalendarDate 2021 Time.Mar 25)
-                        event
+                        [ event ]
                         |> List.map (occurrenceDate Time.utc)
                         |> Expect.equal
                             [ Date.fromCalendarDate 2021 Time.Mar 25
@@ -1151,7 +1151,7 @@ suite =
                     in
                     Parser.expandNext 10
                         (Date.fromCalendarDate 2021 Time.Mar 18)
-                        event
+                        [ event ]
                         |> List.length
                         |> Expect.equal 2
             , test "non-recurring event returns single occurrence if on or after start" <|
@@ -1169,19 +1169,19 @@ suite =
                         [ \_ ->
                             Parser.expandNext 5
                                 (Date.fromCalendarDate 2021 Time.Mar 18)
-                                event
+                                [ event ]
                                 |> List.length
                                 |> Expect.equal 1
                         , \_ ->
                             Parser.expandNext 5
                                 (Date.fromCalendarDate 2021 Time.Mar 1)
-                                event
+                                [ event ]
                                 |> List.length
                                 |> Expect.equal 1
                         , \_ ->
                             Parser.expandNext 5
                                 (Date.fromCalendarDate 2021 Time.Mar 20)
-                                event
+                                [ event ]
                                 |> List.length
                                 |> Expect.equal 0
                         ]
@@ -1209,7 +1209,7 @@ suite =
                     in
                     Parser.expandNext 4
                         (Date.fromCalendarDate 2021 Time.Mar 24)
-                        event
+                        [ event ]
                         |> List.map (occurrenceDate Time.utc)
                         |> Expect.equal
                             [ Date.fromCalendarDate 2021 Time.Mar 24 -- Wed
@@ -1245,7 +1245,7 @@ suite =
                     in
                     Parser.expandNext 3
                         (Date.fromCalendarDate 2021 Time.Mar 18)
-                        event
+                        [ event ]
                         |> List.map (occurrenceDate Time.utc)
                         |> Expect.equal
                             [ Date.fromCalendarDate 2021 Time.Mar 18
@@ -1288,7 +1288,7 @@ suite =
                             let
                                 occurrences : List Parser.Occurrence
                                 occurrences =
-                                    Parser.expandAll yearRange cal.events
+                                    Parser.expand yearRange cal.events
                             in
                             occurrences
                                 |> List.map (\occ -> ( occurrenceDate Time.utc occ, occ.event.summary ))
@@ -1336,7 +1336,7 @@ suite =
                             let
                                 occurrences : List Parser.Occurrence
                                 occurrences =
-                                    Parser.expandAll yearRange cal.events
+                                    Parser.expand yearRange cal.events
                                         |> List.filter (\occ -> occ.event.status /= Just Parser.Cancelled)
                             in
                             occurrences
@@ -1387,7 +1387,7 @@ suite =
                     in
                     case Parser.parse input of
                         Ok cal ->
-                            Parser.expandAll yearRange cal.events
+                            Parser.expand yearRange cal.events
                                 |> List.map (\occ -> ( occurrenceDate Time.utc occ, occ.event.summary ))
                                 |> Expect.equal
                                     [ ( Date.fromCalendarDate 2021 Time.Mar 18, Just "Daily standup" )
@@ -1438,7 +1438,7 @@ suite =
                     in
                     case Parser.parse input of
                         Ok cal ->
-                            Parser.expandAll yearRange cal.events
+                            Parser.expand yearRange cal.events
                                 |> List.map (\occ -> ( occurrenceDate Time.utc occ, occ.event.summary ))
                                 |> List.sortBy (\( _, s ) -> Maybe.withDefault "" s)
                                 |> Expect.equal
@@ -1480,7 +1480,7 @@ makeAllDayEvent { summary, start, end } =
     , transparency = Nothing
     , recurrenceRules = []
     , exclusions = []
-    , rdates = []
+    , recurrenceDates = []
     , recurrenceId = Nothing
     , attendees = []
     , extraProperties = []
@@ -1516,7 +1516,7 @@ makeTimedEvent { summary, start, end } =
     , transparency = Nothing
     , recurrenceRules = []
     , exclusions = []
-    , rdates = []
+    , recurrenceDates = []
     , recurrenceId = Nothing
     , attendees = []
     , extraProperties = []

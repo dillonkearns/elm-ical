@@ -6,7 +6,6 @@ module Ical.Parser exposing
     , Organizer, RawProperty
     , Attendee, AttendeeRole(..), ParticipationStatus(..)
     , Occurrence, expand, expandNext
-    , expandAll
     )
 
 {-| Parse iCal ([RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545)) calendar strings
@@ -79,7 +78,7 @@ Parsed types are transparent record aliases so you can read fields directly.
 
 ## Recurrence expansion
 
-@docs Occurrence, expand, expandAll, expandNext
+@docs Occurrence, expand, expandNext
 
 -}
 
@@ -131,7 +130,7 @@ type alias Event =
     , transparency : Maybe Transparency
     , recurrenceRules : List RecurrenceRule
     , exclusions : List Time.Posix
-    , rdates : List Time.Posix
+    , recurrenceDates : List Time.Posix
     , recurrenceId : Maybe Time.Posix
     , attendees : List Attendee
     , extraProperties : List RawProperty
@@ -427,7 +426,7 @@ type alias EventAccum =
     , transparency : Maybe Transparency
     , recurrenceRules : List RecurrenceRule
     , exclusions : List Time.Posix
-    , rdates : List Time.Posix
+    , recurrenceDates : List Time.Posix
     , recurrenceId : Maybe Time.Posix
     , attendees : List Attendee
     , extraProperties : List RawProperty
@@ -452,7 +451,7 @@ emptyEventAccum =
     , transparency = Nothing
     , recurrenceRules = []
     , exclusions = []
-    , rdates = []
+    , recurrenceDates = []
     , recurrenceId = Nothing
     , attendees = []
     , extraProperties = []
@@ -494,7 +493,7 @@ finalizeEvent accum =
                                                                     , transparency = accum.transparency
                                                                     , recurrenceRules = List.reverse accum.recurrenceRules
                                                                     , exclusions = List.reverse accum.exclusions
-                                                                    , rdates = List.reverse accum.rdates
+                                                                    , recurrenceDates = List.reverse accum.recurrenceDates
                                                                     , recurrenceId = accum.recurrenceId
                                                                     , attendees = List.reverse accum.attendees
                                                                     , extraProperties = List.reverse accum.extraProperties
@@ -792,7 +791,7 @@ applyEventProperty timezones line accum =
         "RDATE" ->
             case parseExdateValues timezones line of
                 Ok values ->
-                    { accum | rdates = List.reverse values ++ accum.rdates }
+                    { accum | recurrenceDates = List.reverse values ++ accum.recurrenceDates }
 
                 Err err ->
                     addEventError ("Invalid RDATE: " ++ err) accum
@@ -1110,19 +1109,63 @@ type alias Occurrence =
     }
 
 
-{-| Expand an event's recurrence rules into a list of concrete occurrences
-within a date range.
+{-| Expand events into concrete occurrences within a date range, merging
+RECURRENCE-ID overrides automatically. Override events (those with a
+`recurrenceId`) replace the matching occurrence from the master event that
+shares their `uid`.
 
-    expand { start = jan1, end = dec31 } event
+    case Parser.parse icsString of
+        Ok cal ->
+            Parser.expand { start = jan1, end = dec31 } cal.events
 
-For events without recurrence rules, returns a single occurrence if the event
-falls within the range. For events with recurrence rules, generates all
-occurrences within the range, respecting COUNT, UNTIL, EXDATE, and all BY\*
-filters.
+        Err err ->
+            []
+
+For a single event, wrap it in a list:
+
+    Parser.expand { start = jan1, end = dec31 } [ event ]
 
 -}
-expand : { start : Date.Date, end : Date.Date } -> Event -> List Occurrence
-expand range event =
+expand : { start : Date.Date, end : Date.Date } -> List Event -> List Occurrence
+expand range events =
+    let
+        ( masterEvents, overrideEvents ) =
+            List.partition (\e -> e.recurrenceId == Nothing) events
+
+        masterOccurrences : List Occurrence
+        masterOccurrences =
+            masterEvents
+                |> List.concatMap (expandEvent range)
+
+        overrideOccurrences : List Occurrence
+        overrideOccurrences =
+            overrideEvents
+                |> List.concatMap (expandEvent range)
+
+        overriddenDates : List ( String, Int )
+        overriddenDates =
+            overrideEvents
+                |> List.filterMap
+                    (\e ->
+                        e.recurrenceId
+                            |> Maybe.map
+                                (\posix ->
+                                    ( e.uid, Date.toRataDie (Date.fromPosix Time.utc posix) )
+                                )
+                    )
+
+        isOverridden : Occurrence -> Bool
+        isOverridden occ =
+            List.member
+                ( occ.event.uid, Date.toRataDie (occurrenceStartDate occ.time) )
+                overriddenDates
+    in
+    (List.filter (\occ -> not (isOverridden occ)) masterOccurrences ++ overrideOccurrences)
+        |> List.sortBy (\occ -> Date.toRataDie (occurrenceStartDate occ.time))
+
+
+expandEvent : { start : Date.Date, end : Date.Date } -> Event -> List Occurrence
+expandEvent range event =
     let
         seed : Date.Date
         seed =
@@ -1149,7 +1192,7 @@ expand range event =
 
         rdateOccurrences : List Occurrence
         rdateOccurrences =
-            event.rdates
+            event.recurrenceDates
                 |> List.map (\posix -> Date.fromPosix Time.utc posix)
                 |> List.filter (\d -> Date.compare d range.start /= LT && Date.compare d range.end /= GT)
                 |> List.map (\d -> { event = event, time = shiftTime event.time seed d })
@@ -1159,20 +1202,23 @@ expand range event =
         |> dedupOccurrences
 
 
-{-| Expand all events in a list, merging RECURRENCE-ID overrides with their
-master events. Override events (those with a `recurrenceId`) replace the
-matching occurrence from the master event that shares their `uid`.
+{-| Get the next N occurrences starting from a given date, merging
+RECURRENCE-ID overrides automatically.
 
     case Parser.parse icsString of
         Ok cal ->
-            Parser.expandAll { start = jan1, end = dec31 } cal.events
+            Parser.expandNext 10 today cal.events
 
         Err err ->
             []
 
+For a single event, wrap it in a list:
+
+    Parser.expandNext 5 today [ event ]
+
 -}
-expandAll : { start : Date.Date, end : Date.Date } -> List Event -> List Occurrence
-expandAll range events =
+expandNext : Int -> Date.Date -> List Event -> List Occurrence
+expandNext n fromDate events =
     let
         ( masterEvents, overrideEvents ) =
             List.partition (\e -> e.recurrenceId == Nothing) events
@@ -1180,12 +1226,12 @@ expandAll range events =
         masterOccurrences : List Occurrence
         masterOccurrences =
             masterEvents
-                |> List.concatMap (expand range)
+                |> List.concatMap (expandNextEvent n fromDate)
 
         overrideOccurrences : List Occurrence
         overrideOccurrences =
             overrideEvents
-                |> List.concatMap (expand range)
+                |> List.concatMap (expandNextEvent n fromDate)
 
         overriddenDates : List ( String, Int )
         overriddenDates =
@@ -1207,18 +1253,11 @@ expandAll range events =
     in
     (List.filter (\occ -> not (isOverridden occ)) masterOccurrences ++ overrideOccurrences)
         |> List.sortBy (\occ -> Date.toRataDie (occurrenceStartDate occ.time))
+        |> List.take n
 
 
-{-| Get the next N occurrences of an event starting from a given date.
-
-    expandNext 5 today event
-
-For non-recurring events, returns a single occurrence if the event falls on or
-after the start date, or an empty list if it is before.
-
--}
-expandNext : Int -> Date.Date -> Event -> List Occurrence
-expandNext n fromDate event =
+expandNextEvent : Int -> Date.Date -> Event -> List Occurrence
+expandNextEvent n fromDate event =
     let
         seed : Date.Date
         seed =
@@ -1245,7 +1284,7 @@ expandNext n fromDate event =
 
         rdateOccurrences : List Occurrence
         rdateOccurrences =
-            event.rdates
+            event.recurrenceDates
                 |> List.map (\posix -> Date.fromPosix Time.utc posix)
                 |> List.filter (\d -> Date.compare d fromDate /= LT)
                 |> List.map (\d -> { event = event, time = shiftTime event.time seed d })

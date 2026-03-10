@@ -164,7 +164,7 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 - Exception dates: `EXDATE` for all-day, floating, and resolved date-time events
 - Additional recurrence dates: `RDATE`
 - `RECURRENCE-ID` override merging
-- Expansion helpers: `Ical.Parser.expand`, `Ical.Parser.expandNext`, and `Ical.Parser.expandAll` (merges overrides across events)
+- Expansion helpers: `Ical.Parser.expand` and `Ical.Parser.expandNext` (both merge RECURRENCE-ID overrides automatically)
 
 ## Not Supported Yet
 
