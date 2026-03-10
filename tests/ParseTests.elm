@@ -332,6 +332,14 @@ recurrenceRuleTests =
                 ValueParser.parseRecurrenceRule "FREQ=MONTHLY;BYDAY=-1FR"
                     |> Result.map .byDay
                     |> Expect.equal (Ok [ Recurrence.EveryLast Time.Fri ])
+        , test "BYDAY ordinal out of range (6MO) returns error" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=MONTHLY;BYDAY=6MO"
+                    |> Expect.equal (Err "Invalid BYDAY ordinal: 6MO")
+        , test "BYDAY negative ordinal out of range (-6FR) returns error" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=MONTHLY;BYDAY=-6FR"
+                    |> Expect.equal (Err "Invalid BYDAY ordinal: -6FR")
         , test "parse with WKST" <|
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=WEEKLY;WKST=SU"
