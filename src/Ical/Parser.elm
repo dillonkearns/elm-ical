@@ -84,6 +84,7 @@ Parsed types are transparent record aliases so you can read fields directly.
 
 import ContentLine exposing (ContentLine)
 import Date
+import DateHelpers
 import Dict exposing (Dict)
 import Ical.Recurrence exposing (DaySpec, Frequency(..), RecurrenceEnd(..), RecurrenceRule)
 import Time
@@ -772,7 +773,12 @@ applyEventProperty timezones line accum =
                     addEventError ("Invalid RRULE: " ++ err) accum
 
         "EXDATE" ->
-            { accum | exclusions = List.reverse (parseExdateValues timezones line) ++ accum.exclusions }
+            case parseExdateValues timezones line of
+                Ok values ->
+                    { accum | exclusions = List.reverse values ++ accum.exclusions }
+
+                Err err ->
+                    addEventError ("Invalid EXDATE: " ++ err) accum
 
         "ATTENDEE" ->
             { accum | attendees = parseAttendee line :: accum.attendees }
@@ -995,11 +1001,11 @@ parseAttendee line =
     }
 
 
-parseExdateValues : Dict String VTimeZone.ZoneDefinition -> ContentLine -> List Time.Posix
+parseExdateValues : Dict String VTimeZone.ZoneDefinition -> ContentLine -> Result String (List Time.Posix)
 parseExdateValues timezones line =
     String.split "," line.value
-        |> List.filterMap
-            (\val ->
+        |> List.foldr
+            (\val resultSoFar ->
                 let
                     fakeLine : ContentLine
                     fakeLine =
@@ -1008,22 +1014,27 @@ parseExdateValues timezones line =
                         , value = val
                         }
                 in
-                case parseDateTimeValue timezones fakeLine of
-                    Ok (IDate date) ->
-                        Just (dateToUtcMidnight date)
+                case ( parseDateTimeValue timezones fakeLine, resultSoFar ) of
+                    ( Ok (IDate date), Ok soFar ) ->
+                        Ok (dateToUtcMidnight date :: soFar)
 
-                    Ok (IDateTime { posix }) ->
-                        Just posix
+                    ( Ok (IDateTime { posix }), Ok soFar ) ->
+                        Ok (posix :: soFar)
 
-                    Ok (IFloating localDateTime) ->
-                        Just
+                    ( Ok (IFloating localDateTime), Ok soFar ) ->
+                        Ok
                             (dateToUtcMidnight
                                 (Date.fromCalendarDate localDateTime.year (Date.numberToMonth localDateTime.month) localDateTime.day)
+                                :: soFar
                             )
 
-                    _ ->
-                        Nothing
+                    ( Err err, _ ) ->
+                        Err ("could not parse value \"" ++ val ++ "\": " ++ err)
+
+                    ( _, Err err ) ->
+                        Err err
             )
+            (Ok [])
 
 
 dateToUtcMidnight : Date.Date -> Time.Posix
@@ -1370,7 +1381,7 @@ expandWeekByDay weekStart byDay date =
     let
         weekStartDate : Date.Date
         weekStartDate =
-            Date.floor (weekdayToInterval weekStart) date
+            Date.floor (DateHelpers.weekdayToInterval weekStart) date
     in
     byDay
         |> List.filterMap
@@ -1378,7 +1389,7 @@ expandWeekByDay weekStart byDay date =
                 let
                     target : Date.Date
                     target =
-                        Date.ceiling (weekdayToInterval spec.weekday) weekStartDate
+                        Date.ceiling (DateHelpers.weekdayToInterval spec.weekday) weekStartDate
                 in
                 if Date.toRataDie target - Date.toRataDie weekStartDate < 7 then
                     Just target
@@ -1454,7 +1465,7 @@ expandByMonthDay year month days =
     let
         maxDay : Int
         maxDay =
-            daysInMonth year month
+            DateHelpers.daysInMonth year month
     in
     days
         |> List.filterMap
@@ -1488,7 +1499,7 @@ resolveDaySpecInMonth year month spec =
     let
         interval : Date.Interval
         interval =
-            weekdayToInterval spec.weekday
+            DateHelpers.weekdayToInterval spec.weekday
     in
     case spec.ordinal of
         Just n ->
@@ -1516,7 +1527,7 @@ resolveDaySpecInMonth year month spec =
                 let
                     maxDay : Int
                     maxDay =
-                        daysInMonth year month
+                        DateHelpers.daysInMonth year month
 
                     lastOfMonth : Date.Date
                     lastOfMonth =
@@ -1578,7 +1589,7 @@ filterByMonthDay byMonthDay dates =
                 let
                     maxDay : Int
                     maxDay =
-                        daysInMonth (Date.year d) (Date.month d)
+                        DateHelpers.daysInMonth (Date.year d) (Date.month d)
 
                     resolvedDays : List Int
                     resolvedDays =
@@ -1760,77 +1771,3 @@ dedupOccurrencesHelp remaining lastRD acc =
 
             else
                 dedupOccurrencesHelp rest rd (occ :: acc)
-
-
-weekdayToInterval : Time.Weekday -> Date.Interval
-weekdayToInterval weekday =
-    case weekday of
-        Time.Mon ->
-            Date.Monday
-
-        Time.Tue ->
-            Date.Tuesday
-
-        Time.Wed ->
-            Date.Wednesday
-
-        Time.Thu ->
-            Date.Thursday
-
-        Time.Fri ->
-            Date.Friday
-
-        Time.Sat ->
-            Date.Saturday
-
-        Time.Sun ->
-            Date.Sunday
-
-
-daysInMonth : Int -> Time.Month -> Int
-daysInMonth year month =
-    case month of
-        Time.Jan ->
-            31
-
-        Time.Feb ->
-            if isLeapYear year then
-                29
-
-            else
-                28
-
-        Time.Mar ->
-            31
-
-        Time.Apr ->
-            30
-
-        Time.May ->
-            31
-
-        Time.Jun ->
-            30
-
-        Time.Jul ->
-            31
-
-        Time.Aug ->
-            31
-
-        Time.Sep ->
-            30
-
-        Time.Oct ->
-            31
-
-        Time.Nov ->
-            30
-
-        Time.Dec ->
-            31
-
-
-isLeapYear : Int -> Bool
-isLeapYear year =
-    modBy 4 year == 0 && (modBy 100 year /= 0 || modBy 400 year == 0)

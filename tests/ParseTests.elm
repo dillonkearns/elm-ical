@@ -1231,6 +1231,32 @@ endToEndTests =
 
                     Err err ->
                         Expect.fail err
+        , test "invalid EXDATE value produces parse error" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Weekly meeting"
+                            , "UID:exdate-invalid-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
+                            , "EXDATE:INVALID"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok _ ->
+                        Expect.fail "Expected a parse error for invalid EXDATE value"
+
+                    Err _ ->
+                        Expect.pass
         , test "ATTENDEE parsed into attendees list" <|
             \() ->
                 let

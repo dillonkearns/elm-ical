@@ -4,6 +4,7 @@ module ValueParser exposing (DateTimeParts, Duration, parseDate, parseDateTime, 
 -}
 
 import Date
+import DateHelpers
 import Ical.Recurrence exposing (DaySpec, Frequency(..), RecurrenceEnd(..), RecurrenceRule)
 import Time
 
@@ -331,7 +332,7 @@ daysInMonth year month =
 
         2 ->
             Just
-                (if isLeapYear year then
+                (if DateHelpers.isLeapYear year then
                     29
 
                  else
@@ -370,11 +371,6 @@ daysInMonth year month =
 
         _ ->
             Nothing
-
-
-isLeapYear : Int -> Bool
-isLeapYear year =
-    modBy 4 year == 0 && (modBy 100 year /= 0 || modBy 400 year == 0)
 
 
 {-| Unescape iCal TEXT values per RFC 5545 Section 3.3.11.

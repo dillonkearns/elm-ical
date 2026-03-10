@@ -1,7 +1,7 @@
 module Ical exposing
     ( generate, generateEvent
     , Config, config, withName, withCalendarDescription, withUrl
-    , Event, event, EventTime, allDay, withTime, Organizer
+    , Event, event, EventTime, allDay, withTime, Organizer, Attendee
     , withDescription, withLocation, withOrganizer, withHtmlDescription
     , withStatus, Status(..), withTransparency, Transparency(..)
     , withCreated, withLastModified
@@ -83,7 +83,7 @@ reversed start/end times or negative intervals are silently normalized.
 
 ## Events
 
-@docs Event, event, EventTime, allDay, withTime, Organizer
+@docs Event, event, EventTime, allDay, withTime, Organizer, Attendee
 @docs withDescription, withLocation, withOrganizer, withHtmlDescription
 @docs withStatus, Status, withTransparency, Transparency
 @docs withCreated, withLastModified
@@ -164,7 +164,7 @@ type alias EventData =
     , created : Maybe Time.Posix
     , lastModified : Maybe Time.Posix
     , recurrenceRule : Maybe Rule
-    , attendees : List Organizer
+    , attendees : List Attendee
     }
 
 
@@ -196,6 +196,14 @@ type Status
 {-| A person with a name and email address, used for the ORGANIZER property.
 -}
 type alias Organizer =
+    { name : String
+    , email : String
+    }
+
+
+{-| A person with a name and email address, used for the ATTENDEE property.
+-}
+type alias Attendee =
     { name : String
     , email : String
     }
@@ -480,7 +488,7 @@ withRecurrenceRule rrule (Event e) =
         |> Ical.withAttendee { name = "Jane Smith", email = "jane@example.com" }
 
 -}
-withAttendee : Organizer -> Event -> Event
+withAttendee : Attendee -> Event -> Event
 withAttendee attendee (Event e) =
     Event { e | attendees = e.attendees ++ [ attendee ] }
 
