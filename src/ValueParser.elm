@@ -450,13 +450,18 @@ parseRecurrenceRule input =
                 Nothing ->
                     Err ("Invalid RRULE: unknown FREQ=" ++ freqStr)
 
-                Just frequency ->
+                Just freqTag ->
                     parseInterval (getParam "INTERVAL")
                         |> Result.andThen
                             (\interval ->
                                 parseWeekStart (getParam "WKST")
                                     |> Result.andThen
                                         (\weekStart ->
+                                            let
+                                                frequency : Frequency
+                                                frequency =
+                                                    buildFrequency freqTag interval weekStart
+                                            in
                                             parseRecurrenceEnd (getParam "COUNT") (getParam "UNTIL")
                                                 |> Result.andThen
                                                     (\end ->
@@ -473,13 +478,11 @@ parseRecurrenceRule input =
                                                                                                 |> Result.map
                                                                                                     (\bySetPos ->
                                                                                                         { frequency = frequency
-                                                                                                        , interval = interval
                                                                                                         , end = end
                                                                                                         , byDay = byDay
                                                                                                         , byMonthDay = byMonthDay
                                                                                                         , byMonth = List.filterMap intToMonth byMonthInts
                                                                                                         , bySetPos = bySetPos
-                                                                                                        , weekStart = weekStart
                                                                                                         }
                                                                                                     )
                                                                                         )
@@ -490,23 +493,46 @@ parseRecurrenceRule input =
                             )
 
 
-parseFrequency : String -> Maybe Frequency
+type FreqTag
+    = DailyTag
+    | WeeklyTag
+    | MonthlyTag
+    | YearlyTag
+
+
+parseFrequency : String -> Maybe FreqTag
 parseFrequency str =
     case String.toUpper str of
         "DAILY" ->
-            Just Daily
+            Just DailyTag
 
         "WEEKLY" ->
-            Just Weekly
+            Just WeeklyTag
 
         "MONTHLY" ->
-            Just Monthly
+            Just MonthlyTag
 
         "YEARLY" ->
-            Just Yearly
+            Just YearlyTag
 
         _ ->
             Nothing
+
+
+buildFrequency : FreqTag -> Int -> Time.Weekday -> Frequency
+buildFrequency tag interval weekStart =
+    case tag of
+        DailyTag ->
+            Daily { every = interval }
+
+        WeeklyTag ->
+            Weekly { every = interval, weekStart = weekStart }
+
+        MonthlyTag ->
+            Monthly { every = interval }
+
+        YearlyTag ->
+            Yearly { every = interval }
 
 
 parseRecurrenceEnd : Maybe String -> Maybe String -> Result String RecurrenceEnd
@@ -547,7 +573,7 @@ parseInterval maybeValue =
                         Ok interval
 
                     else
-                        Err ("Invalid INTERVAL: " ++ intervalStr)
+                        Err ("INTERVAL must be at least 1, got " ++ String.fromInt interval)
 
                 Nothing ->
                     Err ("Invalid INTERVAL: " ++ intervalStr)

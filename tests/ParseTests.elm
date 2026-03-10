@@ -259,14 +259,12 @@ recurrenceRuleTests =
                 ValueParser.parseRecurrenceRule "FREQ=DAILY"
                     |> Expect.equal
                         (Ok
-                            { frequency = Recurrence.Daily
-                            , interval = 1
+                            { frequency = Recurrence.Daily { every = 1 }
                             , end = Recurrence.Forever
                             , byDay = []
                             , byMonthDay = []
                             , byMonth = []
                             , bySetPos = []
-                            , weekStart = Time.Mon
                             }
                         )
         , test "parse FREQ=WEEKLY with BYDAY" <|
@@ -274,8 +272,7 @@ recurrenceRuleTests =
                 ValueParser.parseRecurrenceRule "FREQ=WEEKLY;BYDAY=MO,WE,FR"
                     |> Expect.equal
                         (Ok
-                            { frequency = Recurrence.Weekly
-                            , interval = 1
+                            { frequency = Recurrence.Weekly { every = 1, weekStart = Time.Mon }
                             , end = Recurrence.Forever
                             , byDay =
                                 [ Recurrence.Every Time.Mon
@@ -285,18 +282,25 @@ recurrenceRuleTests =
                             , byMonthDay = []
                             , byMonth = []
                             , bySetPos = []
-                            , weekStart = Time.Mon
                             }
                         )
         , test "parse with INTERVAL" <|
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=DAILY;INTERVAL=2"
-                    |> Result.map .interval
-                    |> Expect.equal (Ok 2)
+                    |> Result.map .frequency
+                    |> Expect.equal (Ok (Recurrence.Daily { every = 2 }))
         , test "invalid INTERVAL returns error" <|
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=DAILY;INTERVAL=foo"
                     |> Expect.err
+        , test "INTERVAL=0 returns error" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=DAILY;INTERVAL=0"
+                    |> Expect.equal (Err "INTERVAL must be at least 1, got 0")
+        , test "negative INTERVAL returns error" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=DAILY;INTERVAL=-1"
+                    |> Expect.equal (Err "INTERVAL must be at least 1, got -1")
         , test "parse with COUNT" <|
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=WEEKLY;COUNT=10"
@@ -343,8 +347,8 @@ recurrenceRuleTests =
         , test "parse with WKST" <|
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=WEEKLY;WKST=SU"
-                    |> Result.map .weekStart
-                    |> Expect.equal (Ok Time.Sun)
+                    |> Result.map .frequency
+                    |> Expect.equal (Ok (Recurrence.Weekly { every = 1, weekStart = Time.Sun }))
         , test "invalid WKST returns error" <|
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=WEEKLY;WKST=XX"
@@ -358,14 +362,12 @@ recurrenceRuleTests =
                 ValueParser.parseRecurrenceRule "FREQ=MONTHLY;INTERVAL=2;BYDAY=1MO;COUNT=6;WKST=SU"
                     |> Expect.equal
                         (Ok
-                            { frequency = Recurrence.Monthly
-                            , interval = 2
+                            { frequency = Recurrence.Monthly { every = 2 }
                             , end = Recurrence.Count 6
                             , byDay = [ Recurrence.Every1st Time.Mon ]
                             , byMonthDay = []
                             , byMonth = []
                             , bySetPos = []
-                            , weekStart = Time.Sun
                             }
                         )
         , test "missing FREQ returns error" <|
@@ -1183,8 +1185,7 @@ endToEndTests =
                             [ ev ] ->
                                 ev.recurrenceRules
                                     |> Expect.equal
-                                        [ { frequency = Recurrence.Weekly
-                                          , interval = 1
+                                        [ { frequency = Recurrence.Weekly { every = 1, weekStart = Time.Mon }
                                           , end = Recurrence.Forever
                                           , byDay =
                                                 [ Recurrence.Every Time.Mon
@@ -1194,7 +1195,6 @@ endToEndTests =
                                           , byMonthDay = []
                                           , byMonth = []
                                           , bySetPos = []
-                                          , weekStart = Time.Mon
                                           }
                                         ]
 
@@ -1913,7 +1913,7 @@ roundTripTests =
                             , summary = "Weekly standup"
                             }
                             |> Ical.withRecurrenceRule
-                                (Ical.rule Recurrence.Weekly
+                                (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
                                     |> Ical.withCount 10
                                     |> Ical.withByDay [ Recurrence.Every Time.Mon, Recurrence.Every Time.Wed ]
                                 )
@@ -1932,7 +1932,7 @@ roundTripTests =
                                 case ev.recurrenceRules of
                                     [ rule ] ->
                                         Expect.all
-                                            [ \r -> r.frequency |> Expect.equal Recurrence.Weekly
+                                            [ \r -> r.frequency |> Expect.equal (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
                                             , \r -> r.end |> Expect.equal (Recurrence.Count 10)
                                             , \r -> r.byDay |> Expect.equal [ Recurrence.Every Time.Mon, Recurrence.Every Time.Wed ]
                                             ]

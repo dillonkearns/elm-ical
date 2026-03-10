@@ -1390,7 +1390,7 @@ generateLoop rule originalTime seed rangeEndRD stepIndex emittedCount acc =
     let
         intervalDate : Date.Date
         intervalDate =
-            advanceByInterval rule.frequency (rule.interval * stepIndex) seed
+            advanceByInterval rule.frequency (frequencyEvery rule.frequency * stepIndex) seed
 
         candidates : List Date.Date
         candidates =
@@ -1487,44 +1487,60 @@ isCountLimited end =
             False
 
 
+frequencyEvery : Frequency -> Int
+frequencyEvery freq =
+    case freq of
+        Daily { every } ->
+            every
+
+        Weekly { every } ->
+            every
+
+        Monthly { every } ->
+            every
+
+        Yearly { every } ->
+            every
+
+
 advanceByInterval : Frequency -> Int -> Date.Date -> Date.Date
 advanceByInterval freq n seed =
     case freq of
-        Daily ->
+        Daily _ ->
             Date.add Date.Days n seed
 
-        Weekly ->
+        Weekly _ ->
             Date.add Date.Weeks n seed
 
-        Monthly ->
+        Monthly _ ->
             Date.add Date.Months n seed
 
-        Yearly ->
+        Yearly _ ->
             Date.add Date.Years n seed
 
 
 expandWithinPeriod : RecurrenceRule -> Date.Date -> Date.Date -> List Date.Date
 expandWithinPeriod rule seed intervalDate =
     case rule.frequency of
-        Daily ->
+        Daily _ ->
             [ intervalDate ]
                 |> filterByMonth rule.byMonth
                 |> filterByMonthDay rule.byMonthDay
                 |> filterByDay rule.byDay
 
-        Weekly ->
+        Weekly { weekStart } ->
             if List.isEmpty rule.byDay then
                 [ intervalDate ]
                     |> filterByMonth rule.byMonth
 
             else
-                expandWeekByDay rule.weekStart rule.byDay intervalDate
+                expandWeekByDay weekStart rule.byDay intervalDate
                     |> filterByMonth rule.byMonth
 
-        Monthly ->
+        Monthly _ ->
             expandMonthly rule intervalDate
 
-        Yearly ->
+        Yearly _ ->
             expandYearly rule seed intervalDate
 
 

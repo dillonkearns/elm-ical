@@ -6,8 +6,8 @@ module Ical exposing
     , withStatus, Status(..), withTransparency, Transparency(..)
     , withCreated, withLastModified
     , withRecurrenceRule, withAttendee
-    , Rule, rule, withRuleInterval, withCount, withUntilDate, withUntilDateTime
-    , withByDay, withByMonthDay, withByMonth, withBySetPos, withWeekStart
+    , Rule, rule, withCount, withUntilDate, withUntilDateTime
+    , withByDay, withByMonthDay, withByMonth, withBySetPos
     )
 
 {-| Generate iCal ([RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545)) calendar feeds
@@ -34,7 +34,7 @@ from typed Elm values.
                     , summary = "Weekly Team Sync"
                     }
                     |> Ical.withRecurrenceRule
-                        (Ical.rule Recurrence.Weekly)
+                        (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon }))
 
             offsite : Ical.Event
             offsite =
@@ -92,8 +92,8 @@ reversed start/end times or negative intervals are silently normalized.
 
 ## Recurrence rules
 
-@docs Rule, rule, withRuleInterval, withCount, withUntilDate, withUntilDateTime
-@docs withByDay, withByMonthDay, withByMonth, withBySetPos, withWeekStart
+@docs Rule, rule, withCount, withUntilDate, withUntilDateTime
+@docs withByDay, withByMonthDay, withByMonth, withBySetPos
 
 -}
 
@@ -212,7 +212,7 @@ type alias Attendee =
 {-| An opaque recurrence rule. Create one with [`rule`](#rule) and customize
 with the `with*` builder functions.
 
-    Ical.rule Recurrence.Weekly
+    Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
         |> Ical.withByDay [ Recurrence.Every Time.Mon ]
         |> Ical.withCount 10
 
@@ -223,38 +223,64 @@ type Rule
 
 type alias RuleData =
     { frequency : Frequency
-    , interval : Int
     , end : Recurrence.RecurrenceEnd
     , byDay : List DaySpec
     , byMonthDay : List Int
     , byMonth : List Time.Month
     , bySetPos : List Int
-    , weekStart : Time.Weekday
     }
 
 
-{-| Create a recurrence rule with the given frequency. All other fields use
-sensible defaults: interval 1, no end, no filters, week starts on Monday.
+{-| Create a recurrence rule with the given frequency. Negative `every` values
+are clamped to 1.
+
+    Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
+        |> Ical.withByDay [ Recurrence.Every Time.Mon ]
+        |> Ical.withCount 10
+
 -}
 rule : Recurrence.Frequency -> Rule
 rule frequency =
     Rule
-        { frequency = frequency
-        , interval = 1
+        { frequency = clampFrequencyEvery frequency
         , end = Recurrence.Forever
         , byDay = []
         , byMonthDay = []
         , byMonth = []
         , bySetPos = []
-        , weekStart = Time.Mon
         }
 
 
-{-| Set the repetition interval. Values less than 1 are clamped to 1.
--}
-withRuleInterval : Int -> Rule -> Rule
-withRuleInterval n (Rule r) =
-    Rule { r | interval = max 1 n }
+frequencyEvery : Frequency -> Int
+frequencyEvery freq =
+    case freq of
+        Daily { every } ->
+            every
+
+        Weekly { every } ->
+            every
+
+        Monthly { every } ->
+            every
+
+        Yearly { every } ->
+            every
+
+
+clampFrequencyEvery : Frequency -> Frequency
+clampFrequencyEvery frequency =
+    case frequency of
+        Daily { every } ->
+            Daily { every = max 1 every }
+
+        Weekly { every, weekStart } ->
+            Weekly { every = max 1 every, weekStart = weekStart }
+
+        Monthly { every } ->
+            Monthly { every = max 1 every }
+
+        Yearly { every } ->
+            Yearly { every = max 1 every }
 
 
 {-| Set a count limit. Values less than 1 are clamped to 1.
@@ -296,7 +322,7 @@ withByMonthDay days (Rule r) =
 
 {-| Set which months the rule applies to.
 
-    Ical.rule Recurrence.Yearly
+    Ical.rule (Recurrence.Yearly { every = 1 })
         |> Ical.withByMonth [ Time.Jan, Time.Apr, Time.Jul, Time.Oct ]
 
 -}
@@ -311,13 +337,6 @@ events produced by the rule in each interval.
 withBySetPos : List Int -> Rule -> Rule
 withBySetPos positions (Rule r) =
     Rule { r | bySetPos = positions }
-
-
-{-| Set the week start day (default is Monday).
--}
-withWeekStart : Time.Weekday -> Rule -> Rule
-withWeekStart weekday (Rule r) =
-    Rule { r | weekStart = weekday }
 
 
 {-| An opaque type representing calendar configuration. Create one with
@@ -616,28 +635,43 @@ transparencyToString transparency =
 formatRule : RuleData -> String
 formatRule r =
     let
-        freq : String
-        freq =
-            "FREQ="
-                ++ (case r.frequency of
-                        Daily ->
-                            "DAILY"
+        freqStr : String
+        freqStr =
+            case r.frequency of
+                Daily _ ->
+                    "DAILY"
 
-                        Weekly ->
-                            "WEEKLY"
+                Weekly _ ->
+                    "WEEKLY"
 
-                        Monthly ->
-                            "MONTHLY"
+                Monthly _ ->
+                    "MONTHLY"
 
-                        Yearly ->
-                            "YEARLY"
-                   )
+                Yearly _ ->
+                    "YEARLY"
+
+        interval : Int
+        interval =
+            frequencyEvery r.frequency
+
+        maybeWeekStart : Maybe Time.Weekday
+        maybeWeekStart =
+            case r.frequency of
+                Weekly { weekStart } ->
+                    if weekStart /= Time.Mon then
+                        Just weekStart
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
 
         parts : List (Maybe String)
         parts =
-            [ Just freq
-            , if r.interval > 1 then
-                Just ("INTERVAL=" ++ String.fromInt r.interval)
+            [ Just ("FREQ=" ++ freqStr)
+            , if interval > 1 then
+                Just ("INTERVAL=" ++ String.fromInt interval)
 
               else
                 Nothing
@@ -673,11 +707,8 @@ formatRule r =
 
               else
                 Just ("BYSETPOS=" ++ String.join "," (List.map String.fromInt r.bySetPos))
-            , if r.weekStart /= Time.Mon then
-                Just ("WKST=" ++ weekdayToString r.weekStart)
-
-              else
-                Nothing
+            , maybeWeekStart
+                |> Maybe.map (\ws -> "WKST=" ++ weekdayToString ws)
             ]
     in
     parts

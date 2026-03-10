@@ -31,36 +31,45 @@ import Time
 by [`Ical.Parser`](Ical-Parser) for reading parsed rule data. For constructing
 rules for generation, use [`Ical.Rule`](Ical#Rule) and its builder functions.
 
-    { frequency = Weekly
-    , interval = 1
+    { frequency = Weekly { every = 1, weekStart = Time.Mon }
     , end = Forever
     , byDay = [ Every Time.Mon ]
     , byMonthDay = []
     , byMonth = []
     , bySetPos = []
-    , weekStart = Time.Mon
     }
+
+  - `byDay` — which days of the week (with optional ordinals for monthly/yearly).
+  - `byMonthDay` — which days of the month (1–31, or -31 to -1 from month end).
+  - `byMonth` — which months.
+  - `bySetPos` — pick the Nth result from the set produced by the other `by*`
+    parts within each frequency period. Positive counts from the start, negative
+    from the end. For example, `BYDAY=MO,TU,WE,TH,FR` with `bySetPos = [ -1 ]`
+    means "the last weekday" of each period.
 
 -}
 type alias RecurrenceRule =
     { frequency : Frequency
-    , interval : Int
     , end : RecurrenceEnd
     , byDay : List DaySpec
     , byMonthDay : List Int
     , byMonth : List Time.Month
     , bySetPos : List Int
-    , weekStart : Time.Weekday
     }
 
 
-{-| How often the event recurs.
+{-| How often the event recurs. Each variant carries its own configuration:
+
+  - `every` — the interval between occurrences (e.g. `every = 2` with `Weekly`
+    means every other week). Must be at least 1.
+  - `weekStart` — which day begins the week (only meaningful for `Weekly`).
+
 -}
 type Frequency
-    = Daily
-    | Weekly
-    | Monthly
-    | Yearly
+    = Daily { every : Int }
+    | Weekly { every : Int, weekStart : Time.Weekday }
+    | Monthly { every : Int }
+    | Yearly { every : Int }
 
 
 {-| When the recurrence stops. `Count` and `Until*` are mutually exclusive per

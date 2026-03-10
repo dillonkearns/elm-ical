@@ -451,7 +451,7 @@ END:VEVENT"""
                     , summary = "Weekly standup"
                     }
                     |> Ical.withRecurrenceRule
-                        (Ical.rule Recurrence.Weekly
+                        (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
                             |> Ical.withByDay [ Recurrence.Every Time.Mon, Recurrence.Every Time.Wed, Recurrence.Every Time.Fri ]
                         )
                     |> Ical.generateEvent
@@ -481,8 +481,7 @@ END:VEVENT"""
                     , summary = "Limited series"
                     }
                     |> Ical.withRecurrenceRule
-                        (Ical.rule Recurrence.Daily
-                            |> Ical.withRuleInterval 2
+                        (Ical.rule (Recurrence.Daily { every = 2 })
                             |> Ical.withCount 10
                         )
                     |> Ical.generateEvent
@@ -512,8 +511,7 @@ END:VEVENT"""
                     , summary = "Clamped"
                     }
                     |> Ical.withRecurrenceRule
-                        (Ical.rule Recurrence.Daily
-                            |> Ical.withRuleInterval -3
+                        (Ical.rule (Recurrence.Daily { every = -3 })
                             |> Ical.withCount -5
                         )
                     |> Ical.generateEvent
@@ -543,7 +541,7 @@ END:VEVENT"""
                     , summary = "Quarterly"
                     }
                     |> Ical.withRecurrenceRule
-                        (Ical.rule Recurrence.Yearly
+                        (Ical.rule (Recurrence.Yearly { every = 1 })
                             |> Ical.withByMonth [ Time.Jan, Time.Apr, Time.Jul, Time.Oct ]
                         )
                     |> Ical.generateEvent

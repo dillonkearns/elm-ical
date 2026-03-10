@@ -73,14 +73,12 @@ suite =
                                 , end = Time.millisToPosix 1616068800000 -- 2021-03-18T11:00:00Z
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Daily
-                                    , interval = 1
+                                    { frequency = Recurrence.Daily { every = 1 }
                                     , end = Recurrence.Count 3
                                     , byDay = []
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -114,14 +112,12 @@ suite =
                                 , end = Time.millisToPosix 1616068800000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Daily
-                                    , interval = 2
+                                    { frequency = Recurrence.Daily { every = 2 }
                                     , end = Recurrence.Count 3
                                     , byDay = []
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -146,14 +142,12 @@ suite =
                                 , end = Time.millisToPosix 1616068800000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Daily
-                                    , interval = 1
+                                    { frequency = Recurrence.Daily { every = 1 }
                                     , end = Recurrence.UntilDate (Date.fromCalendarDate 2021 Time.Mar 20)
                                     , byDay = []
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -178,14 +172,12 @@ suite =
                                 , end = Time.millisToPosix 1616068800000 -- 2021-03-18T11:00:00Z
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Daily
-                                    , interval = 1
+                                    { frequency = Recurrence.Daily { every = 1 }
                                     , end = Recurrence.UntilDateTime (Time.millisToPosix 1616144400000) -- 2021-03-19T09:00:00Z
                                     , byDay = []
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
                     in
                     Parser.expand yearRange [ event ]
@@ -204,14 +196,12 @@ suite =
                                 , end = Time.millisToPosix 1616068800000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Daily
-                                    , interval = 1
+                                    { frequency = Recurrence.Daily { every = 1 }
                                     , end = Recurrence.Count 5
                                     , byDay = [ daySpec Time.Mon, daySpec Time.Tue, daySpec Time.Wed, daySpec Time.Thu, daySpec Time.Fri ]
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -238,14 +228,12 @@ suite =
                                 , end = Time.millisToPosix 1614560400000 -- 2021-03-01T01:00:00Z
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Daily
-                                    , interval = 1
+                                    { frequency = Recurrence.Daily { every = 1 }
                                     , end = Recurrence.Forever
                                     , byDay = []
                                     , byMonthDay = [ -1 ]
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -277,14 +265,12 @@ suite =
                                 , end = Time.millisToPosix 1616068800000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Weekly
-                                    , interval = 1
+                                    { frequency = Recurrence.Weekly { every = 1, weekStart = Time.Mon }
                                     , end = Recurrence.Count 3
                                     , byDay = []
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -310,14 +296,12 @@ suite =
                                 , end = Time.millisToPosix 1615798800000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Weekly
-                                    , interval = 1
+                                    { frequency = Recurrence.Weekly { every = 1, weekStart = Time.Mon }
                                     , end = Recurrence.Count 6
                                     , byDay = [ daySpec Time.Mon, daySpec Time.Wed, daySpec Time.Fri ]
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -346,14 +330,12 @@ suite =
                                 , end = Time.millisToPosix 1615856400000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Weekly
-                                    , interval = 2
+                                    { frequency = Recurrence.Weekly { every = 2, weekStart = Time.Mon }
                                     , end = Recurrence.Count 3
                                     , byDay = [ daySpec Time.Tue ]
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -380,14 +362,12 @@ suite =
                                 , end = Time.millisToPosix 1616068800000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Monthly
-                                    , interval = 1
+                                    { frequency = Recurrence.Monthly { every = 1 }
                                     , end = Recurrence.Count 3
                                     , byDay = []
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -412,14 +392,12 @@ suite =
                                 , end = Time.millisToPosix 1614560400000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Monthly
-                                    , interval = 1
+                                    { frequency = Recurrence.Monthly { every = 1 }
                                     , end = Recurrence.Count 4
                                     , byDay = []
                                     , byMonthDay = [ 1, 15 ]
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -446,14 +424,12 @@ suite =
                                 , end = Time.millisToPosix 1615194000000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Monthly
-                                    , interval = 1
+                                    { frequency = Recurrence.Monthly { every = 1 }
                                     , end = Recurrence.Count 3
                                     , byDay = [ Recurrence.Every2nd Time.Mon ]
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -479,14 +455,12 @@ suite =
                                 , end = Time.millisToPosix 1616749200000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Monthly
-                                    , interval = 1
+                                    { frequency = Recurrence.Monthly { every = 1 }
                                     , end = Recurrence.Count 3
                                     , byDay = [ Recurrence.EveryLast Time.Fri ]
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -511,14 +485,12 @@ suite =
                                 , end = Time.millisToPosix 1617152400000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Monthly
-                                    , interval = 1
+                                    { frequency = Recurrence.Monthly { every = 1 }
                                     , end = Recurrence.Count 3
                                     , byDay = []
                                     , byMonthDay = [ -1 ]
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -545,14 +517,12 @@ suite =
                                 , end = Time.millisToPosix 1616068800000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Yearly
-                                    , interval = 1
+                                    { frequency = Recurrence.Yearly { every = 1 }
                                     , end = Recurrence.Count 3
                                     , byDay = []
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -581,14 +551,12 @@ suite =
                                 , end = Time.millisToPosix 1615798800000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Yearly
-                                    , interval = 1
+                                    { frequency = Recurrence.Yearly { every = 1 }
                                     , end = Recurrence.Count 4
                                     , byDay = []
                                     , byMonthDay = [ 15 ]
                                     , byMonth = [ Time.Mar, Time.Jun ]
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -620,14 +588,12 @@ suite =
                                 , end = Time.millisToPosix 1616068800000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Daily
-                                    , interval = 1
+                                    { frequency = Recurrence.Daily { every = 1 }
                                     , end = Recurrence.Count 5
                                     , byDay = []
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
                                 |> addExclusion (Time.millisToPosix 1616151600000)
                                 -- 2021-03-19
@@ -782,8 +748,7 @@ suite =
                                 , end = Time.millisToPosix 1617152400000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Monthly
-                                    , interval = 1
+                                    { frequency = Recurrence.Monthly { every = 1 }
                                     , end = Recurrence.Count 3
                                     , byDay =
                                         [ daySpec Time.Mon
@@ -795,7 +760,6 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = [ -1 ]
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -822,14 +786,12 @@ suite =
                                 , end = Date.fromCalendarDate 2021 Time.Mar 18
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Weekly
-                                    , interval = 1
+                                    { frequency = Recurrence.Weekly { every = 1, weekStart = Time.Mon }
                                     , end = Recurrence.Count 3
                                     , byDay = []
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -875,14 +837,12 @@ suite =
                                 , end = Time.millisToPosix 1616070600000 -- 2021-03-18T11:30:00Z
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Daily
-                                    , interval = 1
+                                    { frequency = Recurrence.Daily { every = 1 }
                                     , end = Recurrence.Count 2
                                     , byDay = []
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -924,14 +884,12 @@ suite =
                                 , end = Time.millisToPosix 1616068800000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Daily
-                                    , interval = 1
+                                    { frequency = Recurrence.Daily { every = 1 }
                                     , end = Recurrence.Forever
                                     , byDay = []
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -965,14 +923,12 @@ suite =
                                 , end = Time.millisToPosix 1616068800000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Daily
-                                    , interval = 1
+                                    { frequency = Recurrence.Daily { every = 1 }
                                     , end = Recurrence.Count 10
                                     , byDay = []
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -1079,14 +1035,12 @@ suite =
                                 , end = Time.millisToPosix 1616068800000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Daily
-                                    , interval = 1
+                                    { frequency = Recurrence.Daily { every = 1 }
                                     , end = Recurrence.Forever
                                     , byDay = []
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
                     in
                     Parser.expandNext 3
@@ -1109,14 +1063,12 @@ suite =
                                 , end = Time.millisToPosix 1616068800000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Daily
-                                    , interval = 1
+                                    { frequency = Recurrence.Daily { every = 1 }
                                     , end = Recurrence.Forever
                                     , byDay = []
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
                     in
                     Parser.expandNext 3
@@ -1139,14 +1091,12 @@ suite =
                                 , end = Time.millisToPosix 1616068800000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Daily
-                                    , interval = 1
+                                    { frequency = Recurrence.Daily { every = 1 }
                                     , end = Recurrence.Count 2
                                     , byDay = []
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
                     in
                     Parser.expandNext 10
@@ -1197,14 +1147,12 @@ suite =
                                 , end = Time.millisToPosix 1615798800000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Weekly
-                                    , interval = 1
+                                    { frequency = Recurrence.Weekly { every = 1, weekStart = Time.Mon }
                                     , end = Recurrence.Forever
                                     , byDay = [ daySpec Time.Mon, daySpec Time.Wed, daySpec Time.Fri ]
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
                     in
                     Parser.expandNext 4
@@ -1228,14 +1176,12 @@ suite =
                                 , end = Time.millisToPosix 1616068800000
                                 }
                                 |> addRule
-                                    { frequency = Recurrence.Daily
-                                    , interval = 1
+                                    { frequency = Recurrence.Daily { every = 1 }
                                     , end = Recurrence.Forever
                                     , byDay = []
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
-                                    , weekStart = Time.Mon
                                     }
                                 |> addExclusion (Time.millisToPosix 1616151600000)
                                 -- 2021-03-19

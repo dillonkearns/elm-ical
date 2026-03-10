@@ -35,7 +35,7 @@ teamCalendar now =
                 , summary = "Weekly Team Sync"
                 }
                 |> Ical.withRecurrenceRule
-                    (Ical.rule Recurrence.Weekly)
+                    (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon }))
 
         offsite : Ical.Event
         offsite =
@@ -145,6 +145,7 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
   - UTC date-time events
 - Recurrence rules via opaque `Rule` builder:
   - `FREQ`, `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYSETPOS`, `WKST`
+  - `Frequency` carries `every` (interval) and `weekStart` (for Weekly), so they're scoped to where they apply
   - `BYMONTH` uses `Time.Month` values, so invalid months are impossible at the type level
 
 ### Parsing (`Ical.Parser`)
