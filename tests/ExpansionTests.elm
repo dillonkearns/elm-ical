@@ -1473,7 +1473,7 @@ occurrenceStartDateForFloating : Parser.Occurrence -> Date.Date
 occurrenceStartDateForFloating occurrence =
     case occurrence.time of
         Parser.FloatingTime { start } ->
-            Date.fromCalendarDate start.year (intToMonth start.month) start.day
+            Date.fromCalendarDate start.year start.month start.day
 
         _ ->
             occurrenceDate Time.utc occurrence
@@ -1494,44 +1494,6 @@ occurrenceDate zone occ =
             start
 
         Parser.FloatingTime { start } ->
-            Date.fromCalendarDate start.year (intToMonth start.month) start.day
+            Date.fromCalendarDate start.year start.month start.day
 
 
-intToMonth : Int -> Time.Month
-intToMonth m =
-    case m of
-        1 ->
-            Time.Jan
-
-        2 ->
-            Time.Feb
-
-        3 ->
-            Time.Mar
-
-        4 ->
-            Time.Apr
-
-        5 ->
-            Time.May
-
-        6 ->
-            Time.Jun
-
-        7 ->
-            Time.Jul
-
-        8 ->
-            Time.Aug
-
-        9 ->
-            Time.Sep
-
-        10 ->
-            Time.Oct
-
-        11 ->
-            Time.Nov
-
-        _ ->
-            Time.Dec

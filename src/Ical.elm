@@ -1,7 +1,7 @@
 module Ical exposing
     ( generate, generateEvent
     , Config, config, withName, withCalendarDescription, withUrl
-    , Event, event, EventTime, allDay, withTime, Organizer, Attendee
+    , Event, event, EventTime, allDay, allDayRange, withTime, Organizer, Attendee
     , withDescription, withLocation, withOrganizer, withHtmlDescription
     , withStatus, Status(..), withTransparency, Transparency(..)
     , withCreated, withLastModified
@@ -42,7 +42,7 @@ from typed Elm values.
                     { id = "offsite-q2"
                     , stamp = now
                     , time =
-                        Ical.allDay
+                        Ical.allDayRange
                             { start = Date.fromCalendarDate 2021 Time.Jun 14
                             , end = Date.fromCalendarDate 2021 Time.Jun 16
                             }
@@ -83,7 +83,7 @@ reversed start/end times or negative intervals are silently normalized.
 
 ## Events
 
-@docs Event, event, EventTime, allDay, withTime, Organizer, Attendee
+@docs Event, event, EventTime, allDay, allDayRange, withTime, Organizer, Attendee
 @docs withDescription, withLocation, withOrganizer, withHtmlDescription
 @docs withStatus, Status, withTransparency, Transparency
 @docs withCreated, withLastModified
@@ -105,23 +105,41 @@ import Time
 
 
 {-| Represents the time span of an event. Either all-day (date only) or with
-specific times. Create values with [`allDay`](#allDay) or [`withTime`](#withTime).
+specific times. Create values with [`allDay`](#allDay), [`allDayRange`](#allDayRange),
+or [`withTime`](#withTime).
 -}
 type EventTime
     = AllDay { start : Date, end : Date }
     | WithTime { start : Time.Posix, end : Time.Posix }
 
 
-{-| Create an all-day event time span. The `end` date is **inclusive**. A
-single-day event on March 18 should use
-`allDay { start = march18, end = march18 }`. The library automatically adds one
-day to produce the exclusive DTEND required by iCal.
+{-| Create a single-day all-day event.
+
+    Ical.allDay (Date.fromCalendarDate 2021 Time.Mar 18)
+
+The library automatically adds one day to produce the exclusive DTEND
+required by iCal.
+
+-}
+allDay : Date -> EventTime
+allDay date =
+    AllDay { start = date, end = date }
+
+
+{-| Create a multi-day all-day event time span. The `end` date is **inclusive**.
+The library automatically adds one day to produce the exclusive DTEND
+required by iCal.
+
+    Ical.allDayRange
+        { start = Date.fromCalendarDate 2021 Time.Jun 14
+        , end = Date.fromCalendarDate 2021 Time.Jun 16
+        }
 
 If `end` is before `start`, the dates are swapped automatically.
 
 -}
-allDay : { start : Date, end : Date } -> EventTime
-allDay { start, end } =
+allDayRange : { start : Date, end : Date } -> EventTime
+allDayRange { start, end } =
     if Date.compare start end == GT then
         AllDay { start = end, end = start }
 
@@ -444,7 +462,7 @@ so calendar apps can map it directly:
     Ical.event
         { id = "offsite-q2"
         , stamp = now
-        , time = Ical.allDay { start = jun14, end = jun16 }
+        , time = Ical.allDayRange { start = jun14, end = jun16 }
         , summary = "Q2 Team Offsite"
         }
         |> Ical.withLocation "Moscone Center, 747 Howard St, San Francisco, CA 94103"

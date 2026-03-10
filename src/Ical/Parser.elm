@@ -95,8 +95,8 @@ import ValueParser
 {-| A parsed iCal calendar.
 -}
 type alias Calendar =
-    { prodId : String
-    , version : String
+    { generatorProductId : String
+    , specVersion : String
     , events : List Event
     , extraProperties : List RawProperty
     }
@@ -169,7 +169,7 @@ date-time that is interpreted in the viewer's local time.
 -}
 type alias LocalDateTime =
     { year : Int
-    , month : Int
+    , month : Time.Month
     , day : Int
     , hour : Int
     , minute : Int
@@ -247,7 +247,7 @@ type ParticipationStatus
 {-| Parse an iCal string into a Calendar.
 
     Ical.Parser.parse icsString
-    --> Ok { prodId = "-//My App//EN", version = "2.0", events = [...], ... }
+    --> Ok { generatorProductId = "-//My App//EN", specVersion = "2.0", events = [...], ... }
 
 -}
 parse : String -> Result String Calendar
@@ -299,8 +299,8 @@ parseContentLines remaining acc =
 
 
 type alias ParseState =
-    { prodId : Maybe String
-    , version : Maybe String
+    { generatorProductId : Maybe String
+    , specVersion : Maybe String
     , events : List Event
     , extraProperties : List RawProperty
     , timezones : Dict String VTimeZone.ZoneDefinition
@@ -313,8 +313,8 @@ parseCalendar contentLines =
         first :: rest ->
             if first.name == "BEGIN" && String.toUpper first.value == "VCALENDAR" then
                 parseCalendarBody rest
-                    { prodId = Nothing
-                    , version = Nothing
+                    { generatorProductId = Nothing
+                    , specVersion = Nothing
                     , events = []
                     , extraProperties = []
                     , timezones = Dict.empty
@@ -335,11 +335,11 @@ parseCalendarBody lines state =
 
         line :: rest ->
             if line.name == "END" && String.toUpper line.value == "VCALENDAR" then
-                case ( state.prodId, state.version ) of
-                    ( Just prodId, Just version ) ->
+                case ( state.generatorProductId, state.specVersion ) of
+                    ( Just generatorProductId, Just specVersion ) ->
                         Ok
-                            { prodId = prodId
-                            , version = version
+                            { generatorProductId = generatorProductId
+                            , specVersion = specVersion
                             , events = List.reverse state.events
                             , extraProperties = List.reverse state.extraProperties
                             }
@@ -381,10 +381,10 @@ parseCalendarBody lines state =
             else
                 case line.name of
                     "VERSION" ->
-                        parseCalendarBody rest { state | version = Just line.value }
+                        parseCalendarBody rest { state | specVersion = Just line.value }
 
                     "PRODID" ->
-                        parseCalendarBody rest { state | prodId = Just line.value }
+                        parseCalendarBody rest { state | generatorProductId = Just line.value }
 
                     _ ->
                         parseCalendarBody rest
@@ -606,7 +606,7 @@ addDurationToLocal dur dt =
         -- Convert local datetime to a date + seconds-of-day, add duration, convert back
         date : Date.Date
         date =
-            Date.fromCalendarDate dt.year (Date.numberToMonth dt.month) dt.day
+            Date.fromCalendarDate dt.year dt.month dt.day
 
         secondsOfDay : Int
         secondsOfDay =
@@ -625,7 +625,7 @@ addDurationToLocal dur dt =
             Date.add Date.Days extraDays date
     in
     { year = Date.year newDate
-    , month = Date.monthNumber newDate
+    , month = Date.month newDate
     , day = Date.day newDate
     , hour = remainingSeconds // 3600
     , minute = modBy 60 (remainingSeconds // 60)
@@ -805,7 +805,7 @@ applyEventProperty timezones line accum =
                     { accum | recurrenceId = Just posix }
 
                 Ok (IFloating localDateTime) ->
-                    { accum | recurrenceId = Just (dateToUtcMidnight (Date.fromCalendarDate localDateTime.year (Date.numberToMonth localDateTime.month) localDateTime.day)) }
+                    { accum | recurrenceId = Just (dateToUtcMidnight (Date.fromCalendarDate localDateTime.year localDateTime.month localDateTime.day)) }
 
                 Err err ->
                     addEventError ("Invalid RECURRENCE-ID: " ++ err) accum
@@ -890,7 +890,7 @@ dateTimePartsToValue timezones maybeTzid parts =
         dt : LocalDateTime
         dt =
             { year = parts.year
-            , month = parts.month
+            , month = Date.numberToMonth parts.month
             , day = parts.day
             , hour = parts.hour
             , minute = parts.minute
@@ -1054,7 +1054,7 @@ parseExdateValues timezones line =
                     ( Ok (IFloating localDateTime), Ok soFar ) ->
                         Ok
                             (dateToUtcMidnight
-                                (Date.fromCalendarDate localDateTime.year (Date.numberToMonth localDateTime.month) localDateTime.day)
+                                (Date.fromCalendarDate localDateTime.year localDateTime.month localDateTime.day)
                                 :: soFar
                             )
 
@@ -1472,7 +1472,7 @@ occurrenceStartsAfterUntil originalTime seed candidateDate untilPosix =
 
         FloatingTime { start } ->
             Date.compare
-                (Date.fromCalendarDate start.year (Date.numberToMonth start.month) start.day)
+                (Date.fromCalendarDate start.year start.month start.day)
                 (Date.fromPosix Time.utc untilPosix)
                 == GT
 
@@ -1937,7 +1937,7 @@ occurrenceStartDate eventTime =
             Date.fromPosix Time.utc start.posix
 
         FloatingTime { start } ->
-            Date.fromCalendarDate start.year (Date.numberToMonth start.month) start.day
+            Date.fromCalendarDate start.year start.month start.day
 
 
 shiftTime : EventTime -> Date.Date -> Date.Date -> EventTime
@@ -1980,14 +1980,14 @@ shiftLocalDateTime dayDelta ldt =
     let
         originalDate : Date.Date
         originalDate =
-            Date.fromCalendarDate ldt.year (Date.numberToMonth ldt.month) ldt.day
+            Date.fromCalendarDate ldt.year ldt.month ldt.day
 
         newDate : Date.Date
         newDate =
             Date.add Date.Days dayDelta originalDate
     in
     { year = Date.year newDate
-    , month = Date.monthToNumber (Date.month newDate)
+    , month = Date.month newDate
     , day = Date.day newDate
     , hour = ldt.hour
     , minute = ldt.minute

@@ -154,10 +154,7 @@ END:VCALENDAR"""
                     { id = "4ot852po37bvri1natdlv4cf6r"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.allDay
-                            { start = Date.fromCalendarDate 2021 Time.Mar 18
-                            , end = Date.fromCalendarDate 2021 Time.Mar 18
-                            }
+                        Ical.allDay (Date.fromCalendarDate 2021 Time.Mar 18)
                     , summary = "All day event"
                     }
                     |> Ical.withCreated (toIso8601 "2021-03-18T14:59:37.000Z")
@@ -369,7 +366,7 @@ END:VCALENDAR"""
                     { id = "multi-day"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.allDay
+                        Ical.allDayRange
                             { start = Date.fromCalendarDate 2021 Time.Mar 18
                             , end = Date.fromCalendarDate 2021 Time.Mar 20
                             }
@@ -394,7 +391,7 @@ END:VEVENT"""
                     { id = "reversed"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.allDay
+                        Ical.allDayRange
                             { start = Date.fromCalendarDate 2021 Time.Mar 20
                             , end = Date.fromCalendarDate 2021 Time.Mar 18
                             }

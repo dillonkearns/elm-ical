@@ -128,25 +128,25 @@ resolveTests =
             \() ->
                 -- June 15, 2024 at 14:30:00 Eastern = 18:30:00 UTC
                 VTimeZone.resolve easternTimeZone
-                    { year = 2024, month = 6, day = 15, hour = 14, minute = 30, second = 0 }
+                    { year = 2024, month = Time.Jun, day = 15, hour = 14, minute = 30, second = 0 }
                     |> Expect.equal (Ok (toIso8601 "2024-06-15T18:30:00.000Z"))
         , test "winter datetime in Eastern (EST, -5h)" <|
             \() ->
                 -- December 15, 2024 at 14:30:00 Eastern = 19:30:00 UTC
                 VTimeZone.resolve easternTimeZone
-                    { year = 2024, month = 12, day = 15, hour = 14, minute = 30, second = 0 }
+                    { year = 2024, month = Time.Dec, day = 15, hour = 14, minute = 30, second = 0 }
                     |> Expect.equal (Ok (toIso8601 "2024-12-15T19:30:00.000Z"))
         , test "just before spring-forward (still standard)" <|
             \() ->
                 -- March 10, 2024 at 1:30 AM Eastern = 6:30 AM UTC (still EST, -5h)
                 VTimeZone.resolve easternTimeZone
-                    { year = 2024, month = 3, day = 10, hour = 1, minute = 30, second = 0 }
+                    { year = 2024, month = Time.Mar, day = 10, hour = 1, minute = 30, second = 0 }
                     |> Expect.equal (Ok (toIso8601 "2024-03-10T06:30:00.000Z"))
         , test "after spring-forward (daylight)" <|
             \() ->
                 -- March 10, 2024 at 3:30 AM Eastern = 7:30 AM UTC (EDT, -4h)
                 VTimeZone.resolve easternTimeZone
-                    { year = 2024, month = 3, day = 10, hour = 3, minute = 30, second = 0 }
+                    { year = 2024, month = Time.Mar, day = 10, hour = 3, minute = 30, second = 0 }
                     |> Expect.equal (Ok (toIso8601 "2024-03-10T07:30:00.000Z"))
         , test "nonexistent spring-forward time uses offset before the gap" <|
             \() ->
@@ -154,7 +154,7 @@ resolveTests =
                 -- RFC 5545 says to interpret it using the UTC offset before the gap,
                 -- which resolves to 2024-03-10T07:30:00Z.
                 VTimeZone.resolve easternTimeZone
-                    { year = 2024, month = 3, day = 10, hour = 2, minute = 30, second = 0 }
+                    { year = 2024, month = Time.Mar, day = 10, hour = 2, minute = 30, second = 0 }
                     |> Expect.equal (Ok (toIso8601 "2024-03-10T07:30:00.000Z"))
         , test "fall-back ambiguous time resolves to first occurrence (daylight)" <|
             \() ->
@@ -162,7 +162,7 @@ resolveTests =
                 -- RFC 5545: "first occurrence" = still in daylight time (EDT, -4h)
                 -- 1:30 AM EDT = 5:30 AM UTC
                 VTimeZone.resolve easternTimeZone
-                    { year = 2024, month = 11, day = 3, hour = 1, minute = 30, second = 0 }
+                    { year = 2024, month = Time.Nov, day = 3, hour = 1, minute = 30, second = 0 }
                     |> Expect.equal (Ok (toIso8601 "2024-11-03T05:30:00.000Z"))
         ]
 

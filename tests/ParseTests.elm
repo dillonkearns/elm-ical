@@ -392,7 +392,7 @@ componentTests =
                         "BEGIN:VCALENDAR\u{000D}\nVERSION:2.0\u{000D}\nPRODID:-//test//EN\u{000D}\nEND:VCALENDAR\u{000D}\n"
                 in
                 Parser.parse input
-                    |> Result.map .version
+                    |> Result.map .specVersion
                     |> Expect.equal (Ok "2.0")
         , test "nested VEVENT inside VCALENDAR" <|
             \() ->
@@ -541,7 +541,7 @@ componentTests =
                     Ok cal ->
                         Expect.all
                             [ \c -> c.events |> Expect.equal []
-                            , \c -> c.version |> Expect.equal "2.0"
+                            , \c -> c.specVersion |> Expect.equal "2.0"
                             ]
                             cal
 
@@ -1448,8 +1448,8 @@ endToEndTests =
                                 ev.time
                                     |> Expect.equal
                                         (Parser.FloatingTime
-                                            { start = { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
-                                            , end = Just { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
+                                            { start = { year = 2021, month = Time.Mar, day = 18, hour = 16, minute = 20, second = 44 }
+                                            , end = Just { year = 2021, month = Time.Mar, day = 18, hour = 16, minute = 20, second = 44 }
                                             }
                                         )
 
@@ -1484,8 +1484,8 @@ endToEndTests =
                                 ev.time
                                     |> Expect.equal
                                         (Parser.FloatingTime
-                                            { start = { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
-                                            , end = Just { year = 2021, month = 3, day = 18, hour = 16, minute = 20, second = 44 }
+                                            { start = { year = 2021, month = Time.Mar, day = 18, hour = 16, minute = 20, second = 44 }
+                                            , end = Just { year = 2021, month = Time.Mar, day = 18, hour = 16, minute = 20, second = 44 }
                                             }
                                         )
 
@@ -1743,10 +1743,7 @@ roundTripTests =
                             { id = "rt-allday"
                             , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                             , time =
-                                Ical.allDay
-                                    { start = Date.fromCalendarDate 2021 Time.Mar 18
-                                    , end = Date.fromCalendarDate 2021 Time.Mar 18
-                                    }
+                                Ical.allDay (Date.fromCalendarDate 2021 Time.Mar 18)
                             , summary = "All day round-trip"
                             }
                         ]
@@ -1890,8 +1887,8 @@ roundTripTests =
                 case Parser.parse icsString of
                     Ok cal ->
                         Expect.all
-                            [ \c -> c.version |> Expect.equal "2.0"
-                            , \c -> c.prodId |> Expect.equal "-//myapp//cal//EN"
+                            [ \c -> c.specVersion |> Expect.equal "2.0"
+                            , \c -> c.generatorProductId |> Expect.equal "-//myapp//cal//EN"
                             ]
                             cal
 

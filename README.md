@@ -43,7 +43,7 @@ teamCalendar now =
                 { id = "offsite-q2"
                 , stamp = now
                 , time =
-                    Ical.allDay
+                    Ical.allDayRange
                         { start = Date.fromCalendarDate 2021 Time.Jun 14
                         , end = Date.fromCalendarDate 2021 Time.Jun 16
                         }
@@ -127,7 +127,7 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 
 ## Important Semantics
 
-- `Ical.allDay` uses an inclusive end date when generating.
+- `Ical.allDay` creates a single-day event; `Ical.allDayRange` uses an inclusive end date for multi-day spans.
 - `Ical.Parser.EventTime.AllDay` uses RFC-style exclusive end semantics when parsing.
 - If a parsed `VEVENT` omits both `DTEND` and `DURATION`, the parser applies the RFC default:
   - all-day events end on the following date

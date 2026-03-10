@@ -34,7 +34,7 @@ type alias ZoneTransition =
 
 type alias LocalDateTime =
     { year : Int
-    , month : Int
+    , month : Time.Month
     , day : Int
     , hour : Int
     , minute : Int
@@ -457,7 +457,7 @@ parseLocalDateTime value =
                 else
                     Ok
                         { year = parts.year
-                        , month = parts.month
+                        , month = Date.numberToMonth parts.month
                         , day = parts.day
                         , hour = parts.hour
                         , minute = parts.minute
@@ -492,7 +492,7 @@ before the gap.
 -}
 resolve :
     ZoneDefinition
-    -> { year : Int, month : Int, day : Int, hour : Int, minute : Int, second : Int }
+    -> { year : Int, month : Time.Month, day : Int, hour : Int, minute : Int, second : Int }
     -> Result String Time.Posix
 resolve (ZoneDefinition observances) dt =
     let
@@ -573,7 +573,7 @@ transitionForYear observance pattern year =
             localDateTime : LocalDateTime
             localDateTime =
                 { year = year
-                , month = Date.monthNumber date
+                , month = Date.month date
                 , day = Date.day date
                 , hour = observance.dtstart.hour
                 , minute = observance.dtstart.minute
@@ -652,7 +652,7 @@ localDateTimeToPseudoSeconds localDateTime =
     let
         date : Date.Date
         date =
-            Date.fromCalendarDate localDateTime.year (Date.numberToMonth localDateTime.month) localDateTime.day
+            Date.fromCalendarDate localDateTime.year localDateTime.month localDateTime.day
     in
     (Date.toRataDie date - 719163)
         * 86400

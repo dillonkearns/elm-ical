@@ -51,8 +51,8 @@ encodeElmParsed ics =
         Ok cal ->
             Json.Encode.object
                 [ ( "ok", Json.Encode.bool True )
-                , ( "version", Json.Encode.string cal.version )
-                , ( "prodId", Json.Encode.string cal.prodId )
+                , ( "specVersion", Json.Encode.string cal.specVersion )
+                , ( "generatorProductId", Json.Encode.string cal.generatorProductId )
                 , ( "events", Json.Encode.list encodeEvent cal.events )
                 ]
 
@@ -166,7 +166,7 @@ encodeLocalDateTime { year, month, day, hour, minute, second } =
     Json.Encode.object
         [ ( "type", Json.Encode.string "datetime-local" )
         , ( "year", Json.Encode.int year )
-        , ( "month", Json.Encode.int month )
+        , ( "month", Json.Encode.int (monthToInt month) )
         , ( "day", Json.Encode.int day )
         , ( "hour", Json.Encode.int hour )
         , ( "minute", Json.Encode.int minute )
@@ -353,10 +353,7 @@ allDayEvent =
         { id = "4ot852po37bvri1natdlv4cf6r"
         , stamp = millisToPosix 1616083244000
         , time =
-            Ical.allDay
-                { start = Date.fromCalendarDate 2021 Time.Mar 18
-                , end = Date.fromCalendarDate 2021 Time.Mar 18
-                }
+            Ical.allDay (Date.fromCalendarDate 2021 Time.Mar 18)
         , summary = "All day event"
         }
         |> Ical.withCreated (millisToPosix 1616079577000)
