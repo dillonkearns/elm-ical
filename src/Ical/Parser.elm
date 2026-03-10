@@ -86,7 +86,7 @@ import ContentLine exposing (ContentLine)
 import Date
 import DateHelpers
 import Dict exposing (Dict)
-import Ical.Recurrence exposing (DaySpec, Frequency(..), RecurrenceEnd(..), RecurrenceRule)
+import Ical.Recurrence exposing (DaySpec(..), Frequency(..), RecurrenceEnd(..), RecurrenceRule)
 import Time
 import VTimeZone
 import ValueParser
@@ -1528,6 +1528,80 @@ expandWithinPeriod rule seed intervalDate =
             expandYearly rule seed intervalDate
 
 
+daySpecWeekday : DaySpec -> Time.Weekday
+daySpecWeekday spec =
+    case spec of
+        Every wd ->
+            wd
+
+        Every1st wd ->
+            wd
+
+        Every2nd wd ->
+            wd
+
+        Every3rd wd ->
+            wd
+
+        Every4th wd ->
+            wd
+
+        Every5th wd ->
+            wd
+
+        EveryLast wd ->
+            wd
+
+        Every2ndToLast wd ->
+            wd
+
+        Every3rdToLast wd ->
+            wd
+
+        Every4thToLast wd ->
+            wd
+
+        Every5thToLast wd ->
+            wd
+
+
+daySpecOrdinal : DaySpec -> Maybe Int
+daySpecOrdinal spec =
+    case spec of
+        Every _ ->
+            Nothing
+
+        Every1st _ ->
+            Just 1
+
+        Every2nd _ ->
+            Just 2
+
+        Every3rd _ ->
+            Just 3
+
+        Every4th _ ->
+            Just 4
+
+        Every5th _ ->
+            Just 5
+
+        EveryLast _ ->
+            Just -1
+
+        Every2ndToLast _ ->
+            Just -2
+
+        Every3rdToLast _ ->
+            Just -3
+
+        Every4thToLast _ ->
+            Just -4
+
+        Every5thToLast _ ->
+            Just -5
+
+
 expandWeekByDay : Time.Weekday -> List DaySpec -> Date.Date -> List Date.Date
 expandWeekByDay weekStart byDay date =
     let
@@ -1541,7 +1615,7 @@ expandWeekByDay weekStart byDay date =
                 let
                     target : Date.Date
                     target =
-                        Date.ceiling (DateHelpers.weekdayToInterval spec.weekday) weekStartDate
+                        Date.ceiling (DateHelpers.weekdayToInterval (daySpecWeekday spec)) weekStartDate
                 in
                 if Date.toRataDie target - Date.toRataDie weekStartDate < 7 then
                     Just target
@@ -1649,11 +1723,15 @@ expandByDayInMonth year month specs =
 resolveDaySpecInMonth : Int -> Time.Month -> DaySpec -> List Date.Date
 resolveDaySpecInMonth year month spec =
     let
+        weekday : Time.Weekday
+        weekday =
+            daySpecWeekday spec
+
         interval : Date.Interval
         interval =
-            DateHelpers.weekdayToInterval spec.weekday
+            DateHelpers.weekdayToInterval weekday
     in
-    case spec.ordinal of
+    case daySpecOrdinal spec of
         Just n ->
             if n > 0 then
                 let
@@ -1778,7 +1856,7 @@ filterByDay byDay dates =
         let
             weekdays : List Time.Weekday
             weekdays =
-                List.map .weekday byDay
+                List.map daySpecWeekday byDay
         in
         List.filter (\d -> List.member (Date.weekday d) weekdays) dates
 

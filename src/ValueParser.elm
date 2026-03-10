@@ -5,7 +5,7 @@ module ValueParser exposing (DateTimeParts, Duration, parseDate, parseDateTime, 
 
 import Date
 import DateHelpers
-import Ical.Recurrence exposing (DaySpec, Frequency(..), RecurrenceEnd(..), RecurrenceRule)
+import Ical.Recurrence exposing (DaySpec(..), Frequency(..), RecurrenceEnd(..), RecurrenceRule)
 import Time
 
 
@@ -693,18 +693,62 @@ parseDaySpec str =
                     String.dropRight 2 trimmed
             in
             if String.isEmpty prefix then
-                Ok { ordinal = Nothing, weekday = weekday }
+                Ok (Every weekday)
 
             else
                 case String.toInt prefix of
                     Just n ->
-                        Ok { ordinal = Just n, weekday = weekday }
+                        ordinalToDaySpec n weekday
+                            |> Result.fromMaybe ("Invalid BYDAY ordinal: " ++ str)
 
                     Nothing ->
                         Err ("Invalid BYDAY: " ++ str)
 
         Nothing ->
             Err ("Invalid BYDAY: " ++ str)
+
+
+ordinalToDaySpec : Int -> Time.Weekday -> Maybe DaySpec
+ordinalToDaySpec n weekday =
+    if n > 0 then
+        case n of
+            1 ->
+                Just (Every1st weekday)
+
+            2 ->
+                Just (Every2nd weekday)
+
+            3 ->
+                Just (Every3rd weekday)
+
+            4 ->
+                Just (Every4th weekday)
+
+            5 ->
+                Just (Every5th weekday)
+
+            _ ->
+                Nothing
+
+    else
+        case negate n of
+            1 ->
+                Just (EveryLast weekday)
+
+            2 ->
+                Just (Every2ndToLast weekday)
+
+            3 ->
+                Just (Every3rdToLast weekday)
+
+            4 ->
+                Just (Every4thToLast weekday)
+
+            5 ->
+                Just (Every5thToLast weekday)
+
+            _ ->
+                Nothing
 
 
 parseWeekday : String -> Maybe Time.Weekday

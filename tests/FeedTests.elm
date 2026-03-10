@@ -452,7 +452,7 @@ END:VEVENT"""
                     }
                     |> Ical.withRecurrenceRule
                         (Ical.rule Recurrence.Weekly
-                            |> Ical.withByDay [ { ordinal = Nothing, weekday = Time.Mon }, { ordinal = Nothing, weekday = Time.Wed }, { ordinal = Nothing, weekday = Time.Fri } ]
+                            |> Ical.withByDay [ Recurrence.Every Time.Mon, Recurrence.Every Time.Wed, Recurrence.Every Time.Fri ]
                         )
                     |> Ical.generateEvent
                         (Ical.config

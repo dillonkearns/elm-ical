@@ -213,7 +213,7 @@ type alias Attendee =
 with the `with*` builder functions.
 
     Ical.rule Recurrence.Weekly
-        |> Ical.withByDay [ { ordinal = Nothing, weekday = Time.Mon } ]
+        |> Ical.withByDay [ Recurrence.Every Time.Mon ]
         |> Ical.withCount 10
 
 -}
@@ -688,16 +688,47 @@ formatRule r =
 formatDaySpec : Recurrence.DaySpec -> String
 formatDaySpec spec =
     let
-        prefix : String
-        prefix =
-            case spec.ordinal of
-                Just n ->
-                    String.fromInt n
-
-                Nothing ->
-                    ""
+        ( prefix, weekday ) =
+            daySpecToOrdinalAndWeekday spec
     in
-    prefix ++ weekdayToString spec.weekday
+    prefix ++ weekdayToString weekday
+
+
+daySpecToOrdinalAndWeekday : Recurrence.DaySpec -> ( String, Time.Weekday )
+daySpecToOrdinalAndWeekday spec =
+    case spec of
+        Recurrence.Every wd ->
+            ( "", wd )
+
+        Recurrence.Every1st wd ->
+            ( "1", wd )
+
+        Recurrence.Every2nd wd ->
+            ( "2", wd )
+
+        Recurrence.Every3rd wd ->
+            ( "3", wd )
+
+        Recurrence.Every4th wd ->
+            ( "4", wd )
+
+        Recurrence.Every5th wd ->
+            ( "5", wd )
+
+        Recurrence.EveryLast wd ->
+            ( "-1", wd )
+
+        Recurrence.Every2ndToLast wd ->
+            ( "-2", wd )
+
+        Recurrence.Every3rdToLast wd ->
+            ( "-3", wd )
+
+        Recurrence.Every4thToLast wd ->
+            ( "-4", wd )
+
+        Recurrence.Every5thToLast wd ->
+            ( "-5", wd )
 
 
 weekdayToString : Time.Weekday -> String

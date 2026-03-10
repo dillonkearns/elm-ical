@@ -1,6 +1,6 @@
 module Ical.Recurrence exposing
     ( RecurrenceRule, RecurrenceEnd(..)
-    , Frequency(..), DaySpec
+    , Frequency(..), DaySpec(..)
     )
 
 {-| Types for iCal recurrence rules
@@ -34,7 +34,7 @@ rules for generation, use [`Ical.Rule`](Ical#Rule) and its builder functions.
     { frequency = Weekly
     , interval = 1
     , end = Forever
-    , byDay = [ { ordinal = Nothing, weekday = Time.Mon } ]
+    , byDay = [ Every Time.Mon ]
     , byMonthDay = []
     , byMonth = []
     , bySetPos = []
@@ -73,14 +73,31 @@ type RecurrenceEnd
     | UntilDateTime Time.Posix
 
 
-{-| A day-of-week specifier, optionally with an ordinal.
+{-| A day-of-week specifier for recurrence rules.
 
-  - `{ ordinal = Nothing, weekday = Time.Mon }`: every Monday
-  - `{ ordinal = Just 2, weekday = Time.Sun }`: the 2nd Sunday
-  - `{ ordinal = Just -1, weekday = Time.Fri }`: the last Friday
+    -- every Monday
+    Every Time.Mon
+
+    -- the 2nd Sunday of the month
+    Every2nd Time.Sun
+
+    -- the last Friday of the month
+    EveryLast Time.Fri
+
+Positive ordinals (`Every1st` through `Every5th`) count from the start of the
+month. Negative ordinals (`EveryLast` through `Every5thToLast`) count from the
+end.
 
 -}
-type alias DaySpec =
-    { ordinal : Maybe Int
-    , weekday : Time.Weekday
-    }
+type DaySpec
+    = Every Time.Weekday
+    | Every1st Time.Weekday
+    | Every2nd Time.Weekday
+    | Every3rd Time.Weekday
+    | Every4th Time.Weekday
+    | Every5th Time.Weekday
+    | EveryLast Time.Weekday
+    | Every2ndToLast Time.Weekday
+    | Every3rdToLast Time.Weekday
+    | Every4thToLast Time.Weekday
+    | Every5thToLast Time.Weekday

@@ -278,9 +278,9 @@ recurrenceRuleTests =
                             , interval = 1
                             , end = Recurrence.Forever
                             , byDay =
-                                [ { ordinal = Nothing, weekday = Time.Mon }
-                                , { ordinal = Nothing, weekday = Time.Wed }
-                                , { ordinal = Nothing, weekday = Time.Fri }
+                                [ Recurrence.Every Time.Mon
+                                , Recurrence.Every Time.Wed
+                                , Recurrence.Every Time.Fri
                                 ]
                             , byMonthDay = []
                             , byMonth = []
@@ -326,12 +326,12 @@ recurrenceRuleTests =
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=MONTHLY;BYDAY=2SU"
                     |> Result.map .byDay
-                    |> Expect.equal (Ok [ { ordinal = Just 2, weekday = Time.Sun } ])
+                    |> Expect.equal (Ok [ Recurrence.Every2nd Time.Sun ])
         , test "parse negative ordinal BYDAY (last Friday)" <|
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=MONTHLY;BYDAY=-1FR"
                     |> Result.map .byDay
-                    |> Expect.equal (Ok [ { ordinal = Just -1, weekday = Time.Fri } ])
+                    |> Expect.equal (Ok [ Recurrence.EveryLast Time.Fri ])
         , test "parse with WKST" <|
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=WEEKLY;WKST=SU"
@@ -353,7 +353,7 @@ recurrenceRuleTests =
                             { frequency = Recurrence.Monthly
                             , interval = 2
                             , end = Recurrence.Count 6
-                            , byDay = [ { ordinal = Just 1, weekday = Time.Mon } ]
+                            , byDay = [ Recurrence.Every1st Time.Mon ]
                             , byMonthDay = []
                             , byMonth = []
                             , bySetPos = []
@@ -1179,9 +1179,9 @@ endToEndTests =
                                           , interval = 1
                                           , end = Recurrence.Forever
                                           , byDay =
-                                                [ { ordinal = Nothing, weekday = Time.Mon }
-                                                , { ordinal = Nothing, weekday = Time.Wed }
-                                                , { ordinal = Nothing, weekday = Time.Fri }
+                                                [ Recurrence.Every Time.Mon
+                                                , Recurrence.Every Time.Wed
+                                                , Recurrence.Every Time.Fri
                                                 ]
                                           , byMonthDay = []
                                           , byMonth = []
@@ -1907,7 +1907,7 @@ roundTripTests =
                             |> Ical.withRecurrenceRule
                                 (Ical.rule Recurrence.Weekly
                                     |> Ical.withCount 10
-                                    |> Ical.withByDay [ { ordinal = Nothing, weekday = Time.Mon }, { ordinal = Nothing, weekday = Time.Wed } ]
+                                    |> Ical.withByDay [ Recurrence.Every Time.Mon, Recurrence.Every Time.Wed ]
                                 )
                         ]
                             |> Ical.generate
@@ -1926,7 +1926,7 @@ roundTripTests =
                                         Expect.all
                                             [ \r -> r.frequency |> Expect.equal Recurrence.Weekly
                                             , \r -> r.end |> Expect.equal (Recurrence.Count 10)
-                                            , \r -> r.byDay |> List.map .weekday |> Expect.equal [ Time.Mon, Time.Wed ]
+                                            , \r -> r.byDay |> Expect.equal [ Recurrence.Every Time.Mon, Recurrence.Every Time.Wed ]
                                             ]
                                             rule
 

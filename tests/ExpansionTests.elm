@@ -449,7 +449,7 @@ suite =
                                     { frequency = Recurrence.Monthly
                                     , interval = 1
                                     , end = Recurrence.Count 3
-                                    , byDay = [ { ordinal = Just 2, weekday = Time.Mon } ]
+                                    , byDay = [ Recurrence.Every2nd Time.Mon ]
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
@@ -482,7 +482,7 @@ suite =
                                     { frequency = Recurrence.Monthly
                                     , interval = 1
                                     , end = Recurrence.Count 3
-                                    , byDay = [ { ordinal = Just -1, weekday = Time.Fri } ]
+                                    , byDay = [ Recurrence.EveryLast Time.Fri ]
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
@@ -1489,7 +1489,7 @@ makeAllDayEvent { summary, start, end } =
 
 daySpec : Time.Weekday -> Recurrence.DaySpec
 daySpec weekday =
-    { ordinal = Nothing, weekday = weekday }
+    Recurrence.Every weekday
 
 
 addExclusion : Time.Posix -> Parser.Event -> Parser.Event
