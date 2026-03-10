@@ -5,7 +5,8 @@ module Ical.Parser exposing
     , Status(..), Transparency(..)
     , Organizer, RawProperty
     , Attendee, AttendeeRole(..), ParticipationStatus(..)
-    , Occurrence, expand, expandAll, expandNext
+    , Occurrence, expand, expandNext
+    , expandAll
     )
 
 {-| Parse iCal ([RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545)) calendar strings
