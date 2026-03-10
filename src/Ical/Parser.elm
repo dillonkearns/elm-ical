@@ -79,7 +79,7 @@ Parsed types are transparent record aliases so you can read fields directly.
 
 ## Recurrence expansion
 
-@docs Occurrence, expand, expandNext
+@docs Occurrence, expand, expandAll, expandNext
 
 -}
 

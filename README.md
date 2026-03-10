@@ -52,7 +52,10 @@ teamCalendar now =
                 |> Ical.withLocation "Moscone Center, 747 Howard St, San Francisco, CA 94103"
     in
     Ical.generate
-        (Ical.config { id = "//mycompany//team//EN", domain = "mycompany.com" }
+        (Ical.config
+            { id = "//mycompany//team//EN"
+            , domain = "mycompany.com"
+            }
             |> Ical.withName "Engineering Team"
         )
         [ weeklySync, offsite ]
@@ -146,7 +149,7 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 ### Parsing (`Ical.Parser`)
 
 - Calendar properties: `PRODID`, `VERSION`, plus unknown calendar properties in `extraProperties`
-- Event properties: `DTSTART`, `DTEND`, `DTSTAMP`, `DURATION`, `UID`, `SUMMARY`, `DESCRIPTION`, `LOCATION`, `ORGANIZER`, `STATUS`, `TRANSP`, `CREATED`, `LAST-MODIFIED`, `RRULE`, `EXDATE`, `ATTENDEE`
+- Event properties: `DTSTART`, `DTEND`, `DTSTAMP`, `DURATION`, `UID`, `SUMMARY`, `DESCRIPTION`, `LOCATION`, `ORGANIZER`, `STATUS`, `TRANSP`, `CREATED`, `LAST-MODIFIED`, `RRULE`, `EXDATE`, `RDATE`, `RECURRENCE-ID`, `ATTENDEE`
 - Event times:
   - all-day dates
   - UTC date-times
@@ -159,7 +162,9 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 - Frequencies: `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`
 - Rule parts: `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYSETPOS`, `WKST`
 - Exception dates: `EXDATE` for all-day, floating, and resolved date-time events
-- Expansion helpers: `Ical.Parser.expand` and `Ical.Parser.expandNext`
+- Additional recurrence dates: `RDATE`
+- `RECURRENCE-ID` override merging
+- Expansion helpers: `Ical.Parser.expand`, `Ical.Parser.expandNext`, and `Ical.Parser.expandAll` (merges overrides across events)
 
 ## Not Supported Yet
 
@@ -167,8 +172,6 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 - Generating `TZID` date-times or `VTIMEZONE` components
 - `SECONDLY`, `MINUTELY`, `HOURLY`
 - `BYSECOND`, `BYMINUTE`, `BYHOUR`, `BYYEARDAY`, `BYWEEKNO`
-- Event-level `RDATE`
-- `RECURRENCE-ID` and overridden instances
 - Typed `VALARM` extraction
 - `VTODO`, `VJOURNAL`, and `VFREEBUSY`
 
