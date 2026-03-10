@@ -152,9 +152,7 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
   - UTC date-times
   - floating local date-times
   - `TZID` date-times resolved through matching `VTIMEZONE`
-- Attendees:
-  - generation emits `CN` + `mailto:`
-  - parsing reads `CN`, `ROLE`, `PARTSTAT`, and `RSVP`
+- Attendees: `CN`, `ROLE`, `PARTSTAT`, `RSVP`
 
 ### Recurrence Subset
 

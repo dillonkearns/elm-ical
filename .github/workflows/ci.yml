@@ -60,14 +60,10 @@ jobs:
       - uses: sparksp/elm-review-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # - name: prettier
-      #   run: npx --no-install prettier --check .
-      # - name: Build elm docs
-      #   id: docs
-      #   continue-on-error: true
-      #   run: npx --no-install elm make --docs docs.json
-      # - name: Elm Publish
-      #   uses: dillonkearns/elm-publish-action@v1
-      #   with:
-      #     github-token: ${{ secrets.GITHUB_TOKEN }}
-      #     path-to-elm: ./node_modules/.bin/elm
+      - name: Build elm docs
+        run: npx --no-install elm make --docs docs.json
+      - name: Elm Publish
+        uses: dillonkearns/elm-publish-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-elm: ./node_modules/.bin/elm
