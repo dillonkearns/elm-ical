@@ -130,6 +130,8 @@ type alias Event =
     , transparency : Maybe Transparency
     , recurrenceRules : List RecurrenceRule
     , exclusions : List Time.Posix
+    , rdates : List Time.Posix
+    , recurrenceId : Maybe Time.Posix
     , attendees : List Attendee
     , extraProperties : List RawProperty
     }
@@ -424,6 +426,8 @@ type alias EventAccum =
     , transparency : Maybe Transparency
     , recurrenceRules : List RecurrenceRule
     , exclusions : List Time.Posix
+    , rdates : List Time.Posix
+    , recurrenceId : Maybe Time.Posix
     , attendees : List Attendee
     , extraProperties : List RawProperty
     , errors : List String
@@ -447,6 +451,8 @@ emptyEventAccum =
     , transparency = Nothing
     , recurrenceRules = []
     , exclusions = []
+    , rdates = []
+    , recurrenceId = Nothing
     , attendees = []
     , extraProperties = []
     , errors = []
@@ -487,6 +493,8 @@ finalizeEvent accum =
                                                                     , transparency = accum.transparency
                                                                     , recurrenceRules = List.reverse accum.recurrenceRules
                                                                     , exclusions = List.reverse accum.exclusions
+                                                                    , rdates = List.reverse accum.rdates
+                                                                    , recurrenceId = accum.recurrenceId
                                                                     , attendees = List.reverse accum.attendees
                                                                     , extraProperties = List.reverse accum.extraProperties
                                                                     }
@@ -779,6 +787,28 @@ applyEventProperty timezones line accum =
 
                 Err err ->
                     addEventError ("Invalid EXDATE: " ++ err) accum
+
+        "RDATE" ->
+            case parseExdateValues timezones line of
+                Ok values ->
+                    { accum | rdates = List.reverse values ++ accum.rdates }
+
+                Err err ->
+                    addEventError ("Invalid RDATE: " ++ err) accum
+
+        "RECURRENCE-ID" ->
+            case parseDateTimeValue timezones line of
+                Ok (IDate date) ->
+                    { accum | recurrenceId = Just (dateToUtcMidnight date) }
+
+                Ok (IDateTime { posix }) ->
+                    { accum | recurrenceId = Just posix }
+
+                Ok (IFloating localDateTime) ->
+                    { accum | recurrenceId = Just (dateToUtcMidnight (Date.fromCalendarDate localDateTime.year (Date.numberToMonth localDateTime.month) localDateTime.day)) }
+
+                Err err ->
+                    addEventError ("Invalid RECURRENCE-ID: " ++ err) accum
 
         "ATTENDEE" ->
             { accum | attendees = parseAttendee line :: accum.attendees }
@@ -1092,24 +1122,40 @@ filters.
 -}
 expand : { start : Date.Date, end : Date.Date } -> Event -> List Occurrence
 expand range event =
-    case event.recurrenceRules of
-        [] ->
-            let
-                eventDate : Date.Date
-                eventDate =
-                    occurrenceStartDate event.time
-            in
-            if Date.compare eventDate range.start /= LT && Date.compare eventDate range.end /= GT then
-                [ { event = event, time = event.time } ]
+    let
+        seed : Date.Date
+        seed =
+            occurrenceStartDate event.time
 
-            else
-                []
+        baseOccurrences : List Occurrence
+        baseOccurrences =
+            case event.recurrenceRules of
+                [] ->
+                    let
+                        eventDate : Date.Date
+                        eventDate =
+                            occurrenceStartDate event.time
+                    in
+                    if Date.compare eventDate range.start /= LT && Date.compare eventDate range.end /= GT then
+                        [ { event = event, time = event.time } ]
 
-        rules ->
-            rules
-                |> List.concatMap (\rule -> expandRule range event rule)
-                |> List.sortBy (\occ -> Date.toRataDie (occurrenceStartDate occ.time))
-                |> dedupOccurrences
+                    else
+                        []
+
+                rules ->
+                    rules
+                        |> List.concatMap (\rule -> expandRule range event rule)
+
+        rdateOccurrences : List Occurrence
+        rdateOccurrences =
+            event.rdates
+                |> List.map (\posix -> Date.fromPosix Time.utc posix)
+                |> List.filter (\d -> Date.compare d range.start /= LT && Date.compare d range.end /= GT)
+                |> List.map (\d -> { event = event, time = shiftTime event.time seed d })
+    in
+    (baseOccurrences ++ rdateOccurrences)
+        |> List.sortBy (\occ -> Date.toRataDie (occurrenceStartDate occ.time))
+        |> dedupOccurrences
 
 
 {-| Get the next N occurrences of an event starting from a given date.
@@ -1122,25 +1168,41 @@ after the start date, or an empty list if it is before.
 -}
 expandNext : Int -> Date.Date -> Event -> List Occurrence
 expandNext n fromDate event =
-    case event.recurrenceRules of
-        [] ->
-            let
-                eventDate : Date.Date
-                eventDate =
-                    occurrenceStartDate event.time
-            in
-            if Date.compare eventDate fromDate /= LT then
-                [ { event = event, time = event.time } ]
+    let
+        seed : Date.Date
+        seed =
+            occurrenceStartDate event.time
 
-            else
-                []
+        baseOccurrences : List Occurrence
+        baseOccurrences =
+            case event.recurrenceRules of
+                [] ->
+                    let
+                        eventDate : Date.Date
+                        eventDate =
+                            occurrenceStartDate event.time
+                    in
+                    if Date.compare eventDate fromDate /= LT then
+                        [ { event = event, time = event.time } ]
 
-        rules ->
-            rules
-                |> List.concatMap (\rule -> expandNextRule n fromDate event rule)
-                |> List.sortBy (\occ -> Date.toRataDie (occurrenceStartDate occ.time))
-                |> dedupOccurrences
-                |> List.take n
+                    else
+                        []
+
+                rules ->
+                    rules
+                        |> List.concatMap (\rule -> expandNextRule n fromDate event rule)
+
+        rdateOccurrences : List Occurrence
+        rdateOccurrences =
+            event.rdates
+                |> List.map (\posix -> Date.fromPosix Time.utc posix)
+                |> List.filter (\d -> Date.compare d fromDate /= LT)
+                |> List.map (\d -> { event = event, time = shiftTime event.time seed d })
+    in
+    (baseOccurrences ++ rdateOccurrences)
+        |> List.sortBy (\occ -> Date.toRataDie (occurrenceStartDate occ.time))
+        |> dedupOccurrences
+        |> List.take n
 
 
 expandNextRule : Int -> Date.Date -> Event -> RecurrenceRule -> List Occurrence

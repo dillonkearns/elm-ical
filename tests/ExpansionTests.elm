@@ -692,6 +692,83 @@ suite =
                         Err err ->
                             Expect.fail err
             ]
+        , describe "RDATE"
+            [ test "RDATE adds additional occurrences to expansion" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            "BEGIN:VCALENDAR\u{000D}\nVERSION:2.0\u{000D}\nPRODID:-//Test//EN\u{000D}\nBEGIN:VEVENT\u{000D}\nUID:rdate-expand@test\u{000D}\nDTSTAMP:20210318T000000Z\u{000D}\nDTSTART:20210318T100000Z\u{000D}\nDTEND:20210318T110000Z\u{000D}\nRRULE:FREQ=DAILY;COUNT=3\u{000D}\nRDATE:20210323T100000Z\u{000D}\nEND:VEVENT\u{000D}\nEND:VCALENDAR\u{000D}\n"
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            case cal.events of
+                                [ event ] ->
+                                    Parser.expand yearRange event
+                                        |> List.map (occurrenceDate Time.utc)
+                                        |> Expect.equal
+                                            [ Date.fromCalendarDate 2021 Time.Mar 18
+                                            , Date.fromCalendarDate 2021 Time.Mar 19
+                                            , Date.fromCalendarDate 2021 Time.Mar 20
+                                            , Date.fromCalendarDate 2021 Time.Mar 23
+                                            ]
+
+                                _ ->
+                                    Expect.fail "Expected 1 event"
+
+                        Err err ->
+                            Expect.fail err
+            , test "RDATE adds occurrences to non-recurring event" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            "BEGIN:VCALENDAR\u{000D}\nVERSION:2.0\u{000D}\nPRODID:-//Test//EN\u{000D}\nBEGIN:VEVENT\u{000D}\nUID:rdate-no-rrule@test\u{000D}\nDTSTAMP:20210318T000000Z\u{000D}\nDTSTART:20210318T100000Z\u{000D}\nDTEND:20210318T110000Z\u{000D}\nRDATE:20210319T100000Z,20210320T100000Z\u{000D}\nEND:VEVENT\u{000D}\nEND:VCALENDAR\u{000D}\n"
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            case cal.events of
+                                [ event ] ->
+                                    Parser.expand yearRange event
+                                        |> List.map (occurrenceDate Time.utc)
+                                        |> Expect.equal
+                                            [ Date.fromCalendarDate 2021 Time.Mar 18
+                                            , Date.fromCalendarDate 2021 Time.Mar 19
+                                            , Date.fromCalendarDate 2021 Time.Mar 20
+                                            ]
+
+                                _ ->
+                                    Expect.fail "Expected 1 event"
+
+                        Err err ->
+                            Expect.fail err
+            , test "expandNext includes RDATE occurrences" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            "BEGIN:VCALENDAR\u{000D}\nVERSION:2.0\u{000D}\nPRODID:-//Test//EN\u{000D}\nBEGIN:VEVENT\u{000D}\nUID:rdate-next@test\u{000D}\nDTSTAMP:20210318T000000Z\u{000D}\nDTSTART:20210318T100000Z\u{000D}\nDTEND:20210318T110000Z\u{000D}\nRRULE:FREQ=DAILY;COUNT=2\u{000D}\nRDATE:20210323T100000Z\u{000D}\nEND:VEVENT\u{000D}\nEND:VCALENDAR\u{000D}\n"
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            case cal.events of
+                                [ event ] ->
+                                    Parser.expandNext 5
+                                        (Date.fromCalendarDate 2021 Time.Mar 18)
+                                        event
+                                        |> List.map (occurrenceDate Time.utc)
+                                        |> Expect.equal
+                                            [ Date.fromCalendarDate 2021 Time.Mar 18
+                                            , Date.fromCalendarDate 2021 Time.Mar 19
+                                            , Date.fromCalendarDate 2021 Time.Mar 23
+                                            ]
+
+                                _ ->
+                                    Expect.fail "Expected 1 event"
+
+                        Err err ->
+                            Expect.fail err
+            ]
         , describe "BYSETPOS"
             [ test "MONTHLY BYDAY=MO,TU,WE,TH,FR BYSETPOS=-1 (last weekday) COUNT=3" <|
                 \() ->
@@ -1205,6 +1282,8 @@ makeAllDayEvent { summary, start, end } =
     , transparency = Nothing
     , recurrenceRules = []
     , exclusions = []
+    , rdates = []
+    , recurrenceId = Nothing
     , attendees = []
     , extraProperties = []
     }
@@ -1239,6 +1318,8 @@ makeTimedEvent { summary, start, end } =
     , transparency = Nothing
     , recurrenceRules = []
     , exclusions = []
+    , rdates = []
+    , recurrenceId = Nothing
     , attendees = []
     , extraProperties = []
     }

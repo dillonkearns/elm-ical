@@ -1486,6 +1486,194 @@ endToEndTests =
 
                     Err err ->
                         Expect.fail err
+        , test "RDATE parsed into rdates list" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Team standup"
+                            , "UID:rdate-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
+                            , "RDATE:20210325T162044Z,20210401T162044Z"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.rdates
+                                    |> Expect.equal
+                                        [ toIso8601 "2021-03-25T16:20:44.000Z"
+                                        , toIso8601 "2021-04-01T16:20:44.000Z"
+                                        ]
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "RDATE with VALUE=DATE parsed" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Extra holidays"
+                            , "UID:rdate-date-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART;VALUE=DATE:20210318"
+                            , "RDATE;VALUE=DATE:20210325,20210401"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.rdates
+                                    |> List.map (\posix -> Date.fromPosix Time.utc posix)
+                                    |> Expect.equal
+                                        [ Date.fromCalendarDate 2021 Time.Mar 25
+                                        , Date.fromCalendarDate 2021 Time.Apr 1
+                                        ]
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "invalid RDATE value produces parse error" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Team standup"
+                            , "UID:rdate-invalid-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
+                            , "RDATE:INVALID"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok _ ->
+                        Expect.fail "Expected a parse error for invalid RDATE value"
+
+                    Err _ ->
+                        Expect.pass
+        , test "RECURRENCE-ID parsed on event" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Modified occurrence"
+                            , "UID:recurrence-id-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210325T170000Z"
+                            , "DTEND:20210325T180000Z"
+                            , "RECURRENCE-ID:20210325T162044Z"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.recurrenceId
+                                    |> Expect.equal (Just (toIso8601 "2021-03-25T16:20:44.000Z"))
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "RECURRENCE-ID with DATE value" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Modified holiday"
+                            , "UID:recurrence-id-date-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART;VALUE=DATE:20210401"
+                            , "RECURRENCE-ID;VALUE=DATE:20210325"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.recurrenceId
+                                    |> Expect.equal (Just (Time.millisToPosix ((Date.toRataDie (Date.fromCalendarDate 2021 Time.Mar 25) - 719163) * 86400 * 1000)))
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "invalid RECURRENCE-ID produces parse error" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Bad recurrence-id"
+                            , "UID:recurrence-id-invalid-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T162044Z"
+                            , "RECURRENCE-ID:INVALID"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok _ ->
+                        Expect.fail "Expected a parse error for invalid RECURRENCE-ID"
+
+                    Err _ ->
+                        Expect.pass
         ]
 
 
