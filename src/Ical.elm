@@ -438,7 +438,17 @@ withDescription description (Event e) =
     Event { e | description = Just description }
 
 
-{-| Set the event location (LOCATION property).
+{-| Set the event location (LOCATION property). Use a full, resolved address
+so calendar apps can map it directly:
+
+    Ical.event
+        { id = "offsite-q2"
+        , stamp = now
+        , time = Ical.allDay { start = jun14, end = jun16 }
+        , summary = "Q2 Team Offsite"
+        }
+        |> Ical.withLocation "Moscone Center, 747 Howard St, San Francisco, CA 94103"
+
 -}
 withLocation : String -> Event -> Event
 withLocation location (Event e) =
