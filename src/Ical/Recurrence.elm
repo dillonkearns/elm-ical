@@ -48,7 +48,7 @@ type alias RecurrenceRule =
     , end : RecurrenceEnd
     , byDay : List DaySpec
     , byMonthDay : List Int
-    , byMonth : List Int
+    , byMonth : List Time.Month
     , bySetPos : List Int
     , weekStart : Time.Weekday
     }

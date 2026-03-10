@@ -54,7 +54,7 @@ jobs:
       - name: Cross-reference tests
         run: npm run test:cross-reference
       - name: elm-format
-        run: npx --no-install elm-format --validate src/
+        run: npx --no-install elm-format --validate src/ tests/
       - name: Add elm-review, elm and elm-format to path
         run: echo "$(npm prefix)/node_modules/.bin" >> $GITHUB_PATH
       - uses: sparksp/elm-review-action@v1

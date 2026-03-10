@@ -123,71 +123,72 @@ type alias Duration =
 -}
 parseDuration : String -> Result String Duration
 parseDuration input =
-    let
-        stripped : String
-        stripped =
-            if String.startsWith "+" input then
-                String.dropLeft 1 input
-
-            else if String.startsWith "-" input then
-                ""
-
-            else
-                input
-    in
-    if not (String.startsWith "P" stripped) then
-        Err ("Invalid DURATION: " ++ input)
+    if String.startsWith "-" input then
+        Err "Negative durations are not supported"
 
     else
         let
-            afterP : String
-            afterP =
-                String.dropLeft 1 stripped
+            stripped : String
+            stripped =
+                if String.startsWith "+" input then
+                    String.dropLeft 1 input
+
+                else
+                    input
         in
-        if String.contains "W" afterP then
-            -- Week form: P<n>W
-            if String.endsWith "W" afterP && isDigits (String.dropRight 1 afterP) then
-                case String.toInt (String.dropRight 1 afterP) of
-                    Just w ->
-                        Ok { weeks = w, days = 0, hours = 0, minutes = 0, seconds = 0 }
-
-                    Nothing ->
-                        Err ("Invalid DURATION: " ++ input)
-
-            else
-                Err ("Invalid DURATION: " ++ input)
+        if not (String.startsWith "P" stripped) then
+            Err ("Invalid DURATION: " ++ input)
 
         else
-            case String.split "T" afterP of
-                [ datePart, timePart ] ->
-                    parseDurationDays datePart
-                        |> Result.andThen
-                            (\days ->
-                                parseDurationTime timePart
-                                    |> Result.map
-                                        (\time ->
-                                            { weeks = 0
-                                            , days = days
-                                            , hours = time.hours
-                                            , minutes = time.minutes
-                                            , seconds = time.seconds
-                                            }
-                                        )
-                            )
+            let
+                afterP : String
+                afterP =
+                    String.dropLeft 1 stripped
+            in
+            if String.contains "W" afterP then
+                -- Week form: P<n>W
+                if String.endsWith "W" afterP && isDigits (String.dropRight 1 afterP) then
+                    case String.toInt (String.dropRight 1 afterP) of
+                        Just w ->
+                            Ok { weeks = w, days = 0, hours = 0, minutes = 0, seconds = 0 }
 
-                [ datePart ] ->
-                    if String.isEmpty datePart then
-                        Err ("Invalid DURATION: " ++ input)
+                        Nothing ->
+                            Err ("Invalid DURATION: " ++ input)
 
-                    else
+                else
+                    Err ("Invalid DURATION: " ++ input)
+
+            else
+                case String.split "T" afterP of
+                    [ datePart, timePart ] ->
                         parseDurationDays datePart
-                            |> Result.map
+                            |> Result.andThen
                                 (\days ->
-                                    { weeks = 0, days = days, hours = 0, minutes = 0, seconds = 0 }
+                                    parseDurationTime timePart
+                                        |> Result.map
+                                            (\time ->
+                                                { weeks = 0
+                                                , days = days
+                                                , hours = time.hours
+                                                , minutes = time.minutes
+                                                , seconds = time.seconds
+                                                }
+                                            )
                                 )
 
-                _ ->
-                    Err ("Invalid DURATION: " ++ input)
+                    [ datePart ] ->
+                        if String.isEmpty datePart then
+                            Err ("Invalid DURATION: " ++ input)
+
+                        else
+                            parseDurationDays datePart
+                                |> Result.map
+                                    (\days ->
+                                        { weeks = 0, days = days, hours = 0, minutes = 0, seconds = 0 }
+                                    )
+
+                    _ ->
+                        Err ("Invalid DURATION: " ++ input)
 
 
 parseDurationDays : String -> Result String Int
@@ -471,7 +472,7 @@ parseRecurrenceRule input =
                                                                             (\byMonthDay ->
                                                                                 parseIntList "BYMONTH" isValidMonth (getParam "BYMONTH")
                                                                                     |> Result.andThen
-                                                                                        (\byMonth ->
+                                                                                        (\byMonthInts ->
                                                                                             parseIntList "BYSETPOS" isValidSetPos (getParam "BYSETPOS")
                                                                                                 |> Result.map
                                                                                                     (\bySetPos ->
@@ -480,7 +481,7 @@ parseRecurrenceRule input =
                                                                                                         , end = end
                                                                                                         , byDay = byDay
                                                                                                         , byMonthDay = byMonthDay
-                                                                                                        , byMonth = byMonth
+                                                                                                        , byMonth = List.filterMap intToMonth byMonthInts
                                                                                                         , bySetPos = bySetPos
                                                                                                         , weekStart = weekStart
                                                                                                         }
@@ -612,6 +613,15 @@ isValidMonth value =
 isValidSetPos : Int -> Bool
 isValidSetPos value =
     value /= 0 && value >= -366 && value <= 366
+
+
+intToMonth : Int -> Maybe Time.Month
+intToMonth n =
+    if n >= 1 && n <= 12 then
+        Just (Date.numberToMonth n)
+
+    else
+        Nothing
 
 
 parseUntilValue : String -> Result String RecurrenceEnd

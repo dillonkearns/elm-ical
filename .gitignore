@@ -1,7 +1,7 @@
 node_modules/
 elm-stuff/
-test/generate-fixtures.js
-test/fixtures.json
+end-to-end-tests/generate-fixtures.js
+end-to-end-tests/fixtures.json
 docs.json
 .elm-pages/compiled-ports/
 

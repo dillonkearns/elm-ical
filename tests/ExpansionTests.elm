@@ -586,7 +586,7 @@ suite =
                                     , end = Recurrence.Count 4
                                     , byDay = []
                                     , byMonthDay = [ 15 ]
-                                    , byMonth = [ 3, 6 ]
+                                    , byMonth = [ Time.Mar, Time.Jun ]
                                     , bySetPos = []
                                     , weekStart = Time.Mon
                                     }

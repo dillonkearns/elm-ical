@@ -1429,15 +1429,7 @@ expandYearly rule seed intervalDate =
                 [ Date.month seed ]
 
             else
-                List.filterMap
-                    (\m ->
-                        if m >= 1 && m <= 12 then
-                            Just (Date.numberToMonth m)
-
-                        else
-                            Nothing
-                    )
-                    rule.byMonth
+                rule.byMonth
 
         baseDates : List Date.Date
         baseDates =
@@ -1566,13 +1558,13 @@ allWeekdaysInMonth month current acc =
         allWeekdaysInMonth month (Date.add Date.Weeks 1 current) (current :: acc)
 
 
-filterByMonth : List Int -> List Date.Date -> List Date.Date
+filterByMonth : List Time.Month -> List Date.Date -> List Date.Date
 filterByMonth byMonth dates =
     if List.isEmpty byMonth then
         dates
 
     else
-        List.filter (\d -> List.member (Date.monthToNumber (Date.month d)) byMonth) dates
+        List.filter (\d -> List.member (Date.month d) byMonth) dates
 
 
 filterByMonthDay : List Int -> List Date.Date -> List Date.Date

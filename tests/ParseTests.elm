@@ -244,6 +244,10 @@ valueParserTests =
             \() ->
                 ValueParser.parseDuration "PTXM"
                     |> Expect.err
+        , test "negative DURATION returns clear error" <|
+            \() ->
+                ValueParser.parseDuration "-PT15M"
+                    |> Expect.equal (Err "Negative durations are not supported")
         ]
 
 
@@ -317,7 +321,7 @@ recurrenceRuleTests =
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=YEARLY;BYMONTH=3,6,9,12"
                     |> Result.map .byMonth
-                    |> Expect.equal (Ok [ 3, 6, 9, 12 ])
+                    |> Expect.equal (Ok [ Time.Mar, Time.Jun, Time.Sep, Time.Dec ])
         , test "parse ordinal BYDAY (2nd Sunday)" <|
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=MONTHLY;BYDAY=2SU"
@@ -1093,6 +1097,36 @@ endToEndTests =
                 in
                 Parser.parse input
                     |> Expect.err
+        , test "VEVENT with negative DURATION fails with clear error" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "DTSTART:20210318T162044Z"
+                            , "DURATION:-PT15M"
+                            , "UID:neg-duration"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "SUMMARY:Test"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Err err ->
+                        if String.contains "Negative durations" err then
+                            Expect.pass
+
+                        else
+                            Expect.fail ("Expected error about negative durations, got: " ++ err)
+
+                    Ok _ ->
+                        Expect.fail "Expected parsing to fail for negative DURATION"
         , test "invalid RRULE value fails parsing" <|
             \() ->
                 let

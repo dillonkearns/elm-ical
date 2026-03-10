@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "elm-test",
-    "test:generate-fixtures": "node test/generate-fixtures.mjs",
-    "test:cross-reference": "npm run test:generate-fixtures && node --test test/cross-reference.test.mjs",
+    "test:generate-fixtures": "node end-to-end-tests/generate-fixtures.mjs",
+    "test:cross-reference": "npm run test:generate-fixtures && node --test end-to-end-tests/cross-reference.test.mjs",
     "postinstall": "elm-tooling install"
   },
   "keywords": [],
