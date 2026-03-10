@@ -5,7 +5,7 @@ module Ical.Parser exposing
     , Status(..), Transparency(..)
     , Organizer, RawProperty
     , Attendee, AttendeeRole(..), ParticipationStatus(..)
-    , Occurrence, expand, expandNext
+    , Occurrence, expand, expandAll, expandNext
     )
 
 {-| Parse iCal ([RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545)) calendar strings
@@ -1156,6 +1156,56 @@ expand range event =
     (baseOccurrences ++ rdateOccurrences)
         |> List.sortBy (\occ -> Date.toRataDie (occurrenceStartDate occ.time))
         |> dedupOccurrences
+
+
+{-| Expand all events in a list, merging RECURRENCE-ID overrides with their
+master events. Override events (those with a `recurrenceId`) replace the
+matching occurrence from the master event that shares their `uid`.
+
+    case Parser.parse icsString of
+        Ok cal ->
+            Parser.expandAll { start = jan1, end = dec31 } cal.events
+
+        Err err ->
+            []
+
+-}
+expandAll : { start : Date.Date, end : Date.Date } -> List Event -> List Occurrence
+expandAll range events =
+    let
+        ( masterEvents, overrideEvents ) =
+            List.partition (\e -> e.recurrenceId == Nothing) events
+
+        masterOccurrences : List Occurrence
+        masterOccurrences =
+            masterEvents
+                |> List.concatMap (expand range)
+
+        overrideOccurrences : List Occurrence
+        overrideOccurrences =
+            overrideEvents
+                |> List.concatMap (expand range)
+
+        overriddenDates : List ( String, Int )
+        overriddenDates =
+            overrideEvents
+                |> List.filterMap
+                    (\e ->
+                        e.recurrenceId
+                            |> Maybe.map
+                                (\posix ->
+                                    ( e.uid, Date.toRataDie (Date.fromPosix Time.utc posix) )
+                                )
+                    )
+
+        isOverridden : Occurrence -> Bool
+        isOverridden occ =
+            List.member
+                ( occ.event.uid, Date.toRataDie (occurrenceStartDate occ.time) )
+                overriddenDates
+    in
+    (List.filter (\occ -> not (isOverridden occ)) masterOccurrences ++ overrideOccurrences)
+        |> List.sortBy (\occ -> Date.toRataDie (occurrenceStartDate occ.time))
 
 
 {-| Get the next N occurrences of an event starting from a given date.

@@ -1253,6 +1253,204 @@ suite =
                             , Date.fromCalendarDate 2021 Time.Mar 22
                             ]
             ]
+        , describe "RECURRENCE-ID overrides"
+            [ test "override replaces original occurrence in expand" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            String.join "\u{000D}\n"
+                                [ "BEGIN:VCALENDAR"
+                                , "VERSION:2.0"
+                                , "PRODID:-//Test//EN"
+                                , "BEGIN:VEVENT"
+                                , "UID:override-test@test"
+                                , "DTSTAMP:20210318T000000Z"
+                                , "DTSTART:20210318T100000Z"
+                                , "DTEND:20210318T110000Z"
+                                , "SUMMARY:Weekly standup"
+                                , "RRULE:FREQ=WEEKLY;COUNT=4"
+                                , "END:VEVENT"
+                                , "BEGIN:VEVENT"
+                                , "UID:override-test@test"
+                                , "DTSTAMP:20210318T000000Z"
+                                , "DTSTART:20210325T140000Z"
+                                , "DTEND:20210325T150000Z"
+                                , "SUMMARY:Weekly standup (moved)"
+                                , "RECURRENCE-ID:20210325T100000Z"
+                                , "END:VEVENT"
+                                , "END:VCALENDAR"
+                                , ""
+                                ]
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            let
+                                occurrences : List Parser.Occurrence
+                                occurrences =
+                                    Parser.expandAll yearRange cal.events
+                            in
+                            occurrences
+                                |> List.map (\occ -> ( occurrenceDate Time.utc occ, occ.event.summary ))
+                                |> Expect.equal
+                                    [ ( Date.fromCalendarDate 2021 Time.Mar 18, Just "Weekly standup" )
+                                    , ( Date.fromCalendarDate 2021 Time.Mar 25, Just "Weekly standup (moved)" )
+                                    , ( Date.fromCalendarDate 2021 Time.Apr 1, Just "Weekly standup" )
+                                    , ( Date.fromCalendarDate 2021 Time.Apr 8, Just "Weekly standup" )
+                                    ]
+
+                        Err err ->
+                            Expect.fail err
+            , test "cancelled override removes occurrence from expansion" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            String.join "\u{000D}\n"
+                                [ "BEGIN:VCALENDAR"
+                                , "VERSION:2.0"
+                                , "PRODID:-//Test//EN"
+                                , "BEGIN:VEVENT"
+                                , "UID:cancel-test@test"
+                                , "DTSTAMP:20210318T000000Z"
+                                , "DTSTART:20210318T100000Z"
+                                , "DTEND:20210318T110000Z"
+                                , "SUMMARY:Weekly standup"
+                                , "RRULE:FREQ=WEEKLY;COUNT=3"
+                                , "END:VEVENT"
+                                , "BEGIN:VEVENT"
+                                , "UID:cancel-test@test"
+                                , "DTSTAMP:20210318T000000Z"
+                                , "DTSTART:20210325T100000Z"
+                                , "DTEND:20210325T110000Z"
+                                , "SUMMARY:Weekly standup"
+                                , "STATUS:CANCELLED"
+                                , "RECURRENCE-ID:20210325T100000Z"
+                                , "END:VEVENT"
+                                , "END:VCALENDAR"
+                                , ""
+                                ]
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            let
+                                occurrences : List Parser.Occurrence
+                                occurrences =
+                                    Parser.expandAll yearRange cal.events
+                                        |> List.filter (\occ -> occ.event.status /= Just Parser.Cancelled)
+                            in
+                            occurrences
+                                |> List.map (occurrenceDate Time.utc)
+                                |> Expect.equal
+                                    [ Date.fromCalendarDate 2021 Time.Mar 18
+                                    , Date.fromCalendarDate 2021 Time.Apr 1
+                                    ]
+
+                        Err err ->
+                            Expect.fail err
+            , test "multiple overrides on same master event" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            String.join "\u{000D}\n"
+                                [ "BEGIN:VCALENDAR"
+                                , "VERSION:2.0"
+                                , "PRODID:-//Test//EN"
+                                , "BEGIN:VEVENT"
+                                , "UID:multi-override@test"
+                                , "DTSTAMP:20210318T000000Z"
+                                , "DTSTART:20210318T100000Z"
+                                , "DTEND:20210318T110000Z"
+                                , "SUMMARY:Daily standup"
+                                , "RRULE:FREQ=DAILY;COUNT=5"
+                                , "END:VEVENT"
+                                , "BEGIN:VEVENT"
+                                , "UID:multi-override@test"
+                                , "DTSTAMP:20210318T000000Z"
+                                , "DTSTART:20210319T140000Z"
+                                , "DTEND:20210319T150000Z"
+                                , "SUMMARY:Daily standup (moved to afternoon)"
+                                , "RECURRENCE-ID:20210319T100000Z"
+                                , "END:VEVENT"
+                                , "BEGIN:VEVENT"
+                                , "UID:multi-override@test"
+                                , "DTSTAMP:20210318T000000Z"
+                                , "DTSTART:20210321T090000Z"
+                                , "DTEND:20210321T100000Z"
+                                , "SUMMARY:Daily standup (moved earlier)"
+                                , "RECURRENCE-ID:20210321T100000Z"
+                                , "END:VEVENT"
+                                , "END:VCALENDAR"
+                                , ""
+                                ]
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            Parser.expandAll yearRange cal.events
+                                |> List.map (\occ -> ( occurrenceDate Time.utc occ, occ.event.summary ))
+                                |> Expect.equal
+                                    [ ( Date.fromCalendarDate 2021 Time.Mar 18, Just "Daily standup" )
+                                    , ( Date.fromCalendarDate 2021 Time.Mar 19, Just "Daily standup (moved to afternoon)" )
+                                    , ( Date.fromCalendarDate 2021 Time.Mar 20, Just "Daily standup" )
+                                    , ( Date.fromCalendarDate 2021 Time.Mar 21, Just "Daily standup (moved earlier)" )
+                                    , ( Date.fromCalendarDate 2021 Time.Mar 22, Just "Daily standup" )
+                                    ]
+
+                        Err err ->
+                            Expect.fail err
+            , test "override does not affect unrelated events" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            String.join "\u{000D}\n"
+                                [ "BEGIN:VCALENDAR"
+                                , "VERSION:2.0"
+                                , "PRODID:-//Test//EN"
+                                , "BEGIN:VEVENT"
+                                , "UID:event-a@test"
+                                , "DTSTAMP:20210318T000000Z"
+                                , "DTSTART:20210318T100000Z"
+                                , "DTEND:20210318T110000Z"
+                                , "SUMMARY:Event A"
+                                , "RRULE:FREQ=WEEKLY;COUNT=2"
+                                , "END:VEVENT"
+                                , "BEGIN:VEVENT"
+                                , "UID:event-b@test"
+                                , "DTSTAMP:20210318T000000Z"
+                                , "DTSTART:20210318T100000Z"
+                                , "DTEND:20210318T110000Z"
+                                , "SUMMARY:Event B"
+                                , "RRULE:FREQ=WEEKLY;COUNT=2"
+                                , "END:VEVENT"
+                                , "BEGIN:VEVENT"
+                                , "UID:event-a@test"
+                                , "DTSTAMP:20210318T000000Z"
+                                , "DTSTART:20210325T140000Z"
+                                , "DTEND:20210325T150000Z"
+                                , "SUMMARY:Event A (moved)"
+                                , "RECURRENCE-ID:20210325T100000Z"
+                                , "END:VEVENT"
+                                , "END:VCALENDAR"
+                                , ""
+                                ]
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            Parser.expandAll yearRange cal.events
+                                |> List.map (\occ -> ( occurrenceDate Time.utc occ, occ.event.summary ))
+                                |> List.sortBy (\( _, s ) -> Maybe.withDefault "" s)
+                                |> Expect.equal
+                                    [ ( Date.fromCalendarDate 2021 Time.Mar 18, Just "Event A" )
+                                    , ( Date.fromCalendarDate 2021 Time.Mar 25, Just "Event A (moved)" )
+                                    , ( Date.fromCalendarDate 2021 Time.Mar 18, Just "Event B" )
+                                    , ( Date.fromCalendarDate 2021 Time.Mar 25, Just "Event B" )
+                                    ]
+
+                        Err err ->
+                            Expect.fail err
+            ]
         ]
 
 
