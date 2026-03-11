@@ -687,6 +687,231 @@ DTSTAMP:20210318T162044Z
 UID:floating-clamped@test.com
 SUMMARY:Clamped floating
 END:VEVENT"""
+        , test "event with display alarm 15 minutes before" <|
+            \() ->
+                Ical.event
+                    { id = "alarm-1"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.withTime
+                            { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T11:00:00.000Z"
+                            }
+                    , summary = "Meeting"
+                    }
+                    |> Ical.withAlarm
+                        (Ical.displayAlarm
+                            { description = "Meeting in 15 minutes"
+                            , trigger = Ical.SecondsFromStart (-15 * 60)
+                            }
+                        )
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T100000Z
+DTEND:20210318T110000Z
+DTSTAMP:20210318T162044Z
+UID:alarm-1@test.com
+SUMMARY:Meeting
+BEGIN:VALARM
+TRIGGER:-PT15M
+ACTION:DISPLAY
+DESCRIPTION:Meeting in 15 minutes
+END:VALARM
+END:VEVENT"""
+        , test "event with audio alarm 1 day before" <|
+            \() ->
+                Ical.event
+                    { id = "alarm-2"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.withTime
+                            { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T11:00:00.000Z"
+                            }
+                    , summary = "Conference"
+                    }
+                    |> Ical.withAlarm
+                        (Ical.audioAlarm
+                            { trigger = Ical.SecondsFromStart (-24 * 60 * 60)
+                            }
+                        )
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T100000Z
+DTEND:20210318T110000Z
+DTSTAMP:20210318T162044Z
+UID:alarm-2@test.com
+SUMMARY:Conference
+BEGIN:VALARM
+TRIGGER:-P1D
+ACTION:AUDIO
+END:VALARM
+END:VEVENT"""
+        , test "alarm trigger with mixed duration parts" <|
+            \() ->
+                Ical.event
+                    { id = "alarm-3"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.withTime
+                            { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T11:00:00.000Z"
+                            }
+                    , summary = "Mixed trigger"
+                    }
+                    |> Ical.withAlarm
+                        (Ical.displayAlarm
+                            { description = "Reminder"
+                            , trigger = Ical.SecondsFromStart -(24 * 60 * 60 + 2 * 60 * 60 + 30 * 60)
+                            }
+                        )
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T100000Z
+DTEND:20210318T110000Z
+DTSTAMP:20210318T162044Z
+UID:alarm-3@test.com
+SUMMARY:Mixed trigger
+BEGIN:VALARM
+TRIGGER:-P1DT2H30M
+ACTION:DISPLAY
+DESCRIPTION:Reminder
+END:VALARM
+END:VEVENT"""
+        , test "alarm trigger relative to end" <|
+            \() ->
+                Ical.event
+                    { id = "alarm-4"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.withTime
+                            { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T11:00:00.000Z"
+                            }
+                    , summary = "End-relative"
+                    }
+                    |> Ical.withAlarm
+                        (Ical.displayAlarm
+                            { description = "Wrapping up"
+                            , trigger = Ical.SecondsFromEnd (-5 * 60)
+                            }
+                        )
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T100000Z
+DTEND:20210318T110000Z
+DTSTAMP:20210318T162044Z
+UID:alarm-4@test.com
+SUMMARY:End-relative
+BEGIN:VALARM
+TRIGGER;RELATED=END:-PT5M
+ACTION:DISPLAY
+DESCRIPTION:Wrapping up
+END:VALARM
+END:VEVENT"""
+        , test "multiple alarms on one event" <|
+            \() ->
+                Ical.event
+                    { id = "alarm-5"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.withTime
+                            { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T11:00:00.000Z"
+                            }
+                    , summary = "Multi-alarm"
+                    }
+                    |> Ical.withAlarm
+                        (Ical.displayAlarm
+                            { description = "15 min warning"
+                            , trigger = Ical.SecondsFromStart (-15 * 60)
+                            }
+                        )
+                    |> Ical.withAlarm
+                        (Ical.displayAlarm
+                            { description = "5 min warning"
+                            , trigger = Ical.SecondsFromStart (-5 * 60)
+                            }
+                        )
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T100000Z
+DTEND:20210318T110000Z
+DTSTAMP:20210318T162044Z
+UID:alarm-5@test.com
+SUMMARY:Multi-alarm
+BEGIN:VALARM
+TRIGGER:-PT15M
+ACTION:DISPLAY
+DESCRIPTION:15 min warning
+END:VALARM
+BEGIN:VALARM
+TRIGGER:-PT5M
+ACTION:DISPLAY
+DESCRIPTION:5 min warning
+END:VALARM
+END:VEVENT"""
+        , test "alarm with zero duration triggers at event time" <|
+            \() ->
+                Ical.event
+                    { id = "alarm-6"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.withTime
+                            { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T11:00:00.000Z"
+                            }
+                    , summary = "At start"
+                    }
+                    |> Ical.withAlarm
+                        (Ical.displayAlarm
+                            { description = "Starting now"
+                            , trigger = Ical.SecondsFromStart 0
+                            }
+                        )
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T100000Z
+DTEND:20210318T110000Z
+DTSTAMP:20210318T162044Z
+UID:alarm-6@test.com
+SUMMARY:At start
+BEGIN:VALARM
+TRIGGER:PT0S
+ACTION:DISPLAY
+DESCRIPTION:Starting now
+END:VALARM
+END:VEVENT"""
         ]
 
 

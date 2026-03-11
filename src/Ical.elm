@@ -6,6 +6,7 @@ module Ical exposing
     , withStatus, Status(..), withTransparency, Transparency(..)
     , withCreated, withLastModified
     , withRecurrenceRule, withAttendee
+    , withAlarm, Alarm, displayAlarm, audioAlarm, AlarmTrigger(..)
     , Journal, journal, JournalTime(..)
     , withJournalDescription, withJournalDate, withJournalTime, withJournalFloatingTime
     , withJournalStatus, JournalStatus(..)
@@ -92,6 +93,7 @@ reversed start/end times or negative intervals are silently normalized.
 @docs withStatus, Status, withTransparency, Transparency
 @docs withCreated, withLastModified
 @docs withRecurrenceRule, withAttendee
+@docs withAlarm, Alarm, displayAlarm, audioAlarm, AlarmTrigger
 
 
 ## Journals
@@ -266,6 +268,7 @@ type alias EventData =
     , lastModified : Maybe Time.Posix
     , recurrenceRule : Maybe Rule
     , attendees : List Attendee
+    , alarms : List Alarm
     }
 
 
@@ -307,6 +310,82 @@ type alias Attendee =
     { name : String
     , email : String
     }
+
+
+{-| An opaque alarm (VALARM). Create one with [`displayAlarm`](#displayAlarm)
+or [`audioAlarm`](#audioAlarm), then attach to an event with
+[`withAlarm`](#withAlarm).
+
+The RFC also defines EMAIL alarms, but in practice they are rarely supported
+by modern calendar clients (Google Calendar, Apple Calendar, Outlook all use
+push notifications instead). Only DISPLAY and AUDIO are provided here.
+
+-}
+type Alarm
+    = Alarm AlarmData
+
+
+type alias AlarmData =
+    { action : AlarmAction
+    , trigger : AlarmTrigger
+    , description : Maybe String
+    }
+
+
+type AlarmAction
+    = DisplayAction
+    | AudioAction
+
+
+{-| When an alarm fires, as a signed offset in seconds. Negative values mean
+before, positive values mean after.
+
+    -- 15 minutes before the event starts
+    SecondsFromStart (-15 * 60)
+
+    -- 1 day before the event ends
+    SecondsFromEnd (-24 * 60 * 60)
+
+    -- at the moment the event starts
+    SecondsFromStart 0
+
+-}
+type AlarmTrigger
+    = SecondsFromStart Int
+    | SecondsFromEnd Int
+
+
+{-| Create a display alarm that shows a text notification.
+
+    Ical.displayAlarm
+        { description = "Meeting in 15 minutes"
+        , trigger = Ical.SecondsFromStart (-15 * 60)
+        }
+
+-}
+displayAlarm : { description : String, trigger : AlarmTrigger } -> Alarm
+displayAlarm { description, trigger } =
+    Alarm
+        { action = DisplayAction
+        , trigger = trigger
+        , description = Just description
+        }
+
+
+{-| Create an audio alarm that plays a sound.
+
+    Ical.audioAlarm
+        { trigger = Ical.SecondsFromStart (-15 * 60)
+        }
+
+-}
+audioAlarm : { trigger : AlarmTrigger } -> Alarm
+audioAlarm { trigger } =
+    Alarm
+        { action = AudioAction
+        , trigger = trigger
+        , description = Nothing
+        }
 
 
 {-| An opaque recurrence rule. Create one with [`rule`](#rule) and customize
@@ -535,6 +614,7 @@ event { id, stamp, time, summary } =
         , lastModified = Nothing
         , recurrenceRule = Nothing
         , attendees = []
+        , alarms = []
         }
 
 
@@ -628,6 +708,23 @@ withRecurrenceRule rrule (Event e) =
 withAttendee : Attendee -> Event -> Event
 withAttendee attendee (Event e) =
     Event { e | attendees = e.attendees ++ [ attendee ] }
+
+
+{-| Add an alarm to the event. Multiple alarms can be attached by calling
+this multiple times.
+
+    Ical.event { ... }
+        |> Ical.withAlarm
+            (Ical.displayAlarm
+                { description = "Meeting in 15 minutes"
+                , trigger = Ical.SecondsFromStart (-15 * 60)
+                }
+            )
+
+-}
+withAlarm : Alarm -> Event -> Event
+withAlarm alarm (Event e) =
+    Event { e | alarms = e.alarms ++ [ alarm ] }
 
 
 
@@ -803,7 +900,156 @@ generateEvent : Config -> Event -> String
 generateEvent (Config c) (Event details) =
     "BEGIN:VEVENT\u{000D}\n"
         ++ formatProperties (eventProperties c details)
+        ++ alarmSection details.alarms
         ++ "\u{000D}\nEND:VEVENT"
+
+
+alarmSection : List Alarm -> String
+alarmSection alarms =
+    case alarms of
+        [] ->
+            ""
+
+        _ ->
+            alarms
+                |> List.map generateAlarm
+                |> String.join ""
+
+
+generateAlarm : Alarm -> String
+generateAlarm (Alarm data) =
+    let
+        actionStr : String
+        actionStr =
+            case data.action of
+                DisplayAction ->
+                    "DISPLAY"
+
+                AudioAction ->
+                    "AUDIO"
+
+        triggerLine : String
+        triggerLine =
+            formatTrigger data.trigger
+
+        descriptionLine : String
+        descriptionLine =
+            case data.description of
+                Just desc ->
+                    "\u{000D}\n" ++ formatProperties [ ( "DESCRIPTION", Text desc, [] ) ]
+
+                Nothing ->
+                    ""
+    in
+    "\u{000D}\nBEGIN:VALARM\u{000D}\n"
+        ++ triggerLine
+        ++ "\u{000D}\nACTION:"
+        ++ actionStr
+        ++ descriptionLine
+        ++ "\u{000D}\nEND:VALARM"
+
+
+formatTrigger : AlarmTrigger -> String
+formatTrigger trigger =
+    let
+        ( totalSeconds, related ) =
+            case trigger of
+                SecondsFromStart s ->
+                    ( s, Nothing )
+
+                SecondsFromEnd s ->
+                    ( s, Just "END" )
+
+        relatedParam : String
+        relatedParam =
+            case related of
+                Just rel ->
+                    "TRIGGER;RELATED=" ++ rel ++ ":"
+
+                Nothing ->
+                    "TRIGGER:"
+
+        sign : String
+        sign =
+            if totalSeconds < 0 then
+                "-"
+
+            else
+                ""
+    in
+    relatedParam ++ sign ++ formatDurationSeconds (abs totalSeconds)
+
+
+formatDurationSeconds : Int -> String
+formatDurationSeconds total =
+    let
+        days : Int
+        days =
+            total // 86400
+
+        remaining : Int
+        remaining =
+            remainderBy 86400 total
+
+        hours : Int
+        hours =
+            remaining // 3600
+
+        afterHours : Int
+        afterHours =
+            remainderBy 3600 remaining
+
+        minutes : Int
+        minutes =
+            afterHours // 60
+
+        seconds : Int
+        seconds =
+            remainderBy 60 afterHours
+
+        dayPart : String
+        dayPart =
+            if days > 0 then
+                String.fromInt days ++ "D"
+
+            else
+                ""
+
+        hasTimeParts : Bool
+        hasTimeParts =
+            hours > 0 || minutes > 0 || seconds > 0
+
+        timePart : String
+        timePart =
+            if hasTimeParts then
+                "T"
+                    ++ (if hours > 0 then
+                            String.fromInt hours ++ "H"
+
+                        else
+                            ""
+                       )
+                    ++ (if minutes > 0 then
+                            String.fromInt minutes ++ "M"
+
+                        else
+                            ""
+                       )
+                    ++ (if seconds > 0 then
+                            String.fromInt seconds ++ "S"
+
+                        else
+                            ""
+                       )
+
+            else
+                ""
+    in
+    if String.isEmpty dayPart && String.isEmpty timePart then
+        "PT0S"
+
+    else
+        "P" ++ dayPart ++ timePart
 
 
 generateJournal : Config -> Journal -> String
