@@ -1495,5 +1495,3 @@ occurrenceDate zone occ =
 
         Parser.FloatingTime { start } ->
             Date.fromCalendarDate start.year start.month start.day
-
-

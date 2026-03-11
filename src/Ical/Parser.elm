@@ -92,7 +92,15 @@ import VTimeZone
 import ValueParser
 
 
-{-| A parsed iCal calendar.
+{-| A parsed iCal calendar. Access fields directly:
+
+    case Parser.parse icsString of
+        Ok cal ->
+            List.length cal.events
+
+        Err err ->
+            0
+
 -}
 type alias Calendar =
     { generatorProductId : String

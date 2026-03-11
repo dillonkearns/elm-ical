@@ -186,11 +186,10 @@ type alias EventData =
     }
 
 
-{-| <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.2.7>
+{-| Whether the event blocks time on a calendar for free/busy lookups.
 
-"OPAQUE" - Blocks or opaque on busy time searches.
-"TRANSPARENT" - Transparent on busy time searches.
-Default value is OPAQUE.
+  - `Opaque` — the event blocks time (default in iCal).
+  - `Transparent` — the event does not block time (e.g. reminders, FYI events).
 
 -}
 type Transparency
@@ -198,11 +197,11 @@ type Transparency
     | Transparent
 
 
-{-| <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.1.11>
+{-| The scheduling status of an event.
 
-       statvalue-event = "TENTATIVE"    ;Indicates event is tentative.
-                       / "CONFIRMED"    ;Indicates event is definite.
-                       / "CANCELLED"    ;Indicates event was cancelled.
+  - `Tentative` — the event is not yet confirmed.
+  - `Confirmed` — the event is definite.
+  - `Cancelled` — the event has been cancelled.
 
 -}
 type Status
@@ -349,8 +348,8 @@ withByMonth months (Rule r) =
     Rule { r | byMonth = months }
 
 
-{-| Set the BYSETPOS filter. Selects the nth occurrence within the set of
-events produced by the rule in each interval.
+{-| Filter to specific positions within each recurrence period. For example,
+with `BYDAY=MO,TU,WE,TH,FR`, a `bySetPos` of `[ -1 ]` means "the last weekday."
 -}
 withBySetPos : List Int -> Rule -> Rule
 withBySetPos positions (Rule r) =
@@ -380,7 +379,14 @@ type alias ConfigData =
 
 {-| Create a calendar configuration with the required fields.
 
-    Ical.config { id = "//myapp//calendar//EN", domain = "example.com" }
+  - `id` — identifies your product in the PRODID property
+    (e.g. `"//mycompany//myapp//EN"`).
+  - `domain` — your domain, used to generate globally unique event UIDs
+    (e.g. `"example.com"` produces UIDs like `"event-id@example.com"`).
+
+```
+Ical.config { id = "//mycompany//myapp//EN", domain = "example.com" }
+```
 
 -}
 config : { id : String, domain : String } -> Config
@@ -394,14 +400,14 @@ config { id, domain } =
         }
 
 
-{-| Set the calendar display name (NAME property).
+{-| Set the calendar display name.
 -}
 withName : String -> Config -> Config
 withName name (Config c) =
     Config { c | name = Just name }
 
 
-{-| Set the calendar description (DESCRIPTION property).
+{-| Set the calendar description.
 -}
 withCalendarDescription : String -> Config -> Config
 withCalendarDescription description (Config c) =
@@ -449,7 +455,7 @@ event { id, stamp, time, summary } =
         }
 
 
-{-| Set the event description (DESCRIPTION property).
+{-| Set a plain-text description for the event.
 -}
 withDescription : String -> Event -> Event
 withDescription description (Event e) =
@@ -473,14 +479,15 @@ withLocation location (Event e) =
     Event { e | location = Just location }
 
 
-{-| Set the event organizer (ORGANIZER property with CN parameter).
+{-| Set the event organizer.
 -}
 withOrganizer : Organizer -> Event -> Event
 withOrganizer organizer (Event e) =
     Event { e | organizer = Just organizer }
 
 
-{-| Set the HTML description (X-ALT-DESC property with FMTTYPE=text/html).
+{-| Set an HTML-formatted description. Calendar apps that support rich text
+will display this instead of the plain-text description.
 -}
 withHtmlDescription : String -> Event -> Event
 withHtmlDescription html (Event e) =
@@ -501,25 +508,25 @@ withTransparency transparency (Event e) =
     Event { e | transparency = Just transparency }
 
 
-{-| Set the CREATED timestamp.
+{-| Set the creation timestamp.
 -}
 withCreated : Time.Posix -> Event -> Event
 withCreated created (Event e) =
     Event { e | created = Just created }
 
 
-{-| Set the LAST-MODIFIED timestamp.
+{-| Set the last-modified timestamp.
 -}
 withLastModified : Time.Posix -> Event -> Event
 withLastModified lastModified (Event e) =
     Event { e | lastModified = Just lastModified }
 
 
-{-| Add a recurrence rule (RRULE) to the event.
+{-| Add a recurrence rule to the event.
 
     Ical.event { ... }
         |> Ical.withRecurrenceRule
-            (Ical.rule Recurrence.Weekly
+            (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
                 |> Ical.withCount 10
             )
 
@@ -529,7 +536,7 @@ withRecurrenceRule rrule (Event e) =
     Event { e | recurrenceRule = Just rrule }
 
 
-{-| Add an attendee to the event (ATTENDEE property with CN parameter).
+{-| Add an attendee to the event.
 
     Ical.event { ... }
         |> Ical.withAttendee { name = "Jane Smith", email = "jane@example.com" }
