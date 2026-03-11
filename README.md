@@ -150,6 +150,9 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 - Event times:
   - all-day events
   - UTC date-time events
+  - floating local date-times (no timezone)
+- `VALARM` generation: `DISPLAY` and `AUDIO` alarms with trigger offsets relative to start or end. EMAIL alarms are omitted — they are rarely supported by modern calendar clients.
+- `VJOURNAL` generation: journal/note entries with optional date or datetime, status (`DRAFT`/`FINAL`/`CANCELLED`), and description
 - Recurrence rules via opaque `Rule` builder:
   - `FREQ`, `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYSETPOS`, `WKST`
   - `Frequency` carries `every` (interval) and `weekStart` (for Weekly), so they're scoped to where they apply
@@ -165,6 +168,7 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
   - floating local date-times
   - `TZID` date-times resolved through matching `VTIMEZONE`
 - Attendees: `CN`, `ROLE`, `PARTSTAT`, `RSVP`
+- `VJOURNAL` parsing: journal entries with optional `DTSTART` (date, datetime, or floating), `STATUS` (`DRAFT`/`FINAL`/`CANCELLED`), `SUMMARY`, `DESCRIPTION`, `ORGANIZER`
 
 ### Recurrence Subset
 
@@ -177,12 +181,11 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 
 ## Not Supported Yet
 
-- Generating floating local times
 - Generating `TZID` date-times or `VTIMEZONE` components
 - `SECONDLY`, `MINUTELY`, `HOURLY`
 - `BYSECOND`, `BYMINUTE`, `BYHOUR`, `BYYEARDAY`, `BYWEEKNO`
-- Typed `VALARM` extraction
-- `VTODO`, `VJOURNAL`, and `VFREEBUSY`
+- Typed `VALARM` parsing (VALARM sub-components inside events are silently skipped; generation is supported)
+- `VTODO` and `VFREEBUSY`
 
 ## Known Limitations
 
