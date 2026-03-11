@@ -1,11 +1,15 @@
 module Ical exposing
-    ( generate, generateEvent
+    ( generate, generateWithJournals, generateEvent
     , Config, config, withName, withCalendarDescription, withUrl
-    , Event, event, EventTime, allDay, allDayRange, withTime, Organizer, Attendee
+    , Event, event, EventTime, allDay, allDayRange, withTime, floatingTime, FloatingDateTime, Organizer, Attendee
     , withDescription, withLocation, withOrganizer, withHtmlDescription
     , withStatus, Status(..), withTransparency, Transparency(..)
     , withCreated, withLastModified
     , withRecurrenceRule, withAttendee
+    , Journal, journal, JournalTime(..)
+    , withJournalDescription, withJournalDate, withJournalTime, withJournalFloatingTime
+    , withJournalStatus, JournalStatus(..)
+    , withJournalCreated, withJournalLastModified, withJournalOrganizer
     , Rule, rule, withCount, withUntilDate, withUntilDateTime
     , withByDay, withByMonthDay, withByMonth, withBySetPos
     )
@@ -73,7 +77,7 @@ reversed start/end times or negative intervals are silently normalized.
 
 ## Generating output
 
-@docs generate, generateEvent
+@docs generate, generateWithJournals, generateEvent
 
 
 ## Calendar configuration
@@ -83,11 +87,19 @@ reversed start/end times or negative intervals are silently normalized.
 
 ## Events
 
-@docs Event, event, EventTime, allDay, allDayRange, withTime, Organizer, Attendee
+@docs Event, event, EventTime, allDay, allDayRange, withTime, floatingTime, FloatingDateTime, Organizer, Attendee
 @docs withDescription, withLocation, withOrganizer, withHtmlDescription
 @docs withStatus, Status, withTransparency, Transparency
 @docs withCreated, withLastModified
 @docs withRecurrenceRule, withAttendee
+
+
+## Journals
+
+@docs Journal, journal, JournalTime
+@docs withJournalDescription, withJournalDate, withJournalTime, withJournalFloatingTime
+@docs withJournalStatus, JournalStatus
+@docs withJournalCreated, withJournalLastModified, withJournalOrganizer
 
 
 ## Recurrence rules
@@ -104,13 +116,34 @@ import Property exposing (Parameter(..), ValueData(..))
 import Time
 
 
-{-| Represents the time span of an event. Either all-day (date only) or with
-specific times. Create values with [`allDay`](#allDay), [`allDayRange`](#allDayRange),
-or [`withTime`](#withTime).
+{-| Represents the time span of an event. Create values with [`allDay`](#allDay),
+[`allDayRange`](#allDayRange), [`withTime`](#withTime), or
+[`floatingTime`](#floatingTime).
 -}
 type EventTime
     = AllDay { start : Date, end : Date }
     | WithTime { start : Time.Posix, end : Time.Posix }
+    | FloatingTime { start : FloatingDateTime, end : FloatingDateTime }
+
+
+{-| A local date-time with no timezone. Used for floating-time events that
+represent the same wall-clock time regardless of the viewer's timezone.
+
+    { date = Date.fromCalendarDate 2021 Time.Mar 18
+    , hour = 14
+    , minute = 0
+    , second = 0
+    }
+
+Out-of-range values are clamped: hour to 0–23, minute to 0–59, second to 0–59.
+
+-}
+type alias FloatingDateTime =
+    { date : Date
+    , hour : Int
+    , minute : Int
+    , second : Int
+    }
 
 
 {-| Create a single-day all-day event.
@@ -159,6 +192,56 @@ withTime { start, end } =
 
     else
         WithTime { start = start, end = end }
+
+
+{-| Create a floating-time event — a local date-time with no timezone.
+The event represents the same wall-clock time regardless of the viewer's
+timezone (e.g. "meeting at 2pm, wherever you are").
+
+    Ical.floatingTime
+        { start = { date = Date.fromCalendarDate 2021 Time.Mar 18, hour = 14, minute = 0, second = 0 }
+        , end = { date = Date.fromCalendarDate 2021 Time.Mar 18, hour = 15, minute = 30, second = 0 }
+        }
+
+If `end` is before `start`, the times are swapped automatically.
+Out-of-range hour/minute/second values are clamped.
+
+-}
+floatingTime : { start : FloatingDateTime, end : FloatingDateTime } -> EventTime
+floatingTime { start, end } =
+    let
+        clampedStart : FloatingDateTime
+        clampedStart =
+            clampFloatingDateTime start
+
+        clampedEnd : FloatingDateTime
+        clampedEnd =
+            clampFloatingDateTime end
+    in
+    if compareFloatingDateTime clampedStart clampedEnd == GT then
+        FloatingTime { start = clampedEnd, end = clampedStart }
+
+    else
+        FloatingTime { start = clampedStart, end = clampedEnd }
+
+
+clampFloatingDateTime : FloatingDateTime -> FloatingDateTime
+clampFloatingDateTime fdt =
+    { date = fdt.date
+    , hour = clamp 0 23 fdt.hour
+    , minute = clamp 0 59 fdt.minute
+    , second = clamp 0 59 fdt.second
+    }
+
+
+compareFloatingDateTime : FloatingDateTime -> FloatingDateTime -> Order
+compareFloatingDateTime a b =
+    let
+        toComparable : FloatingDateTime -> ( Int, ( Int, Int, Int ) )
+        toComparable fdt =
+            ( Date.toRataDie fdt.date, ( fdt.hour, fdt.minute, fdt.second ) )
+    in
+    compare (toComparable a) (toComparable b)
 
 
 {-| An opaque type representing a calendar event. Create one with [`event`](#event)
@@ -548,26 +631,167 @@ withAttendee attendee (Event e) =
 
 
 
+-- Journal
+
+
+{-| An opaque type representing a journal entry. Create one with
+[`journal`](#journal) and customize with the `withJournal*` functions.
+-}
+type Journal
+    = Journal JournalData
+
+
+type alias JournalData =
+    { id : String
+    , stamp : Time.Posix
+    , summary : String
+    , description : Maybe String
+    , time : Maybe JournalTime
+    , status : Maybe JournalStatus
+    , created : Maybe Time.Posix
+    , lastModified : Maybe Time.Posix
+    , organizer : Maybe Organizer
+    }
+
+
+{-| The time of a journal entry. Journals have no time span, just an optional
+date or datetime stamp.
+-}
+type JournalTime
+    = JournalAllDay Date
+    | JournalWithTime Time.Posix
+    | JournalFloatingTime FloatingDateTime
+
+
+{-| Journal status per
+[RFC 5545 Section 3.8.1.11](https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.1.11).
+-}
+type JournalStatus
+    = Draft
+    | Final
+    | CancelledJournal
+
+
+{-| Create a journal entry with the required fields.
+
+    Ical.journal
+        { id = "journal-1"
+        , stamp = timestamp
+        , summary = "Daily standup notes"
+        }
+
+-}
+journal : { id : String, stamp : Time.Posix, summary : String } -> Journal
+journal { id, stamp, summary } =
+    Journal
+        { id = id
+        , stamp = stamp
+        , summary = summary
+        , description = Nothing
+        , time = Nothing
+        , status = Nothing
+        , created = Nothing
+        , lastModified = Nothing
+        , organizer = Nothing
+        }
+
+
+{-| Set a plain-text description for the journal entry.
+-}
+withJournalDescription : String -> Journal -> Journal
+withJournalDescription description (Journal j) =
+    Journal { j | description = Just description }
+
+
+{-| Set the journal date (all-day).
+-}
+withJournalDate : Date -> Journal -> Journal
+withJournalDate date (Journal j) =
+    Journal { j | time = Just (JournalAllDay date) }
+
+
+{-| Set the journal time (UTC).
+-}
+withJournalTime : Time.Posix -> Journal -> Journal
+withJournalTime posix (Journal j) =
+    Journal { j | time = Just (JournalWithTime posix) }
+
+
+{-| Set the journal time as a floating local datetime.
+-}
+withJournalFloatingTime : FloatingDateTime -> Journal -> Journal
+withJournalFloatingTime fdt (Journal j) =
+    Journal { j | time = Just (JournalFloatingTime (clampFloatingDateTime fdt)) }
+
+
+{-| Set the journal status.
+-}
+withJournalStatus : JournalStatus -> Journal -> Journal
+withJournalStatus status (Journal j) =
+    Journal { j | status = Just status }
+
+
+{-| Set the journal creation timestamp.
+-}
+withJournalCreated : Time.Posix -> Journal -> Journal
+withJournalCreated created (Journal j) =
+    Journal { j | created = Just created }
+
+
+{-| Set the journal last-modified timestamp.
+-}
+withJournalLastModified : Time.Posix -> Journal -> Journal
+withJournalLastModified lastModified (Journal j) =
+    Journal { j | lastModified = Just lastModified }
+
+
+{-| Set the journal organizer.
+-}
+withJournalOrganizer : Organizer -> Journal -> Journal
+withJournalOrganizer organizer (Journal j) =
+    Journal { j | organizer = Just organizer }
+
+
+
 -- Generating output
 
 
 {-| Generate a complete iCal calendar string with the given config and events.
 -}
 generate : Config -> List Event -> String
-generate ((Config c) as cfg) events =
+generate cfg events =
+    generateWithJournals cfg { events = events, journals = [] }
+
+
+{-| Generate a complete iCal calendar string with events and journals.
+
+    Ical.generateWithJournals
+        (Ical.config { id = "//myapp//EN", domain = "example.com" })
+        { events = [ weeklySync ]
+        , journals = [ dailyNotes ]
+        }
+
+-}
+generateWithJournals : Config -> { events : List Event, journals : List Journal } -> String
+generateWithJournals ((Config c) as cfg) { events, journals } =
     let
-        eventSection : String
-        eventSection =
-            case List.map (generateEvent cfg) events of
+        components : List String
+        components =
+            List.map (generateEvent cfg) events
+                ++ List.map (generateJournal cfg) journals
+
+        componentSection : String
+        componentSection =
+            case components of
                 [] ->
                     ""
 
-                generatedEvents ->
-                    "\u{000D}\n" ++ String.join "\u{000D}\n" generatedEvents
+                _ ->
+                    "\u{000D}\n" ++ String.join "\u{000D}\n" components
     in
     "BEGIN:VCALENDAR\u{000D}\n"
         ++ calendarProperties c
-        ++ eventSection
+        ++ componentSection
         ++ "\u{000D}\nEND:VCALENDAR\u{000D}\n"
 
 
@@ -580,6 +804,62 @@ generateEvent (Config c) (Event details) =
     "BEGIN:VEVENT\u{000D}\n"
         ++ formatProperties (eventProperties c details)
         ++ "\u{000D}\nEND:VEVENT"
+
+
+generateJournal : Config -> Journal -> String
+generateJournal (Config c) (Journal details) =
+    "BEGIN:VJOURNAL\u{000D}\n"
+        ++ formatProperties (journalProperties c details)
+        ++ "\u{000D}\nEND:VJOURNAL"
+
+
+journalProperties : ConfigData -> JournalData -> List ( String, ValueData, List Parameter )
+journalProperties c details =
+    (case details.time of
+        Just (JournalAllDay date) ->
+            [ ( "DTSTART", Property.DateValue date, [ Parameter ( "VALUE", "DATE" ) ] ) ]
+
+        Just (JournalWithTime posix) ->
+            [ ( "DTSTART", Property.DateTime posix, [] ) ]
+
+        Just (JournalFloatingTime fdt) ->
+            [ ( "DTSTART", Property.FloatingDateTime fdt, [] ) ]
+
+        Nothing ->
+            []
+    )
+        ++ [ ( "DTSTAMP", details.stamp |> Property.DateTime, [] )
+           , ( "UID", details.id ++ "@" ++ c.domain |> Text, [] )
+           , ( "SUMMARY", details.summary |> Text, [] )
+           ]
+        ++ ([ details.created |> Maybe.map (\created -> ( "CREATED", created |> Property.DateTime, [] ))
+            , details.lastModified |> Maybe.map (\lastModified -> ( "LAST-MODIFIED", lastModified |> Property.DateTime, [] ))
+            , details.description |> Maybe.andThen nonEmpty |> Maybe.map (\description -> ( "DESCRIPTION", Text description, [] ))
+            , details.status |> Maybe.map (\status -> ( "STATUS", status |> journalStatusToString |> Text, [] ))
+            , details.organizer
+                |> Maybe.map
+                    (\organizer ->
+                        ( "ORGANIZER"
+                        , CalAddress organizer.email
+                        , [ Parameter ( "CN", organizer.name ) ]
+                        )
+                    )
+            ]
+                |> List.filterMap identity
+           )
+
+
+journalStatusToString : JournalStatus -> String
+journalStatusToString status =
+    case status of
+        Draft ->
+            "DRAFT"
+
+        Final ->
+            "FINAL"
+
+        CancelledJournal ->
+            "CANCELLED"
 
 
 eventProperties : ConfigData -> EventData -> List ( String, ValueData, List Parameter )
@@ -641,6 +921,11 @@ timeProperties eventTime =
         WithTime { start, end } ->
             [ ( "DTSTART", Property.DateTime start, [] )
             , ( "DTEND", Property.DateTime end, [] )
+            ]
+
+        FloatingTime { start, end } ->
+            [ ( "DTSTART", Property.FloatingDateTime start, [] )
+            , ( "DTEND", Property.FloatingDateTime end, [] )
             ]
 
 

@@ -582,6 +582,111 @@ END:VEVENT"""
                                 ]
                                 output
                        )
+        , test "floating time event" <|
+            \() ->
+                Ical.event
+                    { id = "floating-1"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.floatingTime
+                            { start = { date = Date.fromCalendarDate 2021 Time.Mar 18, hour = 14, minute = 0, second = 0 }
+                            , end = { date = Date.fromCalendarDate 2021 Time.Mar 18, hour = 15, minute = 30, second = 0 }
+                            }
+                    , summary = "Local meeting"
+                    }
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T140000
+DTEND:20210318T153000
+DTSTAMP:20210318T162044Z
+UID:floating-1@test.com
+SUMMARY:Local meeting
+END:VEVENT"""
+        , test "floating time with reversed start/end normalizes order" <|
+            \() ->
+                Ical.event
+                    { id = "floating-reversed"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.floatingTime
+                            { start = { date = Date.fromCalendarDate 2021 Time.Mar 18, hour = 15, minute = 0, second = 0 }
+                            , end = { date = Date.fromCalendarDate 2021 Time.Mar 18, hour = 14, minute = 0, second = 0 }
+                            }
+                    , summary = "Reversed floating"
+                    }
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T140000
+DTEND:20210318T150000
+DTSTAMP:20210318T162044Z
+UID:floating-reversed@test.com
+SUMMARY:Reversed floating
+END:VEVENT"""
+        , test "journal entry with date" <|
+            \() ->
+                Ical.generateWithJournals
+                    (Ical.config
+                        { id = "//test//test//EN"
+                        , domain = "test.com"
+                        }
+                    )
+                    { events = []
+                    , journals =
+                        [ Ical.journal
+                            { id = "journal-1"
+                            , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                            , summary = "Daily standup notes"
+                            }
+                            |> Ical.withJournalDate (Date.fromCalendarDate 2021 Time.Mar 18)
+                            |> Ical.withJournalDescription "Discussed sprint progress."
+                        ]
+                    }
+                    |> expectEqualLines """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//test//test//EN
+BEGIN:VJOURNAL
+DTSTART;VALUE=DATE:20210318
+DTSTAMP:20210318T162044Z
+UID:journal-1@test.com
+SUMMARY:Daily standup notes
+DESCRIPTION:Discussed sprint progress.
+END:VJOURNAL
+END:VCALENDAR"""
+        , test "floating time clamps out-of-range hour/minute/second" <|
+            \() ->
+                Ical.event
+                    { id = "floating-clamped"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.floatingTime
+                            { start = { date = Date.fromCalendarDate 2021 Time.Mar 18, hour = 25, minute = -1, second = 99 }
+                            , end = { date = Date.fromCalendarDate 2021 Time.Mar 18, hour = 25, minute = 70, second = -5 }
+                            }
+                    , summary = "Clamped floating"
+                    }
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T230059
+DTEND:20210318T235900
+DTSTAMP:20210318T162044Z
+UID:floating-clamped@test.com
+SUMMARY:Clamped floating
+END:VEVENT"""
         ]
 
 

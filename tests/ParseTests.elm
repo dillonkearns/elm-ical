@@ -22,6 +22,7 @@ suite =
         , recurrenceRuleTests
         , componentTests
         , endToEndTests
+        , journalTests
         , roundTripTests
         ]
 
@@ -1686,7 +1687,242 @@ endToEndTests =
 
 
 
--- Phase F: Round-Trip Tests
+-- Phase F: Journal Tests
+
+
+journalTests : Test
+journalTests =
+    describe "VJOURNAL parsing"
+        [ test "basic journal with summary and description" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VJOURNAL"
+                            , "UID:journal-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART;VALUE=DATE:20210318"
+                            , "SUMMARY:Daily standup notes"
+                            , "DESCRIPTION:Discussed sprint progress."
+                            , "END:VJOURNAL"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.journals of
+                            [ j ] ->
+                                Expect.all
+                                    [ \journal -> journal.uid |> Expect.equal "journal-1"
+                                    , \journal -> journal.summary |> Expect.equal (Just "Daily standup notes")
+                                    , \journal -> journal.description |> Expect.equal (Just "Discussed sprint progress.")
+                                    , \journal ->
+                                        journal.time
+                                            |> Expect.equal (Just (Parser.JournalDate (Date.fromCalendarDate 2021 Time.Mar 18)))
+                                    ]
+                                    j
+
+                            other ->
+                                Expect.fail ("Expected 1 journal, got " ++ String.fromInt (List.length other))
+
+                    Err err ->
+                        Expect.fail err
+        , test "journal with datetime DTSTART" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VJOURNAL"
+                            , "UID:journal-2"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T140000Z"
+                            , "SUMMARY:Afternoon notes"
+                            , "END:VJOURNAL"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.journals of
+                            [ j ] ->
+                                case j.time of
+                                    Just (Parser.JournalDateTime resolved) ->
+                                        resolved.timeZoneName
+                                            |> Expect.equal Nothing
+
+                                    other ->
+                                        Expect.fail ("Expected JournalDateTime, got " ++ Debug.toString other)
+
+                            _ ->
+                                Expect.fail "Expected 1 journal"
+
+                    Err err ->
+                        Expect.fail err
+        , test "journal without DTSTART" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VJOURNAL"
+                            , "UID:journal-3"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "SUMMARY:Undated note"
+                            , "END:VJOURNAL"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.journals of
+                            [ j ] ->
+                                Expect.all
+                                    [ \journal -> journal.time |> Expect.equal Nothing
+                                    , \journal -> journal.summary |> Expect.equal (Just "Undated note")
+                                    ]
+                                    j
+
+                            _ ->
+                                Expect.fail "Expected 1 journal"
+
+                    Err err ->
+                        Expect.fail err
+        , test "journal with STATUS DRAFT" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VJOURNAL"
+                            , "UID:journal-4"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "STATUS:DRAFT"
+                            , "SUMMARY:Draft entry"
+                            , "END:VJOURNAL"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.journals of
+                            [ j ] ->
+                                j.status |> Expect.equal (Just Parser.Draft)
+
+                            _ ->
+                                Expect.fail "Expected 1 journal"
+
+                    Err err ->
+                        Expect.fail err
+        , test "journal with STATUS FINAL" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VJOURNAL"
+                            , "UID:journal-5"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "STATUS:FINAL"
+                            , "SUMMARY:Final entry"
+                            , "END:VJOURNAL"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.journals of
+                            [ j ] ->
+                                j.status |> Expect.equal (Just Parser.Final)
+
+                            _ ->
+                                Expect.fail "Expected 1 journal"
+
+                    Err err ->
+                        Expect.fail err
+        , test "journal missing UID fails" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VJOURNAL"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "SUMMARY:No UID"
+                            , "END:VJOURNAL"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok _ ->
+                        Expect.fail "Expected parse error for missing UID"
+
+                    Err _ ->
+                        Expect.pass
+        , test "journals and events coexist" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "UID:event-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T100000Z"
+                            , "SUMMARY:An event"
+                            , "END:VEVENT"
+                            , "BEGIN:VJOURNAL"
+                            , "UID:journal-6"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "SUMMARY:A journal entry"
+                            , "END:VJOURNAL"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        Expect.all
+                            [ \c -> List.length c.events |> Expect.equal 1
+                            , \c -> List.length c.journals |> Expect.equal 1
+                            ]
+                            cal
+
+                    Err err ->
+                        Expect.fail err
+        ]
+
+
+
+-- Phase G: Round-Trip Tests
 
 
 roundTripTests : Test
@@ -1981,6 +2217,103 @@ roundTripTests =
 
                             _ ->
                                 Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "round-trip floating time event" <|
+            \() ->
+                let
+                    icsString : String
+                    icsString =
+                        [ Ical.event
+                            { id = "rt-floating"
+                            , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                            , time =
+                                Ical.floatingTime
+                                    { start = { date = Date.fromCalendarDate 2021 Time.Mar 18, hour = 14, minute = 0, second = 0 }
+                                    , end = { date = Date.fromCalendarDate 2021 Time.Mar 18, hour = 15, minute = 30, second = 0 }
+                                    }
+                            , summary = "Local meeting"
+                            }
+                        ]
+                            |> Ical.generate
+                                (Ical.config
+                                    { id = "//test//test//EN"
+                                    , domain = "test.com"
+                                    }
+                                )
+                in
+                case Parser.parse icsString of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                Expect.all
+                                    [ \e -> e.summary |> Expect.equal (Just "Local meeting")
+                                    , \e ->
+                                        case e.time of
+                                            Parser.FloatingTime { start, end } ->
+                                                Expect.all
+                                                    [ \_ -> start.year |> Expect.equal 2021
+                                                    , \_ -> start.month |> Expect.equal Time.Mar
+                                                    , \_ -> start.day |> Expect.equal 18
+                                                    , \_ -> start.hour |> Expect.equal 14
+                                                    , \_ -> start.minute |> Expect.equal 0
+                                                    , \_ -> start.second |> Expect.equal 0
+                                                    , \_ -> end |> Expect.notEqual Nothing
+                                                    ]
+                                                    ()
+
+                                            other ->
+                                                Expect.fail ("Expected FloatingTime, got " ++ Debug.toString other)
+                                    ]
+                                    ev
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "round-trip journal entry" <|
+            \() ->
+                let
+                    icsString : String
+                    icsString =
+                        Ical.generateWithJournals
+                            (Ical.config
+                                { id = "//test//test//EN"
+                                , domain = "test.com"
+                                }
+                            )
+                            { events = []
+                            , journals =
+                                [ Ical.journal
+                                    { id = "rt-journal"
+                                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                                    , summary = "Daily notes"
+                                    }
+                                    |> Ical.withJournalDate (Date.fromCalendarDate 2021 Time.Mar 18)
+                                    |> Ical.withJournalDescription "Sprint progress discussed."
+                                    |> Ical.withJournalStatus Ical.Draft
+                                ]
+                            }
+                in
+                case Parser.parse icsString of
+                    Ok cal ->
+                        case cal.journals of
+                            [ j ] ->
+                                Expect.all
+                                    [ \journal -> journal.uid |> Expect.equal "rt-journal@test.com"
+                                    , \journal -> journal.summary |> Expect.equal (Just "Daily notes")
+                                    , \journal -> journal.description |> Expect.equal (Just "Sprint progress discussed.")
+                                    , \journal ->
+                                        journal.time
+                                            |> Expect.equal (Just (Parser.JournalDate (Date.fromCalendarDate 2021 Time.Mar 18)))
+                                    , \journal -> journal.status |> Expect.equal (Just Parser.Draft)
+                                    ]
+                                    j
+
+                            other ->
+                                Expect.fail ("Expected 1 journal, got " ++ String.fromInt (List.length other))
 
                     Err err ->
                         Expect.fail err

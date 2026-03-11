@@ -5,6 +5,7 @@ module Ical.Parser exposing
     , Status(..), Transparency(..)
     , Organizer, RawProperty
     , Attendee, AttendeeRole(..), ParticipationStatus(..)
+    , Journal, JournalTime(..), JournalStatus(..)
     , Occurrence, expand, expandNext
     )
 
@@ -76,6 +77,11 @@ Parsed types are transparent record aliases so you can read fields directly.
 @docs Attendee, AttendeeRole, ParticipationStatus
 
 
+## Journals
+
+@docs Journal, JournalTime, JournalStatus
+
+
 ## Recurrence expansion
 
 @docs Occurrence, expand, expandNext
@@ -106,6 +112,7 @@ type alias Calendar =
     { generatorProductId : String
     , specVersion : String
     , events : List Event
+    , journals : List Journal
     , extraProperties : List RawProperty
     }
 
@@ -252,6 +259,49 @@ type ParticipationStatus
     | Delegated
 
 
+{-| A parsed iCal journal entry
+([RFC 5545 Section 3.6.3](https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.3)).
+Unlike events, journals have no time span — just an optional date or datetime
+stamp and text content. They represent dated notes or log entries.
+-}
+type alias Journal =
+    { uid : String
+    , stamp : Time.Posix
+    , time : Maybe JournalTime
+    , summary : Maybe String
+    , description : Maybe String
+    , status : Maybe JournalStatus
+    , created : Maybe Time.Posix
+    , lastModified : Maybe Time.Posix
+    , organizer : Maybe Organizer
+    , extraProperties : List RawProperty
+    }
+
+
+{-| The time of a journal entry. Since journals have no time span (no DTEND
+or DURATION), this is a single point — either a date or a datetime.
+-}
+type JournalTime
+    = JournalDate Date.Date
+    | JournalDateTime ResolvedTime
+    | JournalFloatingTime LocalDateTime
+
+
+{-| Journal status per
+[RFC 5545 Section 3.8.1.11](https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.1.11).
+
+  - `Draft` — the journal entry is a draft.
+  - `Final` — the journal entry is final.
+  - `CancelledJournal` — the journal entry has been cancelled.
+    (Named `CancelledJournal` to avoid a clash with [`Cancelled`](#Status).)
+
+-}
+type JournalStatus
+    = Draft
+    | Final
+    | CancelledJournal
+
+
 {-| Parse an iCal string into a Calendar.
 
     Ical.Parser.parse icsString
@@ -310,6 +360,7 @@ type alias ParseState =
     { generatorProductId : Maybe String
     , specVersion : Maybe String
     , events : List Event
+    , journals : List Journal
     , extraProperties : List RawProperty
     , timezones : Dict String VTimeZone.ZoneDefinition
     }
@@ -324,6 +375,7 @@ parseCalendar contentLines =
                     { generatorProductId = Nothing
                     , specVersion = Nothing
                     , events = []
+                    , journals = []
                     , extraProperties = []
                     , timezones = Dict.empty
                     }
@@ -349,6 +401,7 @@ parseCalendarBody lines state =
                             { generatorProductId = generatorProductId
                             , specVersion = specVersion
                             , events = List.reverse state.events
+                            , journals = List.reverse state.journals
                             , extraProperties = List.reverse state.extraProperties
                             }
 
@@ -374,6 +427,14 @@ parseCalendarBody lines state =
                 case parseEvent rest state.timezones emptyEventAccum of
                     Ok ( event, remaining ) ->
                         parseCalendarBody remaining { state | events = event :: state.events }
+
+                    Err err ->
+                        Err err
+
+            else if line.name == "BEGIN" && String.toUpper line.value == "VJOURNAL" then
+                case parseJournal rest state.timezones emptyJournalAccum of
+                    Ok ( journal, remaining ) ->
+                        parseCalendarBody remaining { state | journals = journal :: state.journals }
 
                     Err err ->
                         Err err
@@ -1078,6 +1139,212 @@ parseExdateValues timezones line =
 dateToUtcMidnight : Date.Date -> Time.Posix
 dateToUtcMidnight date =
     Time.millisToPosix ((Date.toRataDie date - 719163) * 86400 * 1000)
+
+
+
+-- VJOURNAL PARSING
+
+
+type alias JournalAccum =
+    { uid : Maybe String
+    , dtstamp : Maybe InternalDateTimeValue
+    , dtstart : Maybe InternalDateTimeValue
+    , created : Maybe InternalDateTimeValue
+    , lastModified : Maybe InternalDateTimeValue
+    , summary : Maybe String
+    , description : Maybe String
+    , organizer : Maybe Organizer
+    , status : Maybe JournalStatus
+    , extraProperties : List RawProperty
+    , errors : List String
+    }
+
+
+emptyJournalAccum : JournalAccum
+emptyJournalAccum =
+    { uid = Nothing
+    , dtstamp = Nothing
+    , dtstart = Nothing
+    , created = Nothing
+    , lastModified = Nothing
+    , summary = Nothing
+    , description = Nothing
+    , organizer = Nothing
+    , status = Nothing
+    , extraProperties = []
+    , errors = []
+    }
+
+
+parseJournal : List ContentLine -> Dict String VTimeZone.ZoneDefinition -> JournalAccum -> Result String ( Journal, List ContentLine )
+parseJournal lines timezones accum =
+    case lines of
+        [] ->
+            Err "Unexpected end of input, expected END:VJOURNAL"
+
+        line :: rest ->
+            if line.name == "END" && String.toUpper line.value == "VJOURNAL" then
+                finalizeJournal accum
+                    |> Result.map (\journal -> ( journal, rest ))
+
+            else if line.name == "END" then
+                Err ("Mismatched END: expected VJOURNAL, got " ++ line.value)
+
+            else if line.name == "BEGIN" then
+                case skipComponent (String.toUpper line.value) rest of
+                    Ok remaining ->
+                        parseJournal remaining timezones accum
+
+                    Err err ->
+                        Err err
+
+            else
+                parseJournal rest timezones (applyJournalProperty timezones line accum)
+
+
+applyJournalProperty : Dict String VTimeZone.ZoneDefinition -> ContentLine -> JournalAccum -> JournalAccum
+applyJournalProperty timezones line accum =
+    let
+        rawProp : RawProperty
+        rawProp =
+            { name = line.name
+            , parameters = line.parameters
+            , value = line.value
+            }
+    in
+    case line.name of
+        "UID" ->
+            { accum | uid = Just line.value }
+
+        "DTSTAMP" ->
+            case parseDateTimeValue timezones line of
+                Ok dtstamp ->
+                    { accum | dtstamp = Just dtstamp }
+
+                Err err ->
+                    addJournalError ("Invalid DTSTAMP: " ++ err) accum
+
+        "DTSTART" ->
+            case parseDateTimeValue timezones line of
+                Ok dtstart ->
+                    { accum | dtstart = Just dtstart }
+
+                Err err ->
+                    addJournalError ("Invalid DTSTART: " ++ err) accum
+
+        "CREATED" ->
+            case parseDateTimeValue timezones line of
+                Ok created ->
+                    { accum | created = Just created }
+
+                Err err ->
+                    addJournalError ("Invalid CREATED: " ++ err) accum
+
+        "LAST-MODIFIED" ->
+            case parseDateTimeValue timezones line of
+                Ok lastModified ->
+                    { accum | lastModified = Just lastModified }
+
+                Err err ->
+                    addJournalError ("Invalid LAST-MODIFIED: " ++ err) accum
+
+        "SUMMARY" ->
+            { accum | summary = Just (ValueParser.unescapeText line.value) }
+
+        "DESCRIPTION" ->
+            { accum | description = Just (ValueParser.unescapeText line.value) }
+
+        "ORGANIZER" ->
+            { accum | organizer = Just (parseOrganizer line) }
+
+        "STATUS" ->
+            case parseJournalStatus line.value of
+                Just s ->
+                    { accum | status = Just s }
+
+                Nothing ->
+                    { accum | extraProperties = rawProp :: accum.extraProperties }
+
+        _ ->
+            { accum | extraProperties = rawProp :: accum.extraProperties }
+
+
+addJournalError : String -> JournalAccum -> JournalAccum
+addJournalError error accum =
+    { accum | errors = error :: accum.errors }
+
+
+parseJournalStatus : String -> Maybe JournalStatus
+parseJournalStatus value =
+    case String.toUpper value of
+        "DRAFT" ->
+            Just Draft
+
+        "FINAL" ->
+            Just Final
+
+        "CANCELLED" ->
+            Just CancelledJournal
+
+        _ ->
+            Nothing
+
+
+finalizeJournal : JournalAccum -> Result String Journal
+finalizeJournal accum =
+    case List.reverse accum.errors of
+        firstError :: _ ->
+            Err firstError
+
+        [] ->
+            case ( accum.uid, accum.dtstamp ) of
+                ( Just uid, Just dtstamp ) ->
+                    extractPosix "DTSTAMP" dtstamp
+                        |> Result.andThen
+                            (\stamp ->
+                                let
+                                    journalTime : Maybe JournalTime
+                                    journalTime =
+                                        accum.dtstart
+                                            |> Maybe.map
+                                                (\dtstart ->
+                                                    case dtstart of
+                                                        IDate date ->
+                                                            JournalDate date
+
+                                                        IDateTime resolved ->
+                                                            JournalDateTime resolved
+
+                                                        IFloating local ->
+                                                            JournalFloatingTime local
+                                                )
+                                in
+                                extractMaybePosix "CREATED" accum.created
+                                    |> Result.andThen
+                                        (\created ->
+                                            extractMaybePosix "LAST-MODIFIED" accum.lastModified
+                                                |> Result.map
+                                                    (\lastModified ->
+                                                        { uid = uid
+                                                        , stamp = stamp
+                                                        , time = journalTime
+                                                        , summary = accum.summary
+                                                        , description = accum.description
+                                                        , status = accum.status
+                                                        , created = created
+                                                        , lastModified = lastModified
+                                                        , organizer = accum.organizer
+                                                        , extraProperties = List.reverse accum.extraProperties
+                                                        }
+                                                    )
+                                        )
+                            )
+
+                ( Nothing, _ ) ->
+                    Err "VJOURNAL missing required UID"
+
+                ( _, Nothing ) ->
+                    Err "VJOURNAL missing required DTSTAMP"
 
 
 skipComponent : String -> List ContentLine -> Result String (List ContentLine)

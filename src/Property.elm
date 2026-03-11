@@ -14,6 +14,7 @@ type ValueData
     | CalAddress String
     | DateTime Time.Posix
     | DateValue Date
+    | FloatingDateTime { date : Date, hour : Int, minute : Int, second : Int }
 
 
 {-| <https://tools.ietf.org/html/rfc5545#section-3.2>
@@ -72,6 +73,9 @@ encodeValue data parameters =
 
                 DateValue date ->
                     IcalDateTime.formatDate date
+
+                FloatingDateTime fdt ->
+                    IcalDateTime.formatFloating fdt
            )
 
 
