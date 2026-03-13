@@ -375,6 +375,42 @@ recurrenceRuleTests =
             \() ->
                 ValueParser.parseRecurrenceRule "INTERVAL=2;BYDAY=MO"
                     |> Expect.err
+        , test "parse FREQ=HOURLY" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=HOURLY"
+                    |> Expect.equal
+                        (Ok
+                            { frequency = Recurrence.Hourly { every = 1 }
+                            , end = Recurrence.Forever
+                            , byDay = []
+                            , byMonthDay = []
+                            , byMonth = []
+                            , bySetPos = []
+                            }
+                        )
+        , test "parse FREQ=MINUTELY with INTERVAL" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=MINUTELY;INTERVAL=30"
+                    |> Result.map .frequency
+                    |> Expect.equal (Ok (Recurrence.Minutely { every = 30 }))
+        , test "parse FREQ=SECONDLY" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=SECONDLY;INTERVAL=15"
+                    |> Result.map .frequency
+                    |> Expect.equal (Ok (Recurrence.Secondly { every = 15 }))
+        , test "parse FREQ=HOURLY with COUNT" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=HOURLY;INTERVAL=2;COUNT=12"
+                    |> Expect.equal
+                        (Ok
+                            { frequency = Recurrence.Hourly { every = 2 }
+                            , end = Recurrence.Count 12
+                            , byDay = []
+                            , byMonthDay = []
+                            , byMonth = []
+                            , bySetPos = []
+                            }
+                        )
         ]
 
 
@@ -1683,6 +1719,47 @@ endToEndTests =
 
                     Err _ ->
                         Expect.pass
+        , test "parse event with FREQ=HOURLY RRULE" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Hourly check"
+                            , "UID:hourly-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T100000Z"
+                            , "DTEND:20210318T103000Z"
+                            , "RRULE:FREQ=HOURLY;INTERVAL=2;COUNT=12"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.recurrenceRules
+                                    |> Expect.equal
+                                        [ { frequency = Recurrence.Hourly { every = 2 }
+                                          , end = Recurrence.Count 12
+                                          , byDay = []
+                                          , byMonthDay = []
+                                          , byMonth = []
+                                          , bySetPos = []
+                                          }
+                                        ]
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
         ]
 
 

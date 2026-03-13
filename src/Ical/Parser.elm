@@ -1765,6 +1765,15 @@ isCountLimited end =
 frequencyEvery : Frequency -> Int
 frequencyEvery freq =
     case freq of
+        Secondly { every } ->
+            every
+
+        Minutely { every } ->
+            every
+
+        Hourly { every } ->
+            every
+
         Daily { every } ->
             every
 
@@ -1781,6 +1790,16 @@ frequencyEvery freq =
 advanceByInterval : Frequency -> Int -> Date.Date -> Date.Date
 advanceByInterval freq n seed =
     case freq of
+        Secondly _ ->
+            -- Sub-daily frequencies don't advance by date; same date each step
+            seed
+
+        Minutely _ ->
+            seed
+
+        Hourly _ ->
+            seed
+
         Daily _ ->
             Date.add Date.Days n seed
 
@@ -1797,6 +1816,17 @@ advanceByInterval freq n seed =
 expandWithinPeriod : RecurrenceRule -> Date.Date -> Date.Date -> List Date.Date
 expandWithinPeriod rule seed intervalDate =
     case rule.frequency of
+        Secondly _ ->
+            -- Sub-daily expansion is not yet supported; the event parses correctly
+            -- but expand/expandNext return no occurrences for sub-daily frequencies.
+            []
+
+        Minutely _ ->
+            []
+
+        Hourly _ ->
+            []
+
         Daily _ ->
             [ intervalDate ]
                 |> filterByMonth rule.byMonth

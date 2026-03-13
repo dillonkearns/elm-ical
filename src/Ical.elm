@@ -433,6 +433,15 @@ rule frequency =
 frequencyEvery : Frequency -> Int
 frequencyEvery freq =
     case freq of
+        Secondly { every } ->
+            every
+
+        Minutely { every } ->
+            every
+
+        Hourly { every } ->
+            every
+
         Daily { every } ->
             every
 
@@ -449,6 +458,15 @@ frequencyEvery freq =
 clampFrequencyEvery : Frequency -> Frequency
 clampFrequencyEvery frequency =
     case frequency of
+        Secondly { every } ->
+            Secondly { every = max 1 every }
+
+        Minutely { every } ->
+            Minutely { every = max 1 every }
+
+        Hourly { every } ->
+            Hourly { every = max 1 every }
+
         Daily { every } ->
             Daily { every = max 1 every }
 
@@ -1204,6 +1222,15 @@ formatRule r =
         freqStr : String
         freqStr =
             case r.frequency of
+                Secondly _ ->
+                    "SECONDLY"
+
+                Minutely _ ->
+                    "MINUTELY"
+
+                Hourly _ ->
+                    "HOURLY"
+
                 Daily _ ->
                     "DAILY"
 

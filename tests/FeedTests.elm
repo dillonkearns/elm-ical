@@ -555,6 +555,94 @@ UID:bymonth-1@test.com
 SUMMARY:Quarterly
 RRULE:FREQ=YEARLY;BYMONTH=1,4,7,10
 END:VEVENT"""
+        , test "generate RRULE with FREQ=HOURLY" <|
+            \() ->
+                Ical.event
+                    { id = "hourly-1"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.withTime
+                            { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T11:00:00.000Z"
+                            }
+                    , summary = "Hourly check"
+                    }
+                    |> Ical.withRecurrenceRule
+                        (Ical.rule (Recurrence.Hourly { every = 2 })
+                            |> Ical.withCount 12
+                        )
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T100000Z
+DTEND:20210318T110000Z
+DTSTAMP:20210318T162044Z
+UID:hourly-1@test.com
+SUMMARY:Hourly check
+RRULE:FREQ=HOURLY;INTERVAL=2;COUNT=12
+END:VEVENT"""
+        , test "generate RRULE with FREQ=MINUTELY" <|
+            \() ->
+                Ical.event
+                    { id = "minutely-1"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.withTime
+                            { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T10:30:00.000Z"
+                            }
+                    , summary = "Pomodoro"
+                    }
+                    |> Ical.withRecurrenceRule
+                        (Ical.rule (Recurrence.Minutely { every = 25 }))
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T100000Z
+DTEND:20210318T103000Z
+DTSTAMP:20210318T162044Z
+UID:minutely-1@test.com
+SUMMARY:Pomodoro
+RRULE:FREQ=MINUTELY;INTERVAL=25
+END:VEVENT"""
+        , test "generate RRULE with FREQ=SECONDLY" <|
+            \() ->
+                Ical.event
+                    { id = "secondly-1"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.withTime
+                            { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T10:00:15.000Z"
+                            }
+                    , summary = "Heartbeat"
+                    }
+                    |> Ical.withRecurrenceRule
+                        (Ical.rule (Recurrence.Secondly { every = 15 })
+                            |> Ical.withCount 100
+                        )
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T100000Z
+DTEND:20210318T100015Z
+DTSTAMP:20210318T162044Z
+UID:secondly-1@test.com
+SUMMARY:Heartbeat
+RRULE:FREQ=SECONDLY;INTERVAL=15;COUNT=100
+END:VEVENT"""
         , test "generate event with ATTENDEE" <|
             \() ->
                 Ical.event

@@ -172,7 +172,7 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 
 ### Recurrence Subset
 
-- Frequencies: `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`
+- Frequencies: `SECONDLY`, `MINUTELY`, `HOURLY`, `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`
 - Rule parts: `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYSETPOS`, `WKST`
 - Exception dates: `EXDATE` for all-day, floating, and resolved date-time events
 - Additional recurrence dates: `RDATE`
@@ -182,7 +182,7 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 ## Not Supported Yet
 
 - Generating `TZID` date-times or `VTIMEZONE` components
-- `SECONDLY`, `MINUTELY`, `HOURLY`
+- Recurrence expansion for sub-daily frequencies (`SECONDLY`, `MINUTELY`, `HOURLY`) — these frequencies parse and generate correctly, but `expand`/`expandNext` return no occurrences for them
 - `BYSECOND`, `BYMINUTE`, `BYHOUR`, `BYYEARDAY`, `BYWEEKNO`
 - Typed `VALARM` parsing (VALARM sub-components inside events are silently skipped; generation is supported)
 - `VTODO` and `VFREEBUSY`

@@ -64,9 +64,16 @@ type alias RecurrenceRule =
     means every other week). Must be at least 1.
   - `weekStart` — which day begins the week (only meaningful for `Weekly`).
 
+**Note:** `Secondly`, `Minutely`, and `Hourly` are supported for generation and
+parsing, but recurrence expansion (`expand`/`expandNext`) does not yet produce
+occurrences for sub-daily frequencies.
+
 -}
 type Frequency
-    = Daily { every : Int }
+    = Secondly { every : Int }
+    | Minutely { every : Int }
+    | Hourly { every : Int }
+    | Daily { every : Int }
     | Weekly { every : Int, weekStart : Time.Weekday }
     | Monthly { every : Int }
     | Yearly { every : Int }

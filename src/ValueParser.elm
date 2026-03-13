@@ -494,7 +494,10 @@ parseRecurrenceRule input =
 
 
 type FreqTag
-    = DailyTag
+    = SecondlyTag
+    | MinutelyTag
+    | HourlyTag
+    | DailyTag
     | WeeklyTag
     | MonthlyTag
     | YearlyTag
@@ -503,6 +506,15 @@ type FreqTag
 parseFrequency : String -> Maybe FreqTag
 parseFrequency str =
     case String.toUpper str of
+        "SECONDLY" ->
+            Just SecondlyTag
+
+        "MINUTELY" ->
+            Just MinutelyTag
+
+        "HOURLY" ->
+            Just HourlyTag
+
         "DAILY" ->
             Just DailyTag
 
@@ -522,6 +534,15 @@ parseFrequency str =
 buildFrequency : FreqTag -> Int -> Time.Weekday -> Frequency
 buildFrequency tag interval weekStart =
     case tag of
+        SecondlyTag ->
+            Secondly { every = interval }
+
+        MinutelyTag ->
+            Minutely { every = interval }
+
+        HourlyTag ->
+            Hourly { every = interval }
+
         DailyTag ->
             Daily { every = interval }
 
