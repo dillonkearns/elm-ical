@@ -1333,6 +1333,160 @@ suite =
                             , Date.fromCalendarDate 2021 Time.Mar 20
                             , Date.fromCalendarDate 2021 Time.Mar 22
                             ]
+            , test "expandNext with HOURLY frequency" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "Hourly check"
+                                , start = Time.millisToPosix 1616065200000 -- 2021-03-18T11:00:00Z
+                                , end = Time.millisToPosix 1616068800000
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Hourly { every = 3 }
+                                    , end = Recurrence.Count 4
+                                    , byDay = []
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
+                                    }
+                    in
+                    Parser.expandNext 4
+                        (Date.fromCalendarDate 2021 Time.Mar 18)
+                        [ event ]
+                        |> List.map (occurrenceHour Time.utc)
+                        |> Expect.equal [ 11, 14, 17, 20 ]
+            , test "expandNext with DAILY + BYHOUR" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "Twice daily"
+                                , start = Time.millisToPosix 1616065200000 -- 2021-03-18T11:00:00Z
+                                , end = Time.millisToPosix 1616068800000
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Daily { every = 1 }
+                                    , end = Recurrence.Forever
+                                    , byDay = []
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , byHour = [ 9, 17 ]
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
+                                    }
+                    in
+                    Parser.expandNext 4
+                        (Date.fromCalendarDate 2021 Time.Mar 18)
+                        [ event ]
+                        |> List.map (occurrenceHour Time.utc)
+                        |> Expect.equal [ 9, 17, 9, 17 ]
+            ]
+        , describe "sub-daily with BY* filters"
+            [ test "HOURLY with BYDAY filter limits to specific days" <|
+                \() ->
+                    let
+                        -- 2021-03-18 is a Thursday
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "Weekday hourly"
+                                , start = Time.millisToPosix 1616065200000 -- 2021-03-18T11:00:00Z (Thu)
+                                , end = Time.millisToPosix 1616068800000
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Hourly { every = 12 }
+                                    , end = Recurrence.Count 4
+                                    , byDay = [ Recurrence.Every Time.Thu, Recurrence.Every Time.Fri ]
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
+                                    }
+                    in
+                    Parser.expand yearRange [ event ]
+                        |> List.map (\occ -> ( occurrenceDate Time.utc occ, occurrenceHour Time.utc occ ))
+                        |> Expect.equal
+                            [ ( Date.fromCalendarDate 2021 Time.Mar 18, 11 ) -- Thu 11:00
+                            , ( Date.fromCalendarDate 2021 Time.Mar 18, 23 ) -- Thu 23:00
+                            , ( Date.fromCalendarDate 2021 Time.Mar 19, 11 ) -- Fri 11:00
+                            , ( Date.fromCalendarDate 2021 Time.Mar 19, 23 ) -- Fri 23:00
+                            ]
+            , test "MINUTELY with BYHOUR filter" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "Office hours pings"
+                                , start = Time.millisToPosix 1616065200000 -- 2021-03-18T11:00:00Z
+                                , end = Time.millisToPosix 1616066100000
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Minutely { every = 30 }
+                                    , end = Recurrence.Count 6
+                                    , byDay = []
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , byHour = [ 11, 12 ]
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
+                                    }
+                    in
+                    Parser.expand yearRange [ event ]
+                        |> List.map (occurrenceHourMinute Time.utc)
+                        |> Expect.equal
+                            [ ( 11, 0 ), ( 11, 30 ), ( 12, 0 ), ( 12, 30 ), ( 11, 0 ), ( 11, 30 ) ]
+            ]
+        , describe "FloatingTime with BYHOUR"
+            [ test "DAILY with BYHOUR on floating time event" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeFloatingEvent
+                                { summary = "Local twice daily"
+                                , year = 2021
+                                , month = Time.Mar
+                                , day = 18
+                                , hour = 10
+                                , minute = 0
+                                , second = 0
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Daily { every = 1 }
+                                    , end = Recurrence.Count 4
+                                    , byDay = []
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , byHour = [ 9, 17 ]
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
+                                    }
+                    in
+                    Parser.expand yearRange [ event ]
+                        |> List.map occurrenceFloatingHour
+                        |> Expect.equal [ 9, 17, 9, 17 ]
             ]
         , describe "BYYEARDAY"
             [ test "YEARLY with BYYEARDAY expands to specific days of the year" <|
@@ -1849,6 +2003,42 @@ occurrenceStartDateForFloating occurrence =
 addRule : Recurrence.RecurrenceRule -> Parser.Event -> Parser.Event
 addRule rule event =
     { event | recurrenceRules = rule :: event.recurrenceRules }
+
+
+makeFloatingEvent : { summary : String, year : Int, month : Time.Month, day : Int, hour : Int, minute : Int, second : Int } -> Parser.Event
+makeFloatingEvent { summary, year, month, day, hour, minute, second } =
+    { uid = "test-uid"
+    , stamp = Time.millisToPosix 0
+    , time =
+        Parser.FloatingTime
+            { start = { year = year, month = month, day = day, hour = hour, minute = minute, second = second }
+            , end = Just { year = year, month = month, day = day, hour = hour + 1, minute = minute, second = second }
+            }
+    , created = Nothing
+    , lastModified = Nothing
+    , summary = Just summary
+    , description = Nothing
+    , location = Nothing
+    , organizer = Nothing
+    , status = Nothing
+    , transparency = Nothing
+    , recurrenceRules = []
+    , exclusions = []
+    , recurrenceDates = []
+    , recurrenceId = Nothing
+    , attendees = []
+    , extraProperties = []
+    }
+
+
+occurrenceFloatingHour : Parser.Occurrence -> Int
+occurrenceFloatingHour occ =
+    case occ.time of
+        Parser.FloatingTime { start } ->
+            start.hour
+
+        _ ->
+            -1
 
 
 occurrenceDate : Time.Zone -> Parser.Occurrence -> Date.Date

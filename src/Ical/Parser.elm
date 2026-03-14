@@ -1572,39 +1572,21 @@ expandNextEvent n fromDate event =
 
 expandNextRule : Int -> Date.Date -> Event -> RecurrenceRule -> List Occurrence
 expandNextRule n fromDate event rule =
+    expandNextChunked n fromDate event rule 1 []
+
+
+expandNextChunked : Int -> Date.Date -> Event -> RecurrenceRule -> Int -> List Occurrence -> List Occurrence
+expandNextChunked needed fromDate event rule chunkYears acc =
     let
-        seed : Date.Date
-        seed =
-            occurrenceStartDate event.time
-
-        fromRD : Int
-        fromRD =
-            Date.toRataDie fromDate
-    in
-    expandNextChunked rule seed fromRD n event 1 []
-
-
-expandNextChunked : RecurrenceRule -> Date.Date -> Int -> Int -> Event -> Int -> List Occurrence -> List Occurrence
-expandNextChunked rule seed fromRD needed event chunkYears acc =
-    let
-        rangeEndRD : Int
-        rangeEndRD =
-            fromRD + (chunkYears * 366)
-
-        candidates : List Date.Date
-        candidates =
-            generateCandidates rule event.time seed rangeEndRD
-
-        filtered : List Date.Date
-        filtered =
-            candidates
-                |> filterExclusions event
+        range : { start : Date.Date, end : Date.Date }
+        range =
+            { start = fromDate
+            , end = Date.add Date.Days (chunkYears * 366) fromDate
+            }
 
         newOccurrences : List Occurrence
         newOccurrences =
-            filtered
-                |> List.filter (\d -> Date.toRataDie d >= fromRD)
-                |> List.map (\d -> { event = event, time = shiftTime event.time seed d })
+            expandRule range event rule
 
         combined : List Occurrence
         combined =
@@ -1620,7 +1602,7 @@ expandNextChunked rule seed fromRD needed event chunkYears acc =
                     combined
 
                 else
-                    expandNextChunked rule seed fromRD needed event (chunkYears * 2) []
+                    expandNextChunked needed fromDate event rule (chunkYears * 2) []
 
             _ ->
                 combined
@@ -1754,30 +1736,37 @@ subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusio
         currentMs : Int
         currentMs =
             startMs + stepIndex * intervalMs
+
+        pastEnd : Bool
+        pastEnd =
+            currentMs >= rangeEndMs
+
+        excluded : Bool
+        excluded =
+            List.member currentMs exclusionMs
+
+        filtered : Bool
+        filtered =
+            not (passesSubDailyFilters rule currentMs)
+
+        inRange : Bool
+        inRange =
+            currentMs >= rangeStartMs
     in
-    if currentMs >= rangeEndMs && not (isCountLimited rule.end) then
+    if pastEnd && not (isCountLimited rule.end) then
         List.reverse acc
 
     else
         case rule.end of
             Count n ->
-                if emittedCount >= n then
+                if emittedCount >= n || pastEnd then
                     List.reverse acc
 
-                else if currentMs >= rangeEndMs then
-                    -- Past range but still counting — keep going a bit in case of UNTIL
-                    List.reverse acc
-
-                else if List.member currentMs exclusionMs then
+                else if excluded || filtered then
                     subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
 
-                else if currentMs >= rangeStartMs then
-                    let
-                        occ : Occurrence
-                        occ =
-                            makeSubDailyOccurrence event tzName currentMs durationMs
-                    in
-                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (emittedCount + 1) (occ :: acc)
+                else if inRange then
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (emittedCount + 1) (makeSubDailyOccurrence event tzName currentMs durationMs :: acc)
 
                 else
                     subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
@@ -1786,16 +1775,11 @@ subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusio
                 if currentMs > Time.posixToMillis untilPosix then
                     List.reverse acc
 
-                else if List.member currentMs exclusionMs then
+                else if excluded || filtered then
                     subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
 
-                else if currentMs >= rangeStartMs then
-                    let
-                        occ : Occurrence
-                        occ =
-                            makeSubDailyOccurrence event tzName currentMs durationMs
-                    in
-                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (emittedCount + 1) (occ :: acc)
+                else if inRange then
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (emittedCount + 1) (makeSubDailyOccurrence event tzName currentMs durationMs :: acc)
 
                 else
                     subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
@@ -1804,37 +1788,48 @@ subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusio
                 if Date.toRataDie (Date.fromPosix Time.utc (Time.millisToPosix currentMs)) > Date.toRataDie untilDate then
                     List.reverse acc
 
-                else if List.member currentMs exclusionMs then
+                else if excluded || filtered then
                     subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
 
-                else if currentMs >= rangeStartMs then
-                    let
-                        occ : Occurrence
-                        occ =
-                            makeSubDailyOccurrence event tzName currentMs durationMs
-                    in
-                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (emittedCount + 1) (occ :: acc)
+                else if inRange then
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (emittedCount + 1) (makeSubDailyOccurrence event tzName currentMs durationMs :: acc)
 
                 else
                     subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
 
             Forever ->
-                if currentMs >= rangeEndMs then
+                if pastEnd then
                     List.reverse acc
 
-                else if List.member currentMs exclusionMs then
+                else if excluded || filtered then
                     subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
 
-                else if currentMs >= rangeStartMs then
-                    let
-                        occ : Occurrence
-                        occ =
-                            makeSubDailyOccurrence event tzName currentMs durationMs
-                    in
-                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (emittedCount + 1) (occ :: acc)
+                else if inRange then
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (emittedCount + 1) (makeSubDailyOccurrence event tzName currentMs durationMs :: acc)
 
                 else
                     subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+
+
+passesSubDailyFilters : RecurrenceRule -> Int -> Bool
+passesSubDailyFilters rule currentMs =
+    let
+        posix : Time.Posix
+        posix =
+            Time.millisToPosix currentMs
+
+        date : Date.Date
+        date =
+            Date.fromPosix Time.utc posix
+    in
+    (List.isEmpty rule.byMonth || List.member (Date.month date) rule.byMonth)
+        && (List.isEmpty rule.byMonthDay || List.member (Date.day date) rule.byMonthDay)
+        && (List.isEmpty rule.byDay || List.member (Date.weekday date) (List.map daySpecWeekday rule.byDay))
+        && (List.isEmpty rule.byHour || List.member (Time.toHour Time.utc posix) rule.byHour)
+        && (List.isEmpty rule.byMinute || List.member (Time.toMinute Time.utc posix) rule.byMinute)
+        && (List.isEmpty rule.bySecond || List.member (Time.toSecond Time.utc posix) rule.bySecond)
+        && (List.isEmpty rule.byYearDay || List.member (Date.ordinalDay date) rule.byYearDay)
+        && (List.isEmpty rule.byWeekNo || List.member (Date.weekNumber date) rule.byWeekNo)
 
 
 makeSubDailyOccurrence : Event -> Maybe String -> Int -> Int -> Occurrence
@@ -1945,7 +1940,104 @@ expandByTimeParts rule event seed candidateDate =
                                     )
                         )
 
-            _ ->
+            FloatingTime { start, end } ->
+                let
+                    dayDelta : Int
+                    dayDelta =
+                        Date.toRataDie candidateDate - Date.toRataDie seed
+
+                    origDuration : { hours : Int, minutes : Int, seconds : Int }
+                    origDuration =
+                        case end of
+                            Just e ->
+                                let
+                                    startSecs : Int
+                                    startSecs =
+                                        start.hour * 3600 + start.minute * 60 + start.second
+
+                                    endSecs : Int
+                                    endSecs =
+                                        e.hour * 3600 + e.minute * 60 + e.second
+
+                                    diff : Int
+                                    diff =
+                                        endSecs - startSecs
+                                in
+                                { hours = diff // 3600, minutes = modBy 60 (diff // 60), seconds = modBy 60 diff }
+
+                            Nothing ->
+                                { hours = 0, minutes = 0, seconds = 0 }
+
+                    hours : List Int
+                    hours =
+                        if List.isEmpty rule.byHour then
+                            [ start.hour ]
+
+                        else
+                            rule.byHour
+
+                    minutes : List Int
+                    minutes =
+                        if List.isEmpty rule.byMinute then
+                            [ start.minute ]
+
+                        else
+                            rule.byMinute
+
+                    seconds : List Int
+                    seconds =
+                        if List.isEmpty rule.bySecond then
+                            [ start.second ]
+
+                        else
+                            rule.bySecond
+
+                    newDate : Date.Date
+                    newDate =
+                        Date.add Date.Days dayDelta (Date.fromCalendarDate start.year start.month start.day)
+                in
+                hours
+                    |> List.concatMap
+                        (\h ->
+                            minutes
+                                |> List.concatMap
+                                    (\mn ->
+                                        seconds
+                                            |> List.map
+                                                (\s ->
+                                                    let
+                                                        newStart : LocalDateTime
+                                                        newStart =
+                                                            { year = Date.year newDate
+                                                            , month = Date.month newDate
+                                                            , day = Date.day newDate
+                                                            , hour = h
+                                                            , minute = mn
+                                                            , second = s
+                                                            }
+
+                                                        newEnd : LocalDateTime
+                                                        newEnd =
+                                                            { year = Date.year newDate
+                                                            , month = Date.month newDate
+                                                            , day = Date.day newDate
+                                                            , hour = h + origDuration.hours
+                                                            , minute = mn + origDuration.minutes
+                                                            , second = s + origDuration.seconds
+                                                            }
+                                                    in
+                                                    { event = event
+                                                    , time =
+                                                        FloatingTime
+                                                            { start = newStart
+                                                            , end = Just newEnd
+                                                            }
+                                                    }
+                                                )
+                                    )
+                        )
+
+            AllDay _ ->
                 [ { event = event, time = shiftTime event.time seed candidateDate } ]
 
 
