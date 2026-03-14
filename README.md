@@ -154,7 +154,7 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 - `VALARM` generation: `DISPLAY` and `AUDIO` alarms with trigger offsets relative to start or end. EMAIL alarms are omitted — they are rarely supported by modern calendar clients.
 - `VJOURNAL` generation: journal/note entries with optional date or datetime, status (`DRAFT`/`FINAL`/`CANCELLED`), and description
 - Recurrence rules via opaque `Rule` builder:
-  - `FREQ`, `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYSETPOS`, `WKST`
+  - `FREQ`, `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYSETPOS`, `BYHOUR`, `BYMINUTE`, `BYSECOND`, `BYYEARDAY`, `BYWEEKNO`, `WKST`
   - `Frequency` carries `every` (interval) and `weekStart` (for Weekly), so they're scoped to where they apply
   - `BYMONTH` uses `Time.Month` values, so invalid months are impossible at the type level
 
@@ -173,7 +173,7 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 ### Recurrence Subset
 
 - Frequencies: `SECONDLY`, `MINUTELY`, `HOURLY`, `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`
-- Rule parts: `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYSETPOS`, `WKST`
+- Rule parts: `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYSETPOS`, `BYHOUR`, `BYMINUTE`, `BYSECOND`, `BYYEARDAY`, `BYWEEKNO`, `WKST`
 - Exception dates: `EXDATE` for all-day, floating, and resolved date-time events
 - Additional recurrence dates: `RDATE`
 - `RECURRENCE-ID` override merging
@@ -182,8 +182,6 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 ## Not Supported Yet
 
 - Generating `TZID` date-times or `VTIMEZONE` components
-- Recurrence expansion for sub-daily frequencies (`SECONDLY`, `MINUTELY`, `HOURLY`) — these frequencies parse and generate correctly, but `expand`/`expandNext` return no occurrences for them
-- `BYSECOND`, `BYMINUTE`, `BYHOUR`, `BYYEARDAY`, `BYWEEKNO`
 - Typed `VALARM` parsing (VALARM sub-components inside events are silently skipped; generation is supported)
 - `VTODO` and `VFREEBUSY`
 

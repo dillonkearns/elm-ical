@@ -79,6 +79,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -118,6 +123,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -148,6 +158,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -178,6 +193,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
                     in
                     Parser.expand yearRange [ event ]
@@ -202,6 +222,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -234,6 +259,11 @@ suite =
                                     , byMonthDay = [ -1 ]
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -271,6 +301,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -302,6 +337,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -336,6 +376,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -368,6 +413,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -398,6 +448,11 @@ suite =
                                     , byMonthDay = [ 1, 15 ]
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -430,6 +485,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -461,6 +521,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -491,6 +556,11 @@ suite =
                                     , byMonthDay = [ -1 ]
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -523,6 +593,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -557,6 +632,11 @@ suite =
                                     , byMonthDay = [ 15 ]
                                     , byMonth = [ Time.Mar, Time.Jun ]
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -594,6 +674,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
                                 |> addExclusion (Time.millisToPosix 1616151600000)
                                 -- 2021-03-19
@@ -760,6 +845,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = [ -1 ]
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -792,6 +882,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -843,6 +938,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -890,6 +990,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -929,6 +1034,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
 
                         occurrences : List Parser.Occurrence
@@ -1041,6 +1151,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
                     in
                     Parser.expandNext 3
@@ -1069,6 +1184,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
                     in
                     Parser.expandNext 3
@@ -1097,6 +1217,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
                     in
                     Parser.expandNext 10
@@ -1153,6 +1278,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
                     in
                     Parser.expandNext 4
@@ -1182,6 +1312,11 @@ suite =
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
                                     }
                                 |> addExclusion (Time.millisToPosix 1616151600000)
                                 -- 2021-03-19
@@ -1198,6 +1333,238 @@ suite =
                             , Date.fromCalendarDate 2021 Time.Mar 20
                             , Date.fromCalendarDate 2021 Time.Mar 22
                             ]
+            ]
+        , describe "BYYEARDAY"
+            [ test "YEARLY with BYYEARDAY expands to specific days of the year" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "Yearly milestones"
+                                , start = Time.millisToPosix 1609502400000 -- 2021-01-01T10:00:00Z
+                                , end = Time.millisToPosix 1609506000000 -- 2021-01-01T11:00:00Z
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Yearly { every = 1 }
+                                    , end = Recurrence.Forever
+                                    , byDay = []
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = [ 1, 100 ]
+                                    , byWeekNo = []
+                                    }
+                    in
+                    Parser.expand yearRange [ event ]
+                        |> List.map (occurrenceDate Time.utc)
+                        |> Expect.equal
+                            [ Date.fromCalendarDate 2021 Time.Jan 1
+                            , Date.fromCalendarDate 2021 Time.Apr 10
+                            ]
+            , test "YEARLY with negative BYYEARDAY (-1 = last day of year)" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "Year end"
+                                , start = Time.millisToPosix 1609502400000 -- 2021-01-01T10:00:00Z
+                                , end = Time.millisToPosix 1609506000000
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Yearly { every = 1 }
+                                    , end = Recurrence.Forever
+                                    , byDay = []
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = [ -1 ]
+                                    , byWeekNo = []
+                                    }
+                    in
+                    Parser.expand yearRange [ event ]
+                        |> List.map (occurrenceDate Time.utc)
+                        |> Expect.equal
+                            [ Date.fromCalendarDate 2021 Time.Dec 31
+                            ]
+            ]
+        , describe "BYWEEKNO"
+            [ test "YEARLY with BYWEEKNO and BYDAY expands to specific ISO weeks" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "ISO week event"
+                                , start = Time.millisToPosix 1609754400000 -- 2021-01-04T10:00:00Z (Mon, ISO week 1)
+                                , end = Time.millisToPosix 1609758000000
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Yearly { every = 1 }
+                                    , end = Recurrence.Forever
+                                    , byDay = [ Recurrence.Every Time.Mon ]
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = [ 1, 10 ]
+                                    }
+                    in
+                    Parser.expand yearRange [ event ]
+                        |> List.map (occurrenceDate Time.utc)
+                        |> Expect.equal
+                            [ Date.fromCalendarDate 2021 Time.Jan 4 -- ISO week 1 Monday
+                            , Date.fromCalendarDate 2021 Time.Mar 8 -- ISO week 10 Monday
+                            ]
+            ]
+        , describe "BYHOUR/BYMINUTE/BYSECOND"
+            [ test "DAILY with BYHOUR produces multiple occurrences per day" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "Twice daily"
+                                , start = Time.millisToPosix 1616065200000 -- 2021-03-18T10:00:00Z
+                                , end = Time.millisToPosix 1616068800000 -- 2021-03-18T11:00:00Z
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Daily { every = 1 }
+                                    , end = Recurrence.Count 4
+                                    , byDay = []
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , byHour = [ 9, 17 ]
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
+                                    }
+                    in
+                    Parser.expand yearRange [ event ]
+                        |> List.map (occurrenceHour Time.utc)
+                        |> Expect.equal [ 9, 17, 9, 17 ]
+            , test "DAILY with BYHOUR and BYMINUTE produces cartesian product" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "Multi-time"
+                                , start = Time.millisToPosix 1616065200000 -- 2021-03-18T10:00:00Z
+                                , end = Time.millisToPosix 1616068800000
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Daily { every = 1 }
+                                    , end = Recurrence.Count 4
+                                    , byDay = []
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , byHour = [ 9, 17 ]
+                                    , byMinute = [ 0, 30 ]
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
+                                    }
+                    in
+                    Parser.expand yearRange [ event ]
+                        |> List.map (occurrenceHourMinute Time.utc)
+                        |> Expect.equal [ ( 9, 0 ), ( 9, 30 ), ( 17, 0 ), ( 17, 30 ) ]
+            ]
+        , describe "sub-daily frequencies"
+            [ test "HOURLY expansion produces occurrences across days" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "Hourly check"
+                                , start = Time.millisToPosix 1616065200000 -- 2021-03-18T11:00:00Z
+                                , end = Time.millisToPosix 1616068800000 -- 2021-03-18T12:00:00Z
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Hourly { every = 6 }
+                                    , end = Recurrence.Count 5
+                                    , byDay = []
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
+                                    }
+                    in
+                    Parser.expand yearRange [ event ]
+                        |> List.map (occurrenceHour Time.utc)
+                        |> Expect.equal [ 11, 17, 23, 5, 11 ]
+            , test "MINUTELY expansion with COUNT" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "Pomodoro"
+                                , start = Time.millisToPosix 1616065200000 -- 2021-03-18T11:00:00Z
+                                , end = Time.millisToPosix 1616066700000 -- 2021-03-18T11:25:00Z
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Minutely { every = 30 }
+                                    , end = Recurrence.Count 4
+                                    , byDay = []
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
+                                    }
+                    in
+                    Parser.expand yearRange [ event ]
+                        |> List.map (occurrenceHourMinute Time.utc)
+                        |> Expect.equal [ ( 11, 0 ), ( 11, 30 ), ( 12, 0 ), ( 12, 30 ) ]
+            , test "SECONDLY expansion with COUNT" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "Heartbeat"
+                                , start = Time.millisToPosix 1616065200000 -- 2021-03-18T10:00:00Z
+                                , end = Time.millisToPosix 1616065215000 -- 2021-03-18T10:00:15Z
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Secondly { every = 15 }
+                                    , end = Recurrence.Count 3
+                                    , byDay = []
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
+                                    }
+                    in
+                    Parser.expand yearRange [ event ]
+                        |> List.map (occurrenceSecond Time.utc)
+                        |> Expect.equal [ 0, 15, 30 ]
             ]
         , describe "RECURRENCE-ID overrides"
             [ test "override replaces original occurrence in expand" <|
@@ -1495,3 +1862,33 @@ occurrenceDate zone occ =
 
         Parser.FloatingTime { start } ->
             Date.fromCalendarDate start.year start.month start.day
+
+
+occurrenceHour : Time.Zone -> Parser.Occurrence -> Int
+occurrenceHour zone occ =
+    case occ.time of
+        Parser.WithTime { start } ->
+            Time.toHour zone start.posix
+
+        _ ->
+            -1
+
+
+occurrenceHourMinute : Time.Zone -> Parser.Occurrence -> ( Int, Int )
+occurrenceHourMinute zone occ =
+    case occ.time of
+        Parser.WithTime { start } ->
+            ( Time.toHour zone start.posix, Time.toMinute zone start.posix )
+
+        _ ->
+            ( -1, -1 )
+
+
+occurrenceSecond : Time.Zone -> Parser.Occurrence -> Int
+occurrenceSecond zone occ =
+    case occ.time of
+        Parser.WithTime { start } ->
+            Time.toSecond zone start.posix
+
+        _ ->
+            -1

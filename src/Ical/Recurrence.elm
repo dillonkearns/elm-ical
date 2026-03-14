@@ -46,6 +46,11 @@ rules for generation, use [`Ical.Rule`](Ical#Rule) and its builder functions.
     parts within each frequency period. Positive counts from the start, negative
     from the end. For example, `BYDAY=MO,TU,WE,TH,FR` with `bySetPos = [ -1 ]`
     means "the last weekday" of each period.
+  - `byHour` — which hours (0–23).
+  - `byMinute` — which minutes (0–59).
+  - `bySecond` — which seconds (0–60, 60 for leap second).
+  - `byYearDay` — which days of the year (1–366, or -366 to -1 from year end).
+  - `byWeekNo` — which ISO week numbers (1–53, or -53 to -1 from year end).
 
 -}
 type alias RecurrenceRule =
@@ -55,6 +60,11 @@ type alias RecurrenceRule =
     , byMonthDay : List Int
     , byMonth : List Time.Month
     , bySetPos : List Int
+    , byHour : List Int
+    , byMinute : List Int
+    , bySecond : List Int
+    , byYearDay : List Int
+    , byWeekNo : List Int
     }
 
 
@@ -63,10 +73,6 @@ type alias RecurrenceRule =
   - `every` — the interval between occurrences (e.g. `every = 2` with `Weekly`
     means every other week). Must be at least 1.
   - `weekStart` — which day begins the week (only meaningful for `Weekly`).
-
-**Note:** `Secondly`, `Minutely`, and `Hourly` are supported for generation and
-parsing, but recurrence expansion (`expand`/`expandNext`) does not yet produce
-occurrences for sub-daily frequencies.
 
 -}
 type Frequency

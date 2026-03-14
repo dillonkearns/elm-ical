@@ -1436,7 +1436,7 @@ expand range events =
                 overriddenDates
     in
     (List.filter (\occ -> not (isOverridden occ)) masterOccurrences ++ overrideOccurrences)
-        |> List.sortBy (\occ -> Date.toRataDie (occurrenceStartDate occ.time))
+        |> List.sortBy (\occ -> occurrenceTimeKey occ.time)
 
 
 expandEvent : { start : Date.Date, end : Date.Date } -> Event -> List Occurrence
@@ -1473,7 +1473,7 @@ expandEvent range event =
                 |> List.map (\d -> { event = event, time = shiftTime event.time seed d })
     in
     (baseOccurrences ++ rdateOccurrences)
-        |> List.sortBy (\occ -> Date.toRataDie (occurrenceStartDate occ.time))
+        |> List.sortBy (\occ -> occurrenceTimeKey occ.time)
         |> dedupOccurrences
 
 
@@ -1527,7 +1527,7 @@ expandNext n fromDate events =
                 overriddenDates
     in
     (List.filter (\occ -> not (isOverridden occ)) masterOccurrences ++ overrideOccurrences)
-        |> List.sortBy (\occ -> Date.toRataDie (occurrenceStartDate occ.time))
+        |> List.sortBy (\occ -> occurrenceTimeKey occ.time)
         |> List.take n
 
 
@@ -1565,7 +1565,7 @@ expandNextEvent n fromDate event =
                 |> List.map (\d -> { event = event, time = shiftTime event.time seed d })
     in
     (baseOccurrences ++ rdateOccurrences)
-        |> List.sortBy (\occ -> Date.toRataDie (occurrenceStartDate occ.time))
+        |> List.sortBy (\occ -> occurrenceTimeKey occ.time)
         |> dedupOccurrences
         |> List.take n
 
@@ -1628,31 +1628,325 @@ expandNextChunked rule seed fromRD needed event chunkYears acc =
 
 expandRule : { start : Date.Date, end : Date.Date } -> Event -> RecurrenceRule -> List Occurrence
 expandRule range event rule =
+    case frequencyToMillis rule.frequency of
+        Just intervalMs ->
+            expandSubDaily range event rule intervalMs
+
+        Nothing ->
+            let
+                hasTimeParts : Bool
+                hasTimeParts =
+                    not (List.isEmpty rule.byHour && List.isEmpty rule.byMinute && List.isEmpty rule.bySecond)
+
+                seed : Date.Date
+                seed =
+                    occurrenceStartDate event.time
+
+                rangeStartRD : Int
+                rangeStartRD =
+                    Date.toRataDie range.start
+
+                rangeEndRD : Int
+                rangeEndRD =
+                    Date.toRataDie range.end
+
+                candidates : List Date.Date
+                candidates =
+                    generateCandidates rule event.time seed rangeEndRD
+
+                filtered : List Date.Date
+                filtered =
+                    candidates
+                        |> filterExclusions event
+
+                occurrences : List Occurrence
+                occurrences =
+                    filtered
+                        |> List.filter (\d -> Date.toRataDie d >= rangeStartRD && Date.toRataDie d <= rangeEndRD)
+                        |> List.concatMap
+                            (\d ->
+                                expandByTimeParts rule event seed d
+                            )
+            in
+            -- When time parts expand each date into multiple occurrences,
+            -- COUNT should limit the total occurrence count, not the date count.
+            if hasTimeParts then
+                case rule.end of
+                    Count n ->
+                        List.take n occurrences
+
+                    _ ->
+                        occurrences
+
+            else
+                occurrences
+
+
+frequencyToMillis : Frequency -> Maybe Int
+frequencyToMillis freq =
+    case freq of
+        Secondly { every } ->
+            Just (every * 1000)
+
+        Minutely { every } ->
+            Just (every * 60 * 1000)
+
+        Hourly { every } ->
+            Just (every * 3600 * 1000)
+
+        _ ->
+            Nothing
+
+
+expandSubDaily : { start : Date.Date, end : Date.Date } -> Event -> RecurrenceRule -> Int -> List Occurrence
+expandSubDaily range event rule intervalMs =
+    case event.time of
+        WithTime { start, end } ->
+            let
+                startMs : Int
+                startMs =
+                    Time.posixToMillis start.posix
+
+                durationMs : Int
+                durationMs =
+                    case end of
+                        Just e ->
+                            Time.posixToMillis e.posix - startMs
+
+                        Nothing ->
+                            0
+
+                rangeStartMs : Int
+                rangeStartMs =
+                    dateToUnixMs range.start
+
+                rangeEndMs : Int
+                rangeEndMs =
+                    dateToUnixMs range.end + 86400000
+
+                exclusionMs : List Int
+                exclusionMs =
+                    event.exclusions |> List.map Time.posixToMillis
+            in
+            subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event start.timeZoneName 0 0 []
+
+        _ ->
+            -- Sub-daily frequencies don't apply to all-day or floating events
+            []
+
+
+subDailyLoop :
+    RecurrenceRule
+    -> Int
+    -> Int
+    -> Int
+    -> Int
+    -> Int
+    -> List Int
+    -> Event
+    -> Maybe String
+    -> Int
+    -> Int
+    -> List Occurrence
+    -> List Occurrence
+subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName stepIndex emittedCount acc =
     let
-        seed : Date.Date
-        seed =
-            occurrenceStartDate event.time
-
-        rangeStartRD : Int
-        rangeStartRD =
-            Date.toRataDie range.start
-
-        rangeEndRD : Int
-        rangeEndRD =
-            Date.toRataDie range.end
-
-        candidates : List Date.Date
-        candidates =
-            generateCandidates rule event.time seed rangeEndRD
-
-        filtered : List Date.Date
-        filtered =
-            candidates
-                |> filterExclusions event
+        currentMs : Int
+        currentMs =
+            startMs + stepIndex * intervalMs
     in
-    filtered
-        |> List.filter (\d -> Date.toRataDie d >= rangeStartRD && Date.toRataDie d <= rangeEndRD)
-        |> List.map (\d -> { event = event, time = shiftTime event.time seed d })
+    if currentMs >= rangeEndMs && not (isCountLimited rule.end) then
+        List.reverse acc
+
+    else
+        case rule.end of
+            Count n ->
+                if emittedCount >= n then
+                    List.reverse acc
+
+                else if currentMs >= rangeEndMs then
+                    -- Past range but still counting — keep going a bit in case of UNTIL
+                    List.reverse acc
+
+                else if List.member currentMs exclusionMs then
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+
+                else if currentMs >= rangeStartMs then
+                    let
+                        occ : Occurrence
+                        occ =
+                            makeSubDailyOccurrence event tzName currentMs durationMs
+                    in
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (emittedCount + 1) (occ :: acc)
+
+                else
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+
+            UntilDateTime untilPosix ->
+                if currentMs > Time.posixToMillis untilPosix then
+                    List.reverse acc
+
+                else if List.member currentMs exclusionMs then
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+
+                else if currentMs >= rangeStartMs then
+                    let
+                        occ : Occurrence
+                        occ =
+                            makeSubDailyOccurrence event tzName currentMs durationMs
+                    in
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (emittedCount + 1) (occ :: acc)
+
+                else
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+
+            UntilDate untilDate ->
+                if Date.toRataDie (Date.fromPosix Time.utc (Time.millisToPosix currentMs)) > Date.toRataDie untilDate then
+                    List.reverse acc
+
+                else if List.member currentMs exclusionMs then
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+
+                else if currentMs >= rangeStartMs then
+                    let
+                        occ : Occurrence
+                        occ =
+                            makeSubDailyOccurrence event tzName currentMs durationMs
+                    in
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (emittedCount + 1) (occ :: acc)
+
+                else
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+
+            Forever ->
+                if currentMs >= rangeEndMs then
+                    List.reverse acc
+
+                else if List.member currentMs exclusionMs then
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+
+                else if currentMs >= rangeStartMs then
+                    let
+                        occ : Occurrence
+                        occ =
+                            makeSubDailyOccurrence event tzName currentMs durationMs
+                    in
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (emittedCount + 1) (occ :: acc)
+
+                else
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+
+
+makeSubDailyOccurrence : Event -> Maybe String -> Int -> Int -> Occurrence
+makeSubDailyOccurrence event tzName currentMs durationMs =
+    let
+        startPosix : Time.Posix
+        startPosix =
+            Time.millisToPosix currentMs
+
+        endPosix : Time.Posix
+        endPosix =
+            Time.millisToPosix (currentMs + durationMs)
+    in
+    { event = event
+    , time =
+        WithTime
+            { start = { posix = startPosix, timeZoneName = tzName }
+            , end = Just { posix = endPosix, timeZoneName = tzName }
+            }
+    }
+
+
+expandByTimeParts : RecurrenceRule -> Event -> Date.Date -> Date.Date -> List Occurrence
+expandByTimeParts rule event seed candidateDate =
+    if List.isEmpty rule.byHour && List.isEmpty rule.byMinute && List.isEmpty rule.bySecond then
+        [ { event = event, time = shiftTime event.time seed candidateDate } ]
+
+    else
+        case event.time of
+            WithTime { start, end } ->
+                let
+                    dayDelta : Int
+                    dayDelta =
+                        Date.toRataDie candidateDate - Date.toRataDie seed
+
+                    durationMs : Int
+                    durationMs =
+                        case end of
+                            Just e ->
+                                Time.posixToMillis e.posix - Time.posixToMillis start.posix
+
+                            Nothing ->
+                                0
+
+                    origHour : Int
+                    origHour =
+                        Time.toHour Time.utc start.posix
+
+                    origMinute : Int
+                    origMinute =
+                        Time.toMinute Time.utc start.posix
+
+                    origSecond : Int
+                    origSecond =
+                        Time.toSecond Time.utc start.posix
+
+                    hours : List Int
+                    hours =
+                        if List.isEmpty rule.byHour then
+                            [ origHour ]
+
+                        else
+                            rule.byHour
+
+                    minutes : List Int
+                    minutes =
+                        if List.isEmpty rule.byMinute then
+                            [ origMinute ]
+
+                        else
+                            rule.byMinute
+
+                    seconds : List Int
+                    seconds =
+                        if List.isEmpty rule.bySecond then
+                            [ origSecond ]
+
+                        else
+                            rule.bySecond
+
+                    -- Midnight of the candidate date in ms
+                    baseDayMs : Int
+                    baseDayMs =
+                        Time.posixToMillis start.posix + dayDelta * 86400000 - (origHour * 3600000 + origMinute * 60000 + origSecond * 1000)
+                in
+                hours
+                    |> List.concatMap
+                        (\h ->
+                            minutes
+                                |> List.concatMap
+                                    (\m ->
+                                        seconds
+                                            |> List.map
+                                                (\s ->
+                                                    let
+                                                        newStartMs : Int
+                                                        newStartMs =
+                                                            baseDayMs + h * 3600000 + m * 60000 + s * 1000
+                                                    in
+                                                    { event = event
+                                                    , time =
+                                                        WithTime
+                                                            { start = { posix = Time.millisToPosix newStartMs, timeZoneName = start.timeZoneName }
+                                                            , end = Just { posix = Time.millisToPosix (newStartMs + durationMs), timeZoneName = start.timeZoneName }
+                                                            }
+                                                    }
+                                                )
+                                    )
+                        )
+
+            _ ->
+                [ { event = event, time = shiftTime event.time seed candidateDate } ]
 
 
 generateCandidates : RecurrenceRule -> EventTime -> Date.Date -> Int -> List Date.Date
@@ -1817,8 +2111,7 @@ expandWithinPeriod : RecurrenceRule -> Date.Date -> Date.Date -> List Date.Date
 expandWithinPeriod rule seed intervalDate =
     case rule.frequency of
         Secondly _ ->
-            -- Sub-daily expansion is not yet supported; the event parses correctly
-            -- but expand/expandNext return no occurrences for sub-daily frequencies.
+            -- Sub-daily frequencies are handled by expandSubDaily, not the date-based pipeline
             []
 
         Minutely _ ->
@@ -1832,18 +2125,25 @@ expandWithinPeriod rule seed intervalDate =
                 |> filterByMonth rule.byMonth
                 |> filterByMonthDay rule.byMonthDay
                 |> filterByDay rule.byDay
+                |> filterByYearDay rule.byYearDay
+                |> filterByWeekNo rule.byWeekNo
 
         Weekly { weekStart } ->
-            if List.isEmpty rule.byDay then
+            (if List.isEmpty rule.byDay then
                 [ intervalDate ]
                     |> filterByMonth rule.byMonth
 
-            else
+             else
                 expandWeekByDay weekStart rule.byDay intervalDate
                     |> filterByMonth rule.byMonth
+            )
+                |> filterByYearDay rule.byYearDay
+                |> filterByWeekNo rule.byWeekNo
 
         Monthly _ ->
             expandMonthly rule intervalDate
+                |> filterByYearDay rule.byYearDay
+                |> filterByWeekNo rule.byWeekNo
 
         Yearly _ ->
             expandYearly rule seed intervalDate
@@ -1981,27 +2281,39 @@ expandYearly rule seed intervalDate =
         year =
             Date.year intervalDate
 
-        months : List Time.Month
-        months =
-            if List.isEmpty rule.byMonth then
-                [ Date.month seed ]
-
-            else
-                rule.byMonth
-
         baseDates : List Date.Date
         baseDates =
-            if not (List.isEmpty rule.byMonthDay) then
-                months
-                    |> List.concatMap (\m -> expandByMonthDay year m rule.byMonthDay)
+            if not (List.isEmpty rule.byYearDay) then
+                expandByYearDay year rule.byYearDay
+                    |> filterByMonth rule.byMonth
+                    |> filterByDay rule.byDay
 
-            else if not (List.isEmpty rule.byDay) then
-                months
-                    |> List.concatMap (\m -> expandByDayInMonth year m rule.byDay)
+            else if not (List.isEmpty rule.byWeekNo) then
+                expandByWeekNo year rule.byWeekNo
+                    |> filterByDay rule.byDay
+                    |> filterByMonth rule.byMonth
 
             else
-                months
-                    |> List.map (\m -> Date.fromCalendarDate year m (Date.day seed))
+                let
+                    months : List Time.Month
+                    months =
+                        if List.isEmpty rule.byMonth then
+                            [ Date.month seed ]
+
+                        else
+                            rule.byMonth
+                in
+                if not (List.isEmpty rule.byMonthDay) then
+                    months
+                        |> List.concatMap (\m -> expandByMonthDay year m rule.byMonthDay)
+
+                else if not (List.isEmpty rule.byDay) then
+                    months
+                        |> List.concatMap (\m -> expandByDayInMonth year m rule.byDay)
+
+                else
+                    months
+                        |> List.map (\m -> Date.fromCalendarDate year m (Date.day seed))
     in
     baseDates
         |> List.sortBy Date.toRataDie
@@ -2182,6 +2494,193 @@ filterByDay byDay dates =
         List.filter (\d -> List.member (Date.weekday d) weekdays) dates
 
 
+filterByYearDay : List Int -> List Date.Date -> List Date.Date
+filterByYearDay byYearDay dates =
+    if List.isEmpty byYearDay then
+        dates
+
+    else
+        List.filter
+            (\d ->
+                let
+                    totalDays : Int
+                    totalDays =
+                        if DateHelpers.isLeapYear (Date.year d) then
+                            366
+
+                        else
+                            365
+
+                    resolvedDays : List Int
+                    resolvedDays =
+                        List.filterMap
+                            (\yd ->
+                                let
+                                    actual : Int
+                                    actual =
+                                        if yd < 0 then
+                                            totalDays + yd + 1
+
+                                        else
+                                            yd
+                                in
+                                if actual >= 1 && actual <= totalDays then
+                                    Just actual
+
+                                else
+                                    Nothing
+                            )
+                            byYearDay
+                in
+                List.member (Date.ordinalDay d) resolvedDays
+            )
+            dates
+
+
+filterByWeekNo : List Int -> List Date.Date -> List Date.Date
+filterByWeekNo byWeekNo dates =
+    if List.isEmpty byWeekNo then
+        dates
+
+    else
+        List.filter
+            (\d ->
+                let
+                    totalWeeks : Int
+                    totalWeeks =
+                        isoWeeksInYear (Date.year d)
+
+                    resolvedWeeks : List Int
+                    resolvedWeeks =
+                        List.filterMap
+                            (\wn ->
+                                let
+                                    actual : Int
+                                    actual =
+                                        if wn < 0 then
+                                            totalWeeks + wn + 1
+
+                                        else
+                                            wn
+                                in
+                                if actual >= 1 && actual <= totalWeeks then
+                                    Just actual
+
+                                else
+                                    Nothing
+                            )
+                            byWeekNo
+                in
+                List.member (Date.weekNumber d) resolvedWeeks
+            )
+            dates
+
+
+expandByYearDay : Int -> List Int -> List Date.Date
+expandByYearDay year yearDays =
+    let
+        totalDays : Int
+        totalDays =
+            if DateHelpers.isLeapYear year then
+                366
+
+            else
+                365
+
+        jan1 : Date.Date
+        jan1 =
+            Date.fromCalendarDate year Time.Jan 1
+    in
+    yearDays
+        |> List.filterMap
+            (\yd ->
+                let
+                    actual : Int
+                    actual =
+                        if yd < 0 then
+                            totalDays + yd + 1
+
+                        else
+                            yd
+                in
+                if actual >= 1 && actual <= totalDays then
+                    Just (Date.add Date.Days (actual - 1) jan1)
+
+                else
+                    Nothing
+            )
+        |> List.sortBy Date.toRataDie
+
+
+expandByWeekNo : Int -> List Int -> List Date.Date
+expandByWeekNo year weekNos =
+    let
+        totalWeeks : Int
+        totalWeeks =
+            isoWeeksInYear year
+
+        -- Find the Monday of ISO week 1
+        jan4 : Date.Date
+        jan4 =
+            Date.fromCalendarDate year Time.Jan 4
+
+        week1Monday : Date.Date
+        week1Monday =
+            Date.floor Date.Monday jan4
+    in
+    weekNos
+        |> List.concatMap
+            (\wn ->
+                let
+                    actual : Int
+                    actual =
+                        if wn < 0 then
+                            totalWeeks + wn + 1
+
+                        else
+                            wn
+                in
+                if actual >= 1 && actual <= totalWeeks then
+                    let
+                        weekMonday : Date.Date
+                        weekMonday =
+                            Date.add Date.Weeks (actual - 1) week1Monday
+                    in
+                    -- Return all 7 days of that week
+                    List.range 0 6
+                        |> List.map (\i -> Date.add Date.Days i weekMonday)
+
+                else
+                    []
+            )
+        |> List.sortBy Date.toRataDie
+
+
+dateToUnixMs : Date.Date -> Int
+dateToUnixMs date =
+    -- Rata Die epoch is Jan 1, 1 CE. Unix epoch (Jan 1, 1970) = Rata Die 719163
+    (Date.toRataDie date - 719163) * 86400000
+
+
+isoWeeksInYear : Int -> Int
+isoWeeksInYear year =
+    -- A year has 53 ISO weeks if Jan 1 is Thursday, or Dec 31 is Thursday
+    let
+        jan1Weekday : Time.Weekday
+        jan1Weekday =
+            Date.weekday (Date.fromCalendarDate year Time.Jan 1)
+
+        dec31Weekday : Time.Weekday
+        dec31Weekday =
+            Date.weekday (Date.fromCalendarDate year Time.Dec 31)
+    in
+    if jan1Weekday == Time.Thu || dec31Weekday == Time.Thu then
+        53
+
+    else
+        52
+
+
 applyBySetPos : List Int -> List Date.Date -> List Date.Date
 applyBySetPos bySetPos dates =
     if List.isEmpty bySetPos then
@@ -2306,19 +2805,38 @@ dedupOccurrences occurrences =
 
 
 dedupOccurrencesHelp : List Occurrence -> Int -> List Occurrence -> List Occurrence
-dedupOccurrencesHelp remaining lastRD acc =
+dedupOccurrencesHelp remaining lastKey acc =
     case remaining of
         [] ->
             List.reverse acc
 
         occ :: rest ->
             let
-                rd : Int
-                rd =
-                    Date.toRataDie (occurrenceStartDate occ.time)
+                key : Int
+                key =
+                    occurrenceTimeKey occ.time
             in
-            if rd == lastRD then
-                dedupOccurrencesHelp rest lastRD acc
+            if key == lastKey then
+                dedupOccurrencesHelp rest lastKey acc
 
             else
-                dedupOccurrencesHelp rest rd (occ :: acc)
+                dedupOccurrencesHelp rest key (occ :: acc)
+
+
+occurrenceTimeKey : EventTime -> Int
+occurrenceTimeKey eventTime =
+    case eventTime of
+        WithTime { start } ->
+            Time.posixToMillis start.posix
+
+        AllDay { start } ->
+            Date.toRataDie start
+
+        FloatingTime { start } ->
+            Date.toRataDie (Date.fromCalendarDate start.year start.month start.day)
+                * 86400
+                + start.hour
+                * 3600
+                + start.minute
+                * 60
+                + start.second

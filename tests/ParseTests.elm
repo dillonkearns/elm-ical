@@ -266,6 +266,11 @@ recurrenceRuleTests =
                             , byMonthDay = []
                             , byMonth = []
                             , bySetPos = []
+                            , byHour = []
+                            , byMinute = []
+                            , bySecond = []
+                            , byYearDay = []
+                            , byWeekNo = []
                             }
                         )
         , test "parse FREQ=WEEKLY with BYDAY" <|
@@ -283,6 +288,11 @@ recurrenceRuleTests =
                             , byMonthDay = []
                             , byMonth = []
                             , bySetPos = []
+                            , byHour = []
+                            , byMinute = []
+                            , bySecond = []
+                            , byYearDay = []
+                            , byWeekNo = []
                             }
                         )
         , test "parse with INTERVAL" <|
@@ -369,6 +379,11 @@ recurrenceRuleTests =
                             , byMonthDay = []
                             , byMonth = []
                             , bySetPos = []
+                            , byHour = []
+                            , byMinute = []
+                            , bySecond = []
+                            , byYearDay = []
+                            , byWeekNo = []
                             }
                         )
         , test "missing FREQ returns error" <|
@@ -386,6 +401,11 @@ recurrenceRuleTests =
                             , byMonthDay = []
                             , byMonth = []
                             , bySetPos = []
+                            , byHour = []
+                            , byMinute = []
+                            , bySecond = []
+                            , byYearDay = []
+                            , byWeekNo = []
                             }
                         )
         , test "parse FREQ=MINUTELY with INTERVAL" <|
@@ -401,16 +421,61 @@ recurrenceRuleTests =
         , test "parse FREQ=HOURLY with COUNT" <|
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=HOURLY;INTERVAL=2;COUNT=12"
-                    |> Expect.equal
-                        (Ok
-                            { frequency = Recurrence.Hourly { every = 2 }
-                            , end = Recurrence.Count 12
-                            , byDay = []
-                            , byMonthDay = []
-                            , byMonth = []
-                            , bySetPos = []
-                            }
-                        )
+                    |> Result.map (\r -> ( r.frequency, r.end ))
+                    |> Expect.equal (Ok ( Recurrence.Hourly { every = 2 }, Recurrence.Count 12 ))
+        , test "parse BYYEARDAY" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=YEARLY;BYYEARDAY=1,100,-1"
+                    |> Result.map .byYearDay
+                    |> Expect.equal (Ok [ 1, 100, -1 ])
+        , test "invalid BYYEARDAY returns error" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=YEARLY;BYYEARDAY=0"
+                    |> Expect.err
+        , test "BYYEARDAY out of range returns error" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=YEARLY;BYYEARDAY=367"
+                    |> Expect.err
+        , test "parse BYWEEKNO" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=YEARLY;BYWEEKNO=1,20,-1"
+                    |> Result.map .byWeekNo
+                    |> Expect.equal (Ok [ 1, 20, -1 ])
+        , test "invalid BYWEEKNO returns error" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=YEARLY;BYWEEKNO=0"
+                    |> Expect.err
+        , test "BYWEEKNO out of range returns error" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=YEARLY;BYWEEKNO=54"
+                    |> Expect.err
+        , test "parse BYHOUR" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=DAILY;BYHOUR=9,17"
+                    |> Result.map .byHour
+                    |> Expect.equal (Ok [ 9, 17 ])
+        , test "invalid BYHOUR returns error" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=DAILY;BYHOUR=24"
+                    |> Expect.err
+        , test "parse BYMINUTE" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=HOURLY;BYMINUTE=0,15,30,45"
+                    |> Result.map .byMinute
+                    |> Expect.equal (Ok [ 0, 15, 30, 45 ])
+        , test "invalid BYMINUTE returns error" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=HOURLY;BYMINUTE=60"
+                    |> Expect.err
+        , test "parse BYSECOND" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=MINUTELY;BYSECOND=0,30"
+                    |> Result.map .bySecond
+                    |> Expect.equal (Ok [ 0, 30 ])
+        , test "invalid BYSECOND returns error" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=MINUTELY;BYSECOND=61"
+                    |> Expect.err
         ]
 
 
@@ -1232,6 +1297,11 @@ endToEndTests =
                                           , byMonthDay = []
                                           , byMonth = []
                                           , bySetPos = []
+                                          , byHour = []
+                                          , byMinute = []
+                                          , bySecond = []
+                                          , byYearDay = []
+                                          , byWeekNo = []
                                           }
                                         ]
 
@@ -1752,6 +1822,11 @@ endToEndTests =
                                           , byMonthDay = []
                                           , byMonth = []
                                           , bySetPos = []
+                                          , byHour = []
+                                          , byMinute = []
+                                          , bySecond = []
+                                          , byYearDay = []
+                                          , byWeekNo = []
                                           }
                                         ]
 

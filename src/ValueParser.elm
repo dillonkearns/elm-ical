@@ -468,24 +468,21 @@ parseRecurrenceRule input =
                                                         parseDaySpecs (getParam "BYDAY")
                                                             |> Result.andThen
                                                                 (\byDay ->
-                                                                    parseIntList "BYMONTHDAY" isValidMonthDay (getParam "BYMONTHDAY")
-                                                                        |> Result.andThen
-                                                                            (\byMonthDay ->
-                                                                                parseIntList "BYMONTH" isValidMonth (getParam "BYMONTH")
-                                                                                    |> Result.andThen
-                                                                                        (\byMonthInts ->
-                                                                                            parseIntList "BYSETPOS" isValidSetPos (getParam "BYSETPOS")
-                                                                                                |> Result.map
-                                                                                                    (\bySetPos ->
-                                                                                                        { frequency = frequency
-                                                                                                        , end = end
-                                                                                                        , byDay = byDay
-                                                                                                        , byMonthDay = byMonthDay
-                                                                                                        , byMonth = List.filterMap intToMonth byMonthInts
-                                                                                                        , bySetPos = bySetPos
-                                                                                                        }
-                                                                                                    )
-                                                                                        )
+                                                                    parseByParts getParam
+                                                                        |> Result.map
+                                                                            (\bp ->
+                                                                                { frequency = frequency
+                                                                                , end = end
+                                                                                , byDay = byDay
+                                                                                , byMonthDay = bp.byMonthDay
+                                                                                , byMonth = bp.byMonth
+                                                                                , bySetPos = bp.bySetPos
+                                                                                , byHour = bp.byHour
+                                                                                , byMinute = bp.byMinute
+                                                                                , bySecond = bp.bySecond
+                                                                                , byYearDay = bp.byYearDay
+                                                                                , byWeekNo = bp.byWeekNo
+                                                                                }
                                                                             )
                                                                 )
                                                     )
@@ -656,6 +653,88 @@ isValidMonth value =
 isValidSetPos : Int -> Bool
 isValidSetPos value =
     value /= 0 && value >= -366 && value <= 366
+
+
+isValidYearDay : Int -> Bool
+isValidYearDay value =
+    value /= 0 && value >= -366 && value <= 366
+
+
+isValidWeekNo : Int -> Bool
+isValidWeekNo value =
+    value /= 0 && value >= -53 && value <= 53
+
+
+isValidHour : Int -> Bool
+isValidHour value =
+    value >= 0 && value <= 23
+
+
+isValidMinute : Int -> Bool
+isValidMinute value =
+    value >= 0 && value <= 59
+
+
+isValidSecond : Int -> Bool
+isValidSecond value =
+    value >= 0 && value <= 60
+
+
+type alias ByParts =
+    { byMonthDay : List Int
+    , byMonth : List Time.Month
+    , bySetPos : List Int
+    , byHour : List Int
+    , byMinute : List Int
+    , bySecond : List Int
+    , byYearDay : List Int
+    , byWeekNo : List Int
+    }
+
+
+parseByParts : (String -> Maybe String) -> Result String ByParts
+parseByParts getParam =
+    parseIntList "BYMONTHDAY" isValidMonthDay (getParam "BYMONTHDAY")
+        |> Result.andThen
+            (\byMonthDay ->
+                parseIntList "BYMONTH" isValidMonth (getParam "BYMONTH")
+                    |> Result.andThen
+                        (\byMonthInts ->
+                            parseIntList "BYSETPOS" isValidSetPos (getParam "BYSETPOS")
+                                |> Result.andThen
+                                    (\bySetPos ->
+                                        parseIntList "BYHOUR" isValidHour (getParam "BYHOUR")
+                                            |> Result.andThen
+                                                (\byHour ->
+                                                    parseIntList "BYMINUTE" isValidMinute (getParam "BYMINUTE")
+                                                        |> Result.andThen
+                                                            (\byMinute ->
+                                                                parseIntList "BYSECOND" isValidSecond (getParam "BYSECOND")
+                                                                    |> Result.andThen
+                                                                        (\bySecond ->
+                                                                            parseIntList "BYYEARDAY" isValidYearDay (getParam "BYYEARDAY")
+                                                                                |> Result.andThen
+                                                                                    (\byYearDay ->
+                                                                                        parseIntList "BYWEEKNO" isValidWeekNo (getParam "BYWEEKNO")
+                                                                                            |> Result.map
+                                                                                                (\byWeekNo ->
+                                                                                                    { byMonthDay = byMonthDay
+                                                                                                    , byMonth = List.filterMap intToMonth byMonthInts
+                                                                                                    , bySetPos = bySetPos
+                                                                                                    , byHour = byHour
+                                                                                                    , byMinute = byMinute
+                                                                                                    , bySecond = bySecond
+                                                                                                    , byYearDay = byYearDay
+                                                                                                    , byWeekNo = byWeekNo
+                                                                                                    }
+                                                                                                )
+                                                                                    )
+                                                                        )
+                                                            )
+                                                )
+                                    )
+                        )
+            )
 
 
 intToMonth : Int -> Maybe Time.Month

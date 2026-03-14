@@ -13,6 +13,7 @@ module Ical exposing
     , withJournalCreated, withJournalLastModified, withJournalOrganizer
     , Rule, rule, withCount, withUntilDate, withUntilDateTime
     , withByDay, withByMonthDay, withByMonth, withBySetPos
+    , withByHour, withByMinute, withBySecond, withByYearDay, withByWeekNo
     )
 
 {-| Generate iCal ([RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545)) calendar feeds
@@ -108,6 +109,7 @@ reversed start/end times or negative intervals are silently normalized.
 
 @docs Rule, rule, withCount, withUntilDate, withUntilDateTime
 @docs withByDay, withByMonthDay, withByMonth, withBySetPos
+@docs withByHour, withByMinute, withBySecond, withByYearDay, withByWeekNo
 
 -}
 
@@ -407,6 +409,11 @@ type alias RuleData =
     , byMonthDay : List Int
     , byMonth : List Time.Month
     , bySetPos : List Int
+    , byHour : List Int
+    , byMinute : List Int
+    , bySecond : List Int
+    , byYearDay : List Int
+    , byWeekNo : List Int
     }
 
 
@@ -427,6 +434,11 @@ rule frequency =
         , byMonthDay = []
         , byMonth = []
         , bySetPos = []
+        , byHour = []
+        , byMinute = []
+        , bySecond = []
+        , byYearDay = []
+        , byWeekNo = []
         }
 
 
@@ -534,6 +546,43 @@ with `BYDAY=MO,TU,WE,TH,FR`, a `bySetPos` of `[ -1 ]` means "the last weekday."
 withBySetPos : List Int -> Rule -> Rule
 withBySetPos positions (Rule r) =
     Rule { r | bySetPos = positions }
+
+
+{-| Set which hours the rule applies to. Valid values are 0–23.
+-}
+withByHour : List Int -> Rule -> Rule
+withByHour hours (Rule r) =
+    Rule { r | byHour = hours }
+
+
+{-| Set which minutes the rule applies to. Valid values are 0–59.
+-}
+withByMinute : List Int -> Rule -> Rule
+withByMinute minutes (Rule r) =
+    Rule { r | byMinute = minutes }
+
+
+{-| Set which seconds the rule applies to. Valid values are 0–60 (60 for leap second).
+-}
+withBySecond : List Int -> Rule -> Rule
+withBySecond seconds (Rule r) =
+    Rule { r | bySecond = seconds }
+
+
+{-| Set which days of the year the rule applies to. Valid values are
+1 to 366 and -366 to -1. Negative values count from the end of the year.
+-}
+withByYearDay : List Int -> Rule -> Rule
+withByYearDay days (Rule r) =
+    Rule { r | byYearDay = days }
+
+
+{-| Set which ISO week numbers the rule applies to. Valid values are
+1 to 53 and -53 to -1. Negative values count from the end of the year.
+-}
+withByWeekNo : List Int -> Rule -> Rule
+withByWeekNo weeks (Rule r) =
+    Rule { r | byWeekNo = weeks }
 
 
 {-| An opaque type representing calendar configuration. Create one with
@@ -1300,6 +1349,31 @@ formatRule r =
 
               else
                 Just ("BYSETPOS=" ++ String.join "," (List.map String.fromInt r.bySetPos))
+            , if List.isEmpty r.byHour then
+                Nothing
+
+              else
+                Just ("BYHOUR=" ++ String.join "," (List.map String.fromInt r.byHour))
+            , if List.isEmpty r.byMinute then
+                Nothing
+
+              else
+                Just ("BYMINUTE=" ++ String.join "," (List.map String.fromInt r.byMinute))
+            , if List.isEmpty r.bySecond then
+                Nothing
+
+              else
+                Just ("BYSECOND=" ++ String.join "," (List.map String.fromInt r.bySecond))
+            , if List.isEmpty r.byYearDay then
+                Nothing
+
+              else
+                Just ("BYYEARDAY=" ++ String.join "," (List.map String.fromInt r.byYearDay))
+            , if List.isEmpty r.byWeekNo then
+                Nothing
+
+              else
+                Just ("BYWEEKNO=" ++ String.join "," (List.map String.fromInt r.byWeekNo))
             , maybeWeekStart
                 |> Maybe.map (\ws -> "WKST=" ++ weekdayToString ws)
             ]
