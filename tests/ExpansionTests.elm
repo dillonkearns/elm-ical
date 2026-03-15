@@ -481,7 +481,7 @@ suite =
                                 |> addRule
                                     { frequency = Recurrence.Monthly { every = 1 }
                                     , end = Recurrence.Count 3
-                                    , byDay = [ Recurrence.Every2nd Time.Mon ]
+                                    , byDay = [ Recurrence.second Time.Mon ]
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
@@ -517,7 +517,7 @@ suite =
                                 |> addRule
                                     { frequency = Recurrence.Monthly { every = 1 }
                                     , end = Recurrence.Count 3
-                                    , byDay = [ Recurrence.EveryLast Time.Fri ]
+                                    , byDay = [ Recurrence.last Time.Fri ]
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
@@ -1542,7 +1542,7 @@ suite =
                                 |> addRule
                                     { frequency = Recurrence.Hourly { every = 12 }
                                     , end = Recurrence.Count 4
-                                    , byDay = [ Recurrence.Every Time.Thu, Recurrence.Every Time.Fri ]
+                                    , byDay = [ daySpec Time.Thu, daySpec Time.Fri ]
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
@@ -1684,6 +1684,99 @@ suite =
                             [ Date.fromCalendarDate 2021 Time.Dec 31
                             ]
             ]
+        , describe "YEARLY BYDAY"
+            [ test "YEARLY with BYDAY and no BYMONTH expands across the whole year" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "Every Monday this year"
+                                , start = Time.millisToPosix 1609754400000 -- 2021-01-04T10:00:00Z
+                                , end = Time.millisToPosix 1609758000000
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Yearly { every = 1 }
+                                    , end = Recurrence.Forever
+                                    , byDay = [ daySpec Time.Mon ]
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = [ 1, 20, -1 ]
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
+                                    }
+                    in
+                    Parser.expand yearRange [ event ]
+                        |> List.map (occurrenceDate Time.utc)
+                        |> Expect.equal
+                            [ Date.fromCalendarDate 2021 Time.Jan 4
+                            , Date.fromCalendarDate 2021 Time.May 17
+                            , Date.fromCalendarDate 2021 Time.Dec 27
+                            ]
+            , test "YEARLY with numeric BYDAY and no BYMONTH uses the year ordinal" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "20th Monday of the year"
+                                , start = Time.millisToPosix 1609754400000 -- 2021-01-04T10:00:00Z
+                                , end = Time.millisToPosix 1609758000000
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Yearly { every = 1 }
+                                    , end = Recurrence.Forever
+                                    , byDay = [ nthDaySpec 20 Time.Mon ]
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
+                                    }
+                    in
+                    Parser.expand yearRange [ event ]
+                        |> List.map (occurrenceDate Time.utc)
+                        |> Expect.equal
+                            [ Date.fromCalendarDate 2021 Time.May 17
+                            ]
+            , test "YEARLY with BYMONTHDAY and no BYMONTH expands across all months" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "First day of each month"
+                                , start = Time.millisToPosix 1609502400000 -- 2021-01-01T10:00:00Z
+                                , end = Time.millisToPosix 1609506000000
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Yearly { every = 1 }
+                                    , end = Recurrence.Forever
+                                    , byDay = []
+                                    , byMonthDay = [ 1 ]
+                                    , byMonth = []
+                                    , bySetPos = [ 1, 6, -1 ]
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
+                                    }
+                    in
+                    Parser.expand yearRange [ event ]
+                        |> List.map (occurrenceDate Time.utc)
+                        |> Expect.equal
+                            [ Date.fromCalendarDate 2021 Time.Jan 1
+                            , Date.fromCalendarDate 2021 Time.Jun 1
+                            , Date.fromCalendarDate 2021 Time.Dec 1
+                            ]
+            ]
         , describe "BYWEEKNO"
             [ test "YEARLY with BYWEEKNO and BYDAY expands to specific ISO weeks" <|
                 \() ->
@@ -1698,7 +1791,7 @@ suite =
                                 |> addRule
                                     { frequency = Recurrence.Yearly { every = 1 }
                                     , end = Recurrence.Forever
-                                    , byDay = [ Recurrence.Every Time.Mon ]
+                                    , byDay = [ daySpec Time.Mon ]
                                     , byMonthDay = []
                                     , byMonth = []
                                     , bySetPos = []
@@ -2138,7 +2231,17 @@ makeAllDayEvent { summary, start, end } =
 
 daySpec : Time.Weekday -> Recurrence.DaySpec
 daySpec weekday =
-    Recurrence.Every weekday
+    Recurrence.every weekday
+
+
+nthDaySpec : Int -> Time.Weekday -> Recurrence.DaySpec
+nthDaySpec n weekday =
+    case Recurrence.nth n weekday of
+        Just spec ->
+            spec
+
+        Nothing ->
+            Debug.todo ("Invalid day spec ordinal in test: " ++ String.fromInt n)
 
 
 addExclusion : Time.Posix -> Parser.Event -> Parser.Event

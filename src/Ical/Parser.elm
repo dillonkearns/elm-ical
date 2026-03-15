@@ -98,7 +98,7 @@ import ContentLine exposing (ContentLine)
 import Date
 import DateHelpers
 import Dict exposing (Dict)
-import Ical.Recurrence exposing (DaySpec(..), Frequency(..), RecurrenceEnd(..), RecurrenceRule)
+import Ical.Recurrence as Recurrence exposing (DaySpec, Frequency(..), RecurrenceEnd(..), RecurrenceRule)
 import Time
 import VTimeZone
 import ValueParser
@@ -2694,76 +2694,12 @@ expandWithinPeriod rule seed intervalDate =
 
 daySpecWeekday : DaySpec -> Time.Weekday
 daySpecWeekday spec =
-    case spec of
-        Every wd ->
-            wd
-
-        Every1st wd ->
-            wd
-
-        Every2nd wd ->
-            wd
-
-        Every3rd wd ->
-            wd
-
-        Every4th wd ->
-            wd
-
-        Every5th wd ->
-            wd
-
-        EveryLast wd ->
-            wd
-
-        Every2ndToLast wd ->
-            wd
-
-        Every3rdToLast wd ->
-            wd
-
-        Every4thToLast wd ->
-            wd
-
-        Every5thToLast wd ->
-            wd
+    Recurrence.weekday spec
 
 
 daySpecOrdinal : DaySpec -> Maybe Int
 daySpecOrdinal spec =
-    case spec of
-        Every _ ->
-            Nothing
-
-        Every1st _ ->
-            Just 1
-
-        Every2nd _ ->
-            Just 2
-
-        Every3rd _ ->
-            Just 3
-
-        Every4th _ ->
-            Just 4
-
-        Every5th _ ->
-            Just 5
-
-        EveryLast _ ->
-            Just -1
-
-        Every2ndToLast _ ->
-            Just -2
-
-        Every3rdToLast _ ->
-            Just -3
-
-        Every4thToLast _ ->
-            Just -4
-
-        Every5thToLast _ ->
-            Just -5
+    Recurrence.ordinal spec
 
 
 expandWeekByDay : Time.Weekday -> List DaySpec -> Date.Date -> List Date.Date
@@ -2824,6 +2760,22 @@ expandYearly rule seed intervalDate =
         year =
             Date.year intervalDate
 
+        expandsAcrossAllMonths : Bool
+        expandsAcrossAllMonths =
+            not (List.isEmpty rule.byMonthDay) || not (List.isEmpty rule.byDay)
+
+        months : List Time.Month
+        months =
+            if List.isEmpty rule.byMonth then
+                if expandsAcrossAllMonths then
+                    allMonths
+
+                else
+                    [ Date.month seed ]
+
+            else
+                rule.byMonth
+
         baseDates : List Date.Date
         baseDates =
             if not (List.isEmpty rule.byYearDay) then
@@ -2836,27 +2788,22 @@ expandYearly rule seed intervalDate =
                     |> filterByDay rule.byDay
                     |> filterByMonth rule.byMonth
 
-            else
-                let
-                    months : List Time.Month
-                    months =
-                        if List.isEmpty rule.byMonth then
-                            [ Date.month seed ]
+            else if not (List.isEmpty rule.byMonthDay) then
+                months
+                    |> List.concatMap (\m -> expandByMonthDay year m rule.byMonthDay)
+                    |> filterByDay rule.byDay
 
-                        else
-                            rule.byMonth
-                in
-                if not (List.isEmpty rule.byMonthDay) then
-                    months
-                        |> List.concatMap (\m -> expandByMonthDay year m rule.byMonthDay)
-
-                else if not (List.isEmpty rule.byDay) then
-                    months
-                        |> List.concatMap (\m -> expandByDayInMonth year m rule.byDay)
+            else if not (List.isEmpty rule.byDay) then
+                if List.isEmpty rule.byMonth then
+                    expandByDayInYear year rule.byDay
 
                 else
                     months
-                        |> List.map (\m -> Date.fromCalendarDate year m (Date.day seed))
+                        |> List.concatMap (\m -> expandByDayInMonth year m rule.byDay)
+
+            else
+                months
+                    |> List.map (\m -> Date.fromCalendarDate year m (Date.day seed))
     in
     baseDates
         |> List.sortBy Date.toRataDie
@@ -2893,6 +2840,13 @@ expandByDayInMonth : Int -> Time.Month -> List DaySpec -> List Date.Date
 expandByDayInMonth year month specs =
     specs
         |> List.concatMap (resolveDaySpecInMonth year month)
+        |> List.sortBy Date.toRataDie
+
+
+expandByDayInYear : Int -> List DaySpec -> List Date.Date
+expandByDayInYear year specs =
+    specs
+        |> List.concatMap (resolveDaySpecInYear year)
         |> List.sortBy Date.toRataDie
 
 
@@ -2966,6 +2920,27 @@ resolveDaySpecInMonth year month spec =
             allWeekdaysInMonth month firstMatch []
 
 
+resolveDaySpecInYear : Int -> DaySpec -> List Date.Date
+resolveDaySpecInYear year spec =
+    let
+        weekday : Time.Weekday
+        weekday =
+            daySpecWeekday spec
+
+        matchingDates : List Date.Date
+        matchingDates =
+            allWeekdaysInYear year weekday
+    in
+    case daySpecOrdinal spec of
+        Just n ->
+            resolveNthDate n matchingDates
+                |> Maybe.map List.singleton
+                |> Maybe.withDefault []
+
+        Nothing ->
+            matchingDates
+
+
 allWeekdaysInMonth : Time.Month -> Date.Date -> List Date.Date -> List Date.Date
 allWeekdaysInMonth month current acc =
     if Date.month current /= month then
@@ -2973,6 +2948,58 @@ allWeekdaysInMonth month current acc =
 
     else
         allWeekdaysInMonth month (Date.add Date.Weeks 1 current) (current :: acc)
+
+
+allWeekdaysInYear : Int -> Time.Weekday -> List Date.Date
+allWeekdaysInYear year weekday =
+    let
+        jan1 : Date.Date
+        jan1 =
+            Date.fromCalendarDate year Time.Jan 1
+
+        firstMatch : Date.Date
+        firstMatch =
+            Date.ceiling (DateHelpers.weekdayToInterval weekday) jan1
+    in
+    allWeekdaysInYearHelp year firstMatch []
+
+
+allWeekdaysInYearHelp : Int -> Date.Date -> List Date.Date -> List Date.Date
+allWeekdaysInYearHelp year current acc =
+    if Date.year current /= year then
+        List.reverse acc
+
+    else
+        allWeekdaysInYearHelp year (Date.add Date.Weeks 1 current) (current :: acc)
+
+
+resolveNthDate : Int -> List Date.Date -> Maybe Date.Date
+resolveNthDate n dates =
+    if n > 0 then
+        List.drop (n - 1) dates
+            |> List.head
+
+    else
+        List.reverse dates
+            |> List.drop (-n - 1)
+            |> List.head
+
+
+allMonths : List Time.Month
+allMonths =
+    [ Time.Jan
+    , Time.Feb
+    , Time.Mar
+    , Time.Apr
+    , Time.May
+    , Time.Jun
+    , Time.Jul
+    , Time.Aug
+    , Time.Sep
+    , Time.Oct
+    , Time.Nov
+    , Time.Dec
+    ]
 
 
 filterByMonth : List Time.Month -> List Date.Date -> List Date.Date

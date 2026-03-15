@@ -281,9 +281,9 @@ recurrenceRuleTests =
                             { frequency = Recurrence.Weekly { every = 1, weekStart = Time.Mon }
                             , end = Recurrence.Forever
                             , byDay =
-                                [ Recurrence.Every Time.Mon
-                                , Recurrence.Every Time.Wed
-                                , Recurrence.Every Time.Fri
+                                [ Recurrence.every Time.Mon
+                                , Recurrence.every Time.Wed
+                                , Recurrence.every Time.Fri
                                 ]
                             , byMonthDay = []
                             , byMonth = []
@@ -341,20 +341,51 @@ recurrenceRuleTests =
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=MONTHLY;BYDAY=2SU"
                     |> Result.map .byDay
-                    |> Expect.equal (Ok [ Recurrence.Every2nd Time.Sun ])
+                    |> Expect.equal (Ok [ Recurrence.second Time.Sun ])
         , test "parse negative ordinal BYDAY (last Friday)" <|
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=MONTHLY;BYDAY=-1FR"
                     |> Result.map .byDay
-                    |> Expect.equal (Ok [ Recurrence.EveryLast Time.Fri ])
-        , test "BYDAY ordinal out of range (6MO) returns error" <|
+                    |> Expect.equal (Ok [ Recurrence.last Time.Fri ])
+        , test "parse larger positive ordinal BYDAY (6MO)" <|
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=MONTHLY;BYDAY=6MO"
-                    |> Expect.equal (Err "Invalid BYDAY ordinal: 6MO")
-        , test "BYDAY negative ordinal out of range (-6FR) returns error" <|
+                    |> Result.map .byDay
+                    |> Expect.equal (Ok [ nthDaySpec 6 Time.Mon ])
+        , test "parse larger negative ordinal BYDAY (-6FR)" <|
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=MONTHLY;BYDAY=-6FR"
-                    |> Expect.equal (Err "Invalid BYDAY ordinal: -6FR")
+                    |> Result.map .byDay
+                    |> Expect.equal (Ok [ nthDaySpec -6 Time.Fri ])
+        , test "parse YEARLY numeric BYDAY (20th Monday)" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=YEARLY;BYDAY=20MO"
+                    |> Result.map .byDay
+                    |> Expect.equal (Ok [ nthDaySpec 20 Time.Mon ])
+        , test "numeric BYDAY is rejected for WEEKLY rules" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=WEEKLY;BYDAY=2MO"
+                    |> Expect.equal (Err "Numeric BYDAY is only allowed with MONTHLY or YEARLY rules")
+        , test "numeric BYDAY is rejected with YEARLY BYWEEKNO" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=YEARLY;BYWEEKNO=20;BYDAY=2MO"
+                    |> Expect.equal (Err "Numeric BYDAY is not allowed with YEARLY rules that also use BYWEEKNO")
+        , test "BYMONTHDAY is rejected for WEEKLY rules" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=WEEKLY;BYMONTHDAY=1"
+                    |> Expect.equal (Err "BYMONTHDAY is not allowed with WEEKLY rules")
+        , test "BYYEARDAY is rejected for MONTHLY rules" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=MONTHLY;BYYEARDAY=1"
+                    |> Expect.equal (Err "BYYEARDAY is not allowed with MONTHLY rules")
+        , test "BYWEEKNO is rejected for non-YEARLY rules" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=MONTHLY;BYWEEKNO=1"
+                    |> Expect.equal (Err "BYWEEKNO is only allowed with YEARLY rules")
+        , test "BYSETPOS without another BY* rule part is rejected" <|
+            \() ->
+                ValueParser.parseRecurrenceRule "FREQ=MONTHLY;BYSETPOS=1"
+                    |> Expect.equal (Err "BYSETPOS must be used with another BY* rule part")
         , test "parse with WKST" <|
             \() ->
                 ValueParser.parseRecurrenceRule "FREQ=WEEKLY;WKST=SU"
@@ -375,7 +406,7 @@ recurrenceRuleTests =
                         (Ok
                             { frequency = Recurrence.Monthly { every = 2 }
                             , end = Recurrence.Count 6
-                            , byDay = [ Recurrence.Every1st Time.Mon ]
+                            , byDay = [ Recurrence.first Time.Mon ]
                             , byMonthDay = []
                             , byMonth = []
                             , bySetPos = []
@@ -1303,9 +1334,9 @@ endToEndTests =
                                         [ { frequency = Recurrence.Weekly { every = 1, weekStart = Time.Mon }
                                           , end = Recurrence.Forever
                                           , byDay =
-                                                [ Recurrence.Every Time.Mon
-                                                , Recurrence.Every Time.Wed
-                                                , Recurrence.Every Time.Fri
+                                                [ Recurrence.every Time.Mon
+                                                , Recurrence.every Time.Wed
+                                                , Recurrence.every Time.Fri
                                                 ]
                                           , byMonthDay = []
                                           , byMonth = []
@@ -2569,7 +2600,7 @@ roundTripTests =
                             |> Ical.withRecurrenceRule
                                 (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
                                     |> Ical.withCount 10
-                                    |> Ical.withByDay [ Recurrence.Every Time.Mon, Recurrence.Every Time.Wed ]
+                                    |> Ical.withByDay [ Recurrence.every Time.Mon, Recurrence.every Time.Wed ]
                                 )
                         ]
                             |> Ical.generate
@@ -2588,7 +2619,7 @@ roundTripTests =
                                         Expect.all
                                             [ \r -> r.frequency |> Expect.equal (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
                                             , \r -> r.end |> Expect.equal (Recurrence.Count 10)
-                                            , \r -> r.byDay |> Expect.equal [ Recurrence.Every Time.Mon, Recurrence.Every Time.Wed ]
+                                            , \r -> r.byDay |> Expect.equal [ Recurrence.every Time.Mon, Recurrence.every Time.Wed ]
                                             ]
                                             rule
 
@@ -2671,7 +2702,7 @@ roundTripTests =
                             }
                             |> Ical.withRecurrenceRule
                                 (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
-                                    |> Ical.withByDay [ Recurrence.Every Time.Mon, Recurrence.Every2nd Time.Tue ]
+                                    |> Ical.withByDay [ Recurrence.every Time.Mon, Recurrence.second Time.Tue ]
                                     |> Ical.withByMonthDay [ 1, -1 ]
                                     |> Ical.withBySetPos [ 1 ]
                                     |> Ical.withByHour [ 9 ]
@@ -2696,7 +2727,7 @@ roundTripTests =
                                     [ rule ] ->
                                         Expect.all
                                             [ \r -> r.frequency |> Expect.equal (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
-                                            , \r -> r.byDay |> Expect.equal [ Recurrence.Every Time.Mon ]
+                                            , \r -> r.byDay |> Expect.equal [ Recurrence.every Time.Mon ]
                                             , \r -> r.byMonthDay |> Expect.equal []
                                             , \r -> r.bySetPos |> Expect.equal [ 1 ]
                                             , \r -> r.byHour |> Expect.equal []
@@ -2989,6 +3020,16 @@ utcResolved posix =
     , localDateTime = Nothing
     , timeZoneContext = Nothing
     }
+
+
+nthDaySpec : Int -> Time.Weekday -> Recurrence.DaySpec
+nthDaySpec n weekday =
+    case Recurrence.nth n weekday of
+        Just spec ->
+            spec
+
+        Nothing ->
+            Debug.todo ("Invalid day spec ordinal in test: " ++ String.fromInt n)
 
 
 toIso8601 : String -> Time.Posix

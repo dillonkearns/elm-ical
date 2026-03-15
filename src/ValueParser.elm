@@ -5,7 +5,7 @@ module ValueParser exposing (DateTimeParts, Duration, parseDate, parseDateTime, 
 
 import Date
 import DateHelpers
-import Ical.Recurrence exposing (DaySpec(..), Frequency(..), RecurrenceEnd(..), RecurrenceRule)
+import Ical.Recurrence as Recurrence exposing (DaySpec, Frequency(..), RecurrenceEnd(..), RecurrenceRule)
 import Time
 
 
@@ -469,20 +469,21 @@ parseRecurrenceRule input =
                                                             |> Result.andThen
                                                                 (\byDay ->
                                                                     parseByParts getParam
-                                                                        |> Result.map
+                                                                        |> Result.andThen
                                                                             (\bp ->
-                                                                                { frequency = frequency
-                                                                                , end = end
-                                                                                , byDay = byDay
-                                                                                , byMonthDay = bp.byMonthDay
-                                                                                , byMonth = bp.byMonth
-                                                                                , bySetPos = bp.bySetPos
-                                                                                , byHour = bp.byHour
-                                                                                , byMinute = bp.byMinute
-                                                                                , bySecond = bp.bySecond
-                                                                                , byYearDay = bp.byYearDay
-                                                                                , byWeekNo = bp.byWeekNo
-                                                                                }
+                                                                                validateRecurrenceRule
+                                                                                    { frequency = frequency
+                                                                                    , end = end
+                                                                                    , byDay = byDay
+                                                                                    , byMonthDay = bp.byMonthDay
+                                                                                    , byMonth = bp.byMonth
+                                                                                    , bySetPos = bp.bySetPos
+                                                                                    , byHour = bp.byHour
+                                                                                    , byMinute = bp.byMinute
+                                                                                    , bySecond = bp.bySecond
+                                                                                    , byYearDay = bp.byYearDay
+                                                                                    , byWeekNo = bp.byWeekNo
+                                                                                    }
                                                                             )
                                                                 )
                                                     )
@@ -819,12 +820,12 @@ parseDaySpec str =
                     String.dropRight 2 trimmed
             in
             if String.isEmpty prefix then
-                Ok (Every weekday)
+                Ok (Recurrence.every weekday)
 
             else
                 case String.toInt prefix of
                     Just n ->
-                        ordinalToDaySpec n weekday
+                        Recurrence.nth n weekday
                             |> Result.fromMaybe ("Invalid BYDAY ordinal: " ++ str)
 
                     Nothing ->
@@ -832,49 +833,6 @@ parseDaySpec str =
 
         Nothing ->
             Err ("Invalid BYDAY: " ++ str)
-
-
-ordinalToDaySpec : Int -> Time.Weekday -> Maybe DaySpec
-ordinalToDaySpec n weekday =
-    if n > 0 then
-        case n of
-            1 ->
-                Just (Every1st weekday)
-
-            2 ->
-                Just (Every2nd weekday)
-
-            3 ->
-                Just (Every3rd weekday)
-
-            4 ->
-                Just (Every4th weekday)
-
-            5 ->
-                Just (Every5th weekday)
-
-            _ ->
-                Nothing
-
-    else
-        case negate n of
-            1 ->
-                Just (EveryLast weekday)
-
-            2 ->
-                Just (Every2ndToLast weekday)
-
-            3 ->
-                Just (Every3rdToLast weekday)
-
-            4 ->
-                Just (Every4thToLast weekday)
-
-            5 ->
-                Just (Every5thToLast weekday)
-
-            _ ->
-                Nothing
 
 
 parseWeekday : String -> Maybe Time.Weekday
@@ -903,3 +861,118 @@ parseWeekday str =
 
         _ ->
             Nothing
+
+
+validateRecurrenceRule : RecurrenceRule -> Result String RecurrenceRule
+validateRecurrenceRule rule =
+    rule
+        |> validateByDayUsage
+        |> Result.andThen validateByMonthDayUsage
+        |> Result.andThen validateByYearDayUsage
+        |> Result.andThen validateByWeekNoUsage
+        |> Result.andThen validateBySetPosUsage
+
+
+validateByDayUsage : RecurrenceRule -> Result String RecurrenceRule
+validateByDayUsage rule =
+    if hasNumericByDay rule.byDay then
+        case rule.frequency of
+            Monthly _ ->
+                Ok rule
+
+            Yearly _ ->
+                if List.isEmpty rule.byWeekNo then
+                    Ok rule
+
+                else
+                    Err "Numeric BYDAY is not allowed with YEARLY rules that also use BYWEEKNO"
+
+            _ ->
+                Err "Numeric BYDAY is only allowed with MONTHLY or YEARLY rules"
+
+    else
+        Ok rule
+
+
+validateByMonthDayUsage : RecurrenceRule -> Result String RecurrenceRule
+validateByMonthDayUsage rule =
+    case rule.frequency of
+        Weekly _ ->
+            if List.isEmpty rule.byMonthDay then
+                Ok rule
+
+            else
+                Err "BYMONTHDAY is not allowed with WEEKLY rules"
+
+        _ ->
+            Ok rule
+
+
+validateByYearDayUsage : RecurrenceRule -> Result String RecurrenceRule
+validateByYearDayUsage rule =
+    case rule.frequency of
+        Daily _ ->
+            if List.isEmpty rule.byYearDay then
+                Ok rule
+
+            else
+                Err "BYYEARDAY is not allowed with DAILY rules"
+
+        Weekly _ ->
+            if List.isEmpty rule.byYearDay then
+                Ok rule
+
+            else
+                Err "BYYEARDAY is not allowed with WEEKLY rules"
+
+        Monthly _ ->
+            if List.isEmpty rule.byYearDay then
+                Ok rule
+
+            else
+                Err "BYYEARDAY is not allowed with MONTHLY rules"
+
+        _ ->
+            Ok rule
+
+
+validateByWeekNoUsage : RecurrenceRule -> Result String RecurrenceRule
+validateByWeekNoUsage rule =
+    case rule.frequency of
+        Yearly _ ->
+            Ok rule
+
+        _ ->
+            if List.isEmpty rule.byWeekNo then
+                Ok rule
+
+            else
+                Err "BYWEEKNO is only allowed with YEARLY rules"
+
+
+validateBySetPosUsage : RecurrenceRule -> Result String RecurrenceRule
+validateBySetPosUsage rule =
+    if List.isEmpty rule.bySetPos || hasByRulePartForSetPos rule then
+        Ok rule
+
+    else
+        Err "BYSETPOS must be used with another BY* rule part"
+
+
+hasNumericByDay : List DaySpec -> Bool
+hasNumericByDay daySpecs =
+    List.any (\daySpec -> Recurrence.ordinal daySpec /= Nothing) daySpecs
+
+
+hasByRulePartForSetPos : RecurrenceRule -> Bool
+hasByRulePartForSetPos rule =
+    not
+        (List.isEmpty rule.byDay
+            && List.isEmpty rule.byMonthDay
+            && List.isEmpty rule.byMonth
+            && List.isEmpty rule.byHour
+            && List.isEmpty rule.byMinute
+            && List.isEmpty rule.bySecond
+            && List.isEmpty rule.byYearDay
+            && List.isEmpty rule.byWeekNo
+        )

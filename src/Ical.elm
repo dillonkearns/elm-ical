@@ -395,7 +395,7 @@ audioAlarm { trigger } =
 with the `with*` builder functions.
 
     Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
-        |> Ical.withByDay [ Recurrence.Every Time.Mon ]
+        |> Ical.withByDay [ Recurrence.every Time.Mon ]
         |> Ical.withCount 10
 
 -}
@@ -422,7 +422,7 @@ type alias RuleData =
 are clamped to 1.
 
     Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
-        |> Ical.withByDay [ Recurrence.Every Time.Mon ]
+        |> Ical.withByDay [ Recurrence.every Time.Mon ]
         |> Ical.withCount 10
 
 -}
@@ -618,7 +618,7 @@ normalizeRule ruleData =
         normalizedRuleData =
             { ruleData
                 | byDay =
-                    normalizeByDayForFrequency ruleData.frequency normalizedByWeekNo ruleData.byDay
+                    normalizeByDayForFrequency ruleData.frequency ruleData.byMonth normalizedByWeekNo ruleData.byDay
                 , byMonthDay =
                     if frequencyAllowsByMonthDay ruleData.frequency then
                         ruleData.byMonthDay
@@ -719,8 +719,8 @@ frequencyAllowsByWeekNo frequency =
             False
 
 
-normalizeByDayForFrequency : Frequency -> List Int -> List DaySpec -> List DaySpec
-normalizeByDayForFrequency frequency byWeekNo daySpecs =
+normalizeByDayForFrequency : Frequency -> List Time.Month -> List Int -> List DaySpec -> List DaySpec
+normalizeByDayForFrequency frequency byMonth byWeekNo daySpecs =
     let
         keepsOrdinalDaySpecs : Bool
         keepsOrdinalDaySpecs =
@@ -733,9 +733,18 @@ normalizeByDayForFrequency frequency byWeekNo daySpecs =
 
                 _ ->
                     False
+
+        supportsLargeOrdinals : Bool
+        supportsLargeOrdinals =
+            case frequency of
+                Yearly _ ->
+                    List.isEmpty byWeekNo && List.isEmpty byMonth
+
+                _ ->
+                    False
     in
     if keepsOrdinalDaySpecs then
-        daySpecs
+        List.filter (monthlyOrdinalIsUsable supportsLargeOrdinals) daySpecs
 
     else
         List.filter (not << daySpecHasOrdinal) daySpecs
@@ -743,12 +752,17 @@ normalizeByDayForFrequency frequency byWeekNo daySpecs =
 
 daySpecHasOrdinal : DaySpec -> Bool
 daySpecHasOrdinal daySpec =
-    case daySpec of
-        Recurrence.Every _ ->
-            False
+    Recurrence.ordinal daySpec /= Nothing
 
-        _ ->
+
+monthlyOrdinalIsUsable : Bool -> DaySpec -> Bool
+monthlyOrdinalIsUsable supportsLargeOrdinals daySpec =
+    case Recurrence.ordinal daySpec of
+        Nothing ->
             True
+
+        Just n ->
+            supportsLargeOrdinals || abs n <= 5
 
 
 isValidMonthDay : Int -> Bool
@@ -1602,39 +1616,9 @@ formatDaySpec spec =
 
 daySpecToOrdinalAndWeekday : Recurrence.DaySpec -> ( String, Time.Weekday )
 daySpecToOrdinalAndWeekday spec =
-    case spec of
-        Recurrence.Every wd ->
-            ( "", wd )
-
-        Recurrence.Every1st wd ->
-            ( "1", wd )
-
-        Recurrence.Every2nd wd ->
-            ( "2", wd )
-
-        Recurrence.Every3rd wd ->
-            ( "3", wd )
-
-        Recurrence.Every4th wd ->
-            ( "4", wd )
-
-        Recurrence.Every5th wd ->
-            ( "5", wd )
-
-        Recurrence.EveryLast wd ->
-            ( "-1", wd )
-
-        Recurrence.Every2ndToLast wd ->
-            ( "-2", wd )
-
-        Recurrence.Every3rdToLast wd ->
-            ( "-3", wd )
-
-        Recurrence.Every4thToLast wd ->
-            ( "-4", wd )
-
-        Recurrence.Every5thToLast wd ->
-            ( "-5", wd )
+    ( Maybe.map String.fromInt (Recurrence.ordinal spec) |> Maybe.withDefault ""
+    , Recurrence.weekday spec
+    )
 
 
 weekdayToString : Time.Weekday -> String

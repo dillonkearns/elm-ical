@@ -1,6 +1,8 @@
 module Ical.Recurrence exposing
     ( RecurrenceRule, RecurrenceEnd(..)
-    , Frequency(..), DaySpec(..)
+    , Frequency(..), DaySpec, every, nth, weekday, ordinal
+    , first, second, third, fourth, fifth
+    , last, secondToLast, thirdToLast, fourthToLast, fifthToLast
     )
 
 {-| Types for iCal recurrence rules
@@ -19,7 +21,9 @@ building rules for generation via [`Ical.Rule`](Ical#Rule).
 
 ## Shared types
 
-@docs Frequency, DaySpec
+@docs Frequency, DaySpec, every, nth, weekday, ordinal
+@docs first, second, third, fourth, fifth
+@docs last, secondToLast, thirdToLast, fourthToLast, fifthToLast
 
 -}
 
@@ -33,7 +37,7 @@ rules for generation, use [`Ical.Rule`](Ical#Rule) and its builder functions.
 
     { frequency = Weekly { every = 1, weekStart = Time.Mon }
     , end = Forever
-    , byDay = [ Every Time.Mon ]
+    , byDay = [ every Time.Mon ]
     , byMonthDay = []
     , byMonth = []
     , bySetPos = []
@@ -102,29 +106,148 @@ type RecurrenceEnd
 
 {-| A day-of-week specifier for recurrence rules.
 
+Create one with [`every`](#every), [`nth`](#nth), or the convenience helpers
+like [`second`](#second) and [`last`](#last).
+
     -- every Monday
-    Every Time.Mon
+    every Time.Mon
 
     -- the 2nd Sunday of the month
-    Every2nd Time.Sun
+    second Time.Sun
 
-    -- the last Friday of the month
-    EveryLast Time.Fri
+    -- the last Friday
+    last Time.Fri
 
-Positive ordinals (`Every1st` through `Every5th`) count from the start of the
-month. Negative ordinals (`EveryLast` through `Every5thToLast`) count from the
-end.
+Positive ordinals count from the start of the period. Negative ordinals count
+from the end. `nth` accepts `-53..-1` and `1..53`, matching the RFC grammar
+for numeric `BYDAY` values.
 
 -}
 type DaySpec
     = Every Time.Weekday
-    | Every1st Time.Weekday
-    | Every2nd Time.Weekday
-    | Every3rd Time.Weekday
-    | Every4th Time.Weekday
-    | Every5th Time.Weekday
-    | EveryLast Time.Weekday
-    | Every2ndToLast Time.Weekday
-    | Every3rdToLast Time.Weekday
-    | Every4thToLast Time.Weekday
-    | Every5thToLast Time.Weekday
+    | Nth Int Time.Weekday
+
+
+{-| Match every instance of the given weekday.
+-}
+every : Time.Weekday -> DaySpec
+every day =
+    Every day
+
+
+{-| Match the `n`th instance of a weekday.
+
+Positive values count from the start, negative values count from the end, and
+`0` is invalid.
+
+    nth 20 Time.Mon
+
+    nth -1 Time.Fri
+
+-}
+nth : Int -> Time.Weekday -> Maybe DaySpec
+nth n day =
+    if isValidOrdinal n then
+        Just (Nth n day)
+
+    else
+        Nothing
+
+
+{-| Extract the weekday from a `DaySpec`.
+-}
+weekday : DaySpec -> Time.Weekday
+weekday spec =
+    case spec of
+        Every day ->
+            day
+
+        Nth _ day ->
+            day
+
+
+{-| Extract the ordinal from a `DaySpec`, if present.
+-}
+ordinal : DaySpec -> Maybe Int
+ordinal spec =
+    case spec of
+        Every _ ->
+            Nothing
+
+        Nth n _ ->
+            Just n
+
+
+{-| The 1st instance of a weekday.
+-}
+first : Time.Weekday -> DaySpec
+first day =
+    Nth 1 day
+
+
+{-| The 2nd instance of a weekday.
+-}
+second : Time.Weekday -> DaySpec
+second day =
+    Nth 2 day
+
+
+{-| The 3rd instance of a weekday.
+-}
+third : Time.Weekday -> DaySpec
+third day =
+    Nth 3 day
+
+
+{-| The 4th instance of a weekday.
+-}
+fourth : Time.Weekday -> DaySpec
+fourth day =
+    Nth 4 day
+
+
+{-| The 5th instance of a weekday.
+-}
+fifth : Time.Weekday -> DaySpec
+fifth day =
+    Nth 5 day
+
+
+{-| The last instance of a weekday.
+-}
+last : Time.Weekday -> DaySpec
+last day =
+    Nth -1 day
+
+
+{-| The 2nd-to-last instance of a weekday.
+-}
+secondToLast : Time.Weekday -> DaySpec
+secondToLast day =
+    Nth -2 day
+
+
+{-| The 3rd-to-last instance of a weekday.
+-}
+thirdToLast : Time.Weekday -> DaySpec
+thirdToLast day =
+    Nth -3 day
+
+
+{-| The 4th-to-last instance of a weekday.
+-}
+fourthToLast : Time.Weekday -> DaySpec
+fourthToLast day =
+    Nth -4 day
+
+
+{-| The 5th-to-last instance of a weekday.
+-}
+fifthToLast : Time.Weekday -> DaySpec
+fifthToLast day =
+    Nth -5 day
+
+
+isValidOrdinal : Int -> Bool
+isValidOrdinal n =
+    n /= 0 && abs n <= 53

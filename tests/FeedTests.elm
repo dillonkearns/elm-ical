@@ -449,7 +449,7 @@ END:VEVENT"""
                     }
                     |> Ical.withRecurrenceRule
                         (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
-                            |> Ical.withByDay [ Recurrence.Every Time.Mon, Recurrence.Every Time.Wed, Recurrence.Every Time.Fri ]
+                            |> Ical.withByDay [ Recurrence.every Time.Mon, Recurrence.every Time.Wed, Recurrence.every Time.Fri ]
                         )
                     |> Ical.generateEvent
                         (Ical.config
@@ -555,6 +555,36 @@ UID:bymonth-1@test.com
 SUMMARY:Quarterly
 RRULE:FREQ=YEARLY;BYMONTH=1,4,7,10
 END:VEVENT"""
+        , test "generate RRULE with yearly numeric BYDAY across the whole year" <|
+            \() ->
+                Ical.event
+                    { id = "yearly-nth-weekday"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.withTime
+                            { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T11:00:00.000Z"
+                            }
+                    , summary = "20th Monday of the year"
+                    }
+                    |> Ical.withRecurrenceRule
+                        (Ical.rule (Recurrence.Yearly { every = 1 })
+                            |> Ical.withByDay [ nthDaySpec 20 Time.Mon ]
+                        )
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART:20210318T100000Z
+DTEND:20210318T110000Z
+DTSTAMP:20210318T162044Z
+UID:yearly-nth-weekday@test.com
+SUMMARY:20th Monday of the year
+RRULE:FREQ=YEARLY;BYDAY=20MO
+END:VEVENT"""
         , test "generate RRULE drops invalid numeric BY* values" <|
             \() ->
                 Ical.event
@@ -606,7 +636,7 @@ END:VEVENT"""
                     }
                     |> Ical.withRecurrenceRule
                         (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
-                            |> Ical.withByDay [ Recurrence.Every Time.Mon, Recurrence.Every2nd Time.Tue ]
+                            |> Ical.withByDay [ Recurrence.every Time.Mon, Recurrence.second Time.Tue ]
                             |> Ical.withByMonthDay [ 1, -1 ]
                             |> Ical.withBySetPos [ 1 ]
                             |> Ical.withByHour [ 9 ]
@@ -639,7 +669,7 @@ END:VEVENT"""
                     }
                     |> Ical.withRecurrenceRule
                         (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
-                            |> Ical.withByDay [ Recurrence.Every2nd Time.Tue ]
+                            |> Ical.withByDay [ Recurrence.second Time.Tue ]
                             |> Ical.withByMonthDay [ 1 ]
                             |> Ical.withBySetPos [ 1 ]
                             |> Ical.withByHour [ 9 ]
@@ -1123,6 +1153,16 @@ dropTrailingEmpty lines =
 
         _ ->
             lines
+
+
+nthDaySpec : Int -> Time.Weekday -> Recurrence.DaySpec
+nthDaySpec n weekday =
+    case Recurrence.nth n weekday of
+        Just spec ->
+            spec
+
+        Nothing ->
+            Debug.todo ("Invalid day spec ordinal in test: " ++ String.fromInt n)
 
 
 toIso8601 : String -> Time.Posix
