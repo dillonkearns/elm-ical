@@ -1224,6 +1224,40 @@ suite =
                             , Date.fromCalendarDate 2021 Time.Mar 26
                             , Date.fromCalendarDate 2021 Time.Mar 27
                             ]
+            , test "sub-daily COUNT occurrences outside range are counted but not emitted" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "Hourly late range"
+                                , start = Time.millisToPosix 1616065200000 -- 2021-03-18T11:00:00Z
+                                , end = Time.millisToPosix 1616068800000 -- 2021-03-18T12:00:00Z
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Hourly { every = 6 }
+                                    , end = Recurrence.Count 5
+                                    , byDay = []
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
+                                    }
+                    in
+                    Parser.expand
+                        { start = Date.fromCalendarDate 2021 Time.Mar 19
+                        , end = Date.fromCalendarDate 2021 Time.Dec 31
+                        }
+                        [ event ]
+                        |> List.map (\occ -> ( occurrenceDate Time.utc occ, occurrenceHour Time.utc occ ))
+                        |> Expect.equal
+                            [ ( Date.fromCalendarDate 2021 Time.Mar 19, 5 )
+                            , ( Date.fromCalendarDate 2021 Time.Mar 19, 11 )
+                            ]
             ]
         , describe "parse then expand round-trip"
             [ test "parse ICS with RRULE then expand" <|
@@ -1318,6 +1352,58 @@ suite =
                                 |> Expect.equal
                                     [ ( Date.fromCalendarDate 2024 Time.Jan 2, ( 4, 30 ) )
                                     , ( Date.fromCalendarDate 2024 Time.Jan 9, ( 4, 30 ) )
+                                    ]
+
+                        Err err ->
+                            Expect.fail err
+            , test "TZID recurrence skips nonexistent local times during spring-forward" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            String.join "\u{000D}\n"
+                                [ "BEGIN:VCALENDAR"
+                                , "VERSION:2.0"
+                                , "PRODID:-//Test//EN"
+                                , "BEGIN:VTIMEZONE"
+                                , "TZID:America/New_York"
+                                , "BEGIN:DAYLIGHT"
+                                , "TZOFFSETFROM:-0500"
+                                , "TZOFFSETTO:-0400"
+                                , "DTSTART:19700308T020000"
+                                , "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU"
+                                , "END:DAYLIGHT"
+                                , "BEGIN:STANDARD"
+                                , "TZOFFSETFROM:-0400"
+                                , "TZOFFSETTO:-0500"
+                                , "DTSTART:19701101T020000"
+                                , "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU"
+                                , "END:STANDARD"
+                                , "END:VTIMEZONE"
+                                , "BEGIN:VEVENT"
+                                , "UID:tzid-nonexistent-local@test"
+                                , "DTSTAMP:20240301T000000Z"
+                                , "DTSTART;TZID=America/New_York:20240309T023000"
+                                , "DTEND;TZID=America/New_York:20240309T033000"
+                                , "RRULE:FREQ=DAILY;COUNT=3"
+                                , "SUMMARY:Spring forward gap"
+                                , "END:VEVENT"
+                                , "END:VCALENDAR"
+                                , ""
+                                ]
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            Parser.expand
+                                { start = Date.fromCalendarDate 2024 Time.Mar 9
+                                , end = Date.fromCalendarDate 2024 Time.Mar 13
+                                }
+                                cal.events
+                                |> List.map occurrenceLocalDateHourMinute
+                                |> Expect.equal
+                                    [ ( Date.fromCalendarDate 2024 Time.Mar 9, 2, 30 )
+                                    , ( Date.fromCalendarDate 2024 Time.Mar 11, 2, 30 )
+                                    , ( Date.fromCalendarDate 2024 Time.Mar 12, 2, 30 )
                                     ]
 
                         Err err ->
@@ -2021,6 +2107,40 @@ suite =
                     Parser.expand yearRange [ event ]
                         |> List.map (occurrenceHour Time.utc)
                         |> Expect.equal [ 11, 17, 23, 5, 11 ]
+            , test "sub-daily EXDATE removes an occurrence without extending COUNT" <|
+                \() ->
+                    let
+                        event : Parser.Event
+                        event =
+                            makeTimedEvent
+                                { summary = "Hourly exclusions"
+                                , start = Time.millisToPosix 1616065200000 -- 2021-03-18T11:00:00Z
+                                , end = Time.millisToPosix 1616068800000 -- 2021-03-18T12:00:00Z
+                                }
+                                |> addRule
+                                    { frequency = Recurrence.Hourly { every = 1 }
+                                    , end = Recurrence.Count 3
+                                    , byDay = []
+                                    , byMonthDay = []
+                                    , byMonth = []
+                                    , bySetPos = []
+                                    , byHour = []
+                                    , byMinute = []
+                                    , bySecond = []
+                                    , byYearDay = []
+                                    , byWeekNo = []
+                                    }
+                                |> addExclusion (Time.millisToPosix 1616068800000)
+
+                        -- 2021-03-18T12:00:00Z
+                    in
+                    Parser.expand
+                        { start = Date.fromCalendarDate 2021 Time.Mar 18
+                        , end = Date.fromCalendarDate 2021 Time.Mar 18
+                        }
+                        [ event ]
+                        |> List.map (occurrenceHour Time.utc)
+                        |> Expect.equal [ 11, 13 ]
             , test "MINUTELY expansion with COUNT" <|
                 \() ->
                     let
@@ -2510,6 +2630,24 @@ occurrenceFloatingDateHour occ =
 
         _ ->
             ( Date.fromCalendarDate 1900 Time.Jan 1, -1 )
+
+
+occurrenceLocalDateHourMinute : Parser.Occurrence -> ( Date.Date, Int, Int )
+occurrenceLocalDateHourMinute occ =
+    case occ.time of
+        Parser.WithTime { start } ->
+            case start.localDateTime of
+                Just localDateTime ->
+                    ( Date.fromCalendarDate localDateTime.year localDateTime.month localDateTime.day
+                    , localDateTime.hour
+                    , localDateTime.minute
+                    )
+
+                Nothing ->
+                    ( Date.fromCalendarDate 1900 Time.Jan 1, -1, -1 )
+
+        _ ->
+            ( Date.fromCalendarDate 1900 Time.Jan 1, -1, -1 )
 
 
 occurrenceDate : Time.Zone -> Parser.Occurrence -> Date.Date

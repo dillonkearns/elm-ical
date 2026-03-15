@@ -2103,6 +2103,32 @@ endToEndTests =
                     ]
                     |> Parser.parse
                     |> Expect.err
+        , test "UTC DTSTART with local UNTIL should be rejected" <|
+            \() ->
+                calendar
+                    [ "BEGIN:VEVENT"
+                    , "UID:utc-start-local-until@test"
+                    , "DTSTAMP:20240101T000000Z"
+                    , "DTSTART:20240101T090000Z"
+                    , "RRULE:FREQ=DAILY;UNTIL=20240103T090000"
+                    , "SUMMARY:Invalid until locality"
+                    , "END:VEVENT"
+                    ]
+                    |> Parser.parse
+                    |> Expect.err
+        , test "floating DTSTART with UTC UNTIL should be rejected" <|
+            \() ->
+                calendar
+                    [ "BEGIN:VEVENT"
+                    , "UID:floating-start-utc-until@test"
+                    , "DTSTAMP:20240101T000000Z"
+                    , "DTSTART:20240101T090000"
+                    , "RRULE:FREQ=DAILY;UNTIL=20240103T090000Z"
+                    , "SUMMARY:Invalid floating until"
+                    , "END:VEVENT"
+                    ]
+                    |> Parser.parse
+                    |> Expect.err
         ]
 
 

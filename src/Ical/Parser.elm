@@ -587,7 +587,7 @@ type alias EventAccum =
     , organizer : Maybe Organizer
     , status : Maybe Status
     , transparency : Maybe Transparency
-    , recurrenceRules : List RecurrenceRule
+    , recurrenceRules : List { rule : RecurrenceRule, raw : String }
     , exclusions : List OccurrenceReference
     , recurrenceDates : List OccurrenceReference
     , recurrenceId : Maybe OccurrenceReference
@@ -664,7 +664,7 @@ finalizeEvent accum =
                                                                                 , organizer = accum.organizer
                                                                                 , status = accum.status
                                                                                 , transparency = accum.transparency
-                                                                                , recurrenceRules = List.reverse accum.recurrenceRules
+                                                                                , recurrenceRules = List.map .rule (List.reverse accum.recurrenceRules)
                                                                                 , exclusions = List.reverse accum.exclusions
                                                                                 , recurrenceDates = List.reverse accum.recurrenceDates
                                                                                 , recurrenceId = accum.recurrenceId
@@ -751,7 +751,7 @@ buildEventTime dtstart maybeDtend maybeDuration =
 
 validateEventRecurrenceFields :
     EventTime
-    -> List RecurrenceRule
+    -> List { rule : RecurrenceRule, raw : String }
     -> List OccurrenceReference
     -> List OccurrenceReference
     -> Maybe OccurrenceReference
@@ -822,7 +822,7 @@ expectedOccurrenceReferenceType eventTime =
             "local DATE-TIME"
 
 
-validateRecurrenceRuleUntilTypes : EventTime -> List RecurrenceRule -> Result String ()
+validateRecurrenceRuleUntilTypes : EventTime -> List { rule : RecurrenceRule, raw : String } -> Result String ()
 validateRecurrenceRuleUntilTypes eventTime recurrenceRules =
     recurrenceRules
         |> List.foldl
@@ -833,9 +833,9 @@ validateRecurrenceRuleUntilTypes eventTime recurrenceRules =
             (Ok ())
 
 
-validateRecurrenceRuleUntilType : EventTime -> RecurrenceRule -> Result String ()
-validateRecurrenceRuleUntilType eventTime rule =
-    case ( eventTime, rule.end ) of
+validateRecurrenceRuleUntilType : EventTime -> { rule : RecurrenceRule, raw : String } -> Result String ()
+validateRecurrenceRuleUntilType eventTime recurrenceRule =
+    case ( eventTime, recurrenceRule.rule.end ) of
         ( AllDay _, UntilDateTime _ ) ->
             Err "RRULE UNTIL value type must match DTSTART (expected DATE)"
 
@@ -845,8 +845,43 @@ validateRecurrenceRuleUntilType eventTime rule =
         ( FloatingTime _, UntilDate _ ) ->
             Err "RRULE UNTIL value type must match DTSTART (expected local DATE-TIME)"
 
+        ( WithTime _, UntilDateTime _ ) ->
+            if recurrenceUntilIsUtc recurrenceRule.raw then
+                Ok ()
+
+            else
+                Err "RRULE UNTIL must be UTC when DTSTART is a resolved DATE-TIME"
+
+        ( FloatingTime _, UntilDateTime _ ) ->
+            if recurrenceUntilIsUtc recurrenceRule.raw then
+                Err "RRULE UNTIL must be local when DTSTART is a floating DATE-TIME"
+
+            else
+                Ok ()
+
         _ ->
             Ok ()
+
+
+recurrenceUntilIsUtc : String -> Bool
+recurrenceUntilIsUtc rawRule =
+    rawRule
+        |> String.split ";"
+        |> List.filterMap
+            (\part ->
+                case String.split "=" part of
+                    [ key, value ] ->
+                        if String.toUpper key == "UNTIL" then
+                            Just (String.endsWith "Z" value)
+
+                        else
+                            Nothing
+
+                    _ ->
+                        Nothing
+            )
+        |> List.head
+        |> Maybe.withDefault False
 
 
 durationHasTimeParts : ValueParser.Duration -> Bool
@@ -946,6 +981,35 @@ resolveTimeZoneLocalDateTime timeZoneName timeZoneContext localDateTime =
                 , localDateTime = Just localDateTime
                 , timeZoneContext = Just timeZoneContext
                 }
+            )
+
+
+resolveRecurringTimeZoneLocalDateTime : String -> TimeZoneContext -> LocalDateTime -> Maybe ResolvedTime
+resolveRecurringTimeZoneLocalDateTime timeZoneName timeZoneContext localDateTime =
+    let
+        zoneDefinition : VTimeZone.ZoneDefinition
+        zoneDefinition =
+            timeZoneDefinitionFromContext timeZoneContext
+    in
+    VTimeZone.resolve zoneDefinition localDateTime
+        |> Result.toMaybe
+        |> Maybe.andThen
+            (\posix ->
+                case VTimeZone.toLocal zoneDefinition posix of
+                    Ok roundTrippedLocalDateTime ->
+                        if roundTrippedLocalDateTime == localDateTime then
+                            Just
+                                { posix = posix
+                                , timeZoneName = Just timeZoneName
+                                , localDateTime = Just localDateTime
+                                , timeZoneContext = Just timeZoneContext
+                                }
+
+                        else
+                            Nothing
+
+                    Err _ ->
+                        Nothing
             )
 
 
@@ -1118,7 +1182,7 @@ applyEventProperty timezones line accum =
         "RRULE" ->
             case ValueParser.parseRecurrenceRule line.value of
                 Ok rule ->
-                    { accum | recurrenceRules = rule :: accum.recurrenceRules }
+                    { accum | recurrenceRules = { rule = rule, raw = line.value } :: accum.recurrenceRules }
 
                 Err err ->
                     addEventError ("Invalid RRULE: " ++ err) accum
@@ -2220,7 +2284,7 @@ subDailyLoop :
     -> Int
     -> List Occurrence
     -> List Occurrence
-subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName stepIndex emittedCount acc =
+subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName stepIndex generatedCount acc =
     let
         currentMs : Int
         currentMs =
@@ -2248,56 +2312,59 @@ subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusio
     else
         case rule.end of
             Count n ->
-                if emittedCount >= n || pastEnd then
+                if generatedCount >= n || pastEnd then
                     List.reverse acc
 
-                else if excluded || filtered then
-                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+                else if filtered then
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) generatedCount acc
+
+                else if excluded then
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (generatedCount + 1) acc
 
                 else if inRange then
-                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (emittedCount + 1) (makeSubDailyOccurrence event tzName currentMs durationMs :: acc)
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (generatedCount + 1) (makeSubDailyOccurrence event tzName currentMs durationMs :: acc)
 
                 else
-                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (generatedCount + 1) acc
 
             UntilDateTime untilPosix ->
                 if currentMs > Time.posixToMillis untilPosix then
                     List.reverse acc
 
                 else if excluded || filtered then
-                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) generatedCount acc
 
                 else if inRange then
-                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (emittedCount + 1) (makeSubDailyOccurrence event tzName currentMs durationMs :: acc)
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (generatedCount + 1) (makeSubDailyOccurrence event tzName currentMs durationMs :: acc)
 
                 else
-                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) generatedCount acc
 
             UntilDate untilDate ->
                 if Date.toRataDie (Date.fromPosix Time.utc (Time.millisToPosix currentMs)) > Date.toRataDie untilDate then
                     List.reverse acc
 
                 else if excluded || filtered then
-                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) generatedCount acc
 
                 else if inRange then
-                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (emittedCount + 1) (makeSubDailyOccurrence event tzName currentMs durationMs :: acc)
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (generatedCount + 1) (makeSubDailyOccurrence event tzName currentMs durationMs :: acc)
 
                 else
-                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) generatedCount acc
 
             Forever ->
                 if pastEnd then
                     List.reverse acc
 
                 else if excluded || filtered then
-                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) generatedCount acc
 
                 else if inRange then
-                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (emittedCount + 1) (makeSubDailyOccurrence event tzName currentMs durationMs :: acc)
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) (generatedCount + 1) (makeSubDailyOccurrence event tzName currentMs durationMs :: acc)
 
                 else
-                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
+                    subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) generatedCount acc
 
 
 subDailyLoopFloating :
@@ -2313,7 +2380,7 @@ subDailyLoopFloating :
     -> Int
     -> List Occurrence
     -> List Occurrence
-subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event stepIndex emittedCount acc =
+subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event stepIndex generatedCount acc =
     let
         currentSeconds : Int
         currentSeconds =
@@ -2341,56 +2408,59 @@ subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStar
     else
         case rule.end of
             Count n ->
-                if emittedCount >= n || pastEnd then
+                if generatedCount >= n || pastEnd then
                     List.reverse acc
 
-                else if excluded || filtered then
-                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) emittedCount acc
+                else if filtered then
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) generatedCount acc
+
+                else if excluded then
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) (generatedCount + 1) acc
 
                 else if inRange then
-                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) (emittedCount + 1) (makeFloatingSubDailyOccurrence event currentSeconds durationSeconds :: acc)
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) (generatedCount + 1) (makeFloatingSubDailyOccurrence event currentSeconds durationSeconds :: acc)
 
                 else
-                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) emittedCount acc
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) (generatedCount + 1) acc
 
             UntilDateTime untilPosix ->
                 if currentSeconds > localDateTimeKey (utcPosixToLocalDateTime untilPosix) then
                     List.reverse acc
 
                 else if excluded || filtered then
-                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) emittedCount acc
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) generatedCount acc
 
                 else if inRange then
-                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) (emittedCount + 1) (makeFloatingSubDailyOccurrence event currentSeconds durationSeconds :: acc)
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) (generatedCount + 1) (makeFloatingSubDailyOccurrence event currentSeconds durationSeconds :: acc)
 
                 else
-                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) emittedCount acc
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) generatedCount acc
 
             UntilDate untilDate ->
                 if currentSeconds >= (Date.toRataDie untilDate + 1) * 86400 then
                     List.reverse acc
 
                 else if excluded || filtered then
-                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) emittedCount acc
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) generatedCount acc
 
                 else if inRange then
-                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) (emittedCount + 1) (makeFloatingSubDailyOccurrence event currentSeconds durationSeconds :: acc)
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) (generatedCount + 1) (makeFloatingSubDailyOccurrence event currentSeconds durationSeconds :: acc)
 
                 else
-                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) emittedCount acc
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) generatedCount acc
 
             Forever ->
                 if pastEnd then
                     List.reverse acc
 
                 else if excluded || filtered then
-                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) emittedCount acc
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) generatedCount acc
 
                 else if inRange then
-                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) (emittedCount + 1) (makeFloatingSubDailyOccurrence event currentSeconds durationSeconds :: acc)
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) (generatedCount + 1) (makeFloatingSubDailyOccurrence event currentSeconds durationSeconds :: acc)
 
                 else
-                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) emittedCount acc
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) generatedCount acc
 
 
 passesSubDailyFilters : RecurrenceRule -> Int -> Bool
@@ -2489,7 +2559,9 @@ makeFloatingSubDailyOccurrence event currentSeconds durationSeconds =
 expandByTimeParts : RecurrenceRule -> Event -> Date.Date -> Date.Date -> List Occurrence
 expandByTimeParts rule event seed candidateDate =
     if List.isEmpty rule.byHour && List.isEmpty rule.byMinute && List.isEmpty rule.bySecond then
-        [ { event = event, time = shiftTime event.time seed candidateDate } ]
+        shiftRecurringTime event.time seed candidateDate
+            |> Maybe.map (\time -> [ { event = event, time = time } ])
+            |> Maybe.withDefault []
 
     else
         case event.time of
@@ -2550,7 +2622,7 @@ expandByTimeParts rule event seed candidateDate =
                                                                     , second = s
                                                                     }
                                                             in
-                                                            resolveTimeZoneLocalDateTime timeZoneName timeZoneContext candidateLocalDateTime
+                                                            resolveRecurringTimeZoneLocalDateTime timeZoneName timeZoneContext candidateLocalDateTime
                                                                 |> Maybe.map
                                                                     (\resolvedStart ->
                                                                         { event = event
@@ -2823,7 +2895,25 @@ collectCandidates rule originalTime seed rangeEndRD stepIndex emittedCount acc c
                             List.reverse acc
 
                         else
-                            collectCandidates rule originalTime seed rangeEndRD stepIndex (emittedCount + 1) (c :: acc) rest
+                            let
+                                occurrenceCount : Int
+                                occurrenceCount =
+                                    occurrenceCountForDateCandidate rule originalTime seed c
+                            in
+                            collectCandidates
+                                rule
+                                originalTime
+                                seed
+                                rangeEndRD
+                                stepIndex
+                                (emittedCount + occurrenceCount)
+                                (if occurrenceCount > 0 then
+                                    c :: acc
+
+                                 else
+                                    acc
+                                )
+                                rest
 
                     UntilDate untilDate ->
                         if Date.compare c untilDate == GT then
@@ -2849,15 +2939,140 @@ collectCandidates rule originalTime seed rangeEndRD stepIndex emittedCount acc c
 
 occurrenceStartsAfterUntil : EventTime -> Date.Date -> Date.Date -> Time.Posix -> Bool
 occurrenceStartsAfterUntil originalTime seed candidateDate untilPosix =
-    case shiftTime originalTime seed candidateDate of
-        WithTime { start } ->
+    case shiftRecurringTime originalTime seed candidateDate of
+        Just (WithTime { start }) ->
             Time.posixToMillis start.posix > Time.posixToMillis untilPosix
 
-        AllDay { start } ->
+        Just (AllDay { start }) ->
             Date.compare start (Date.fromPosix Time.utc untilPosix) == GT
 
-        FloatingTime { start } ->
+        Just (FloatingTime { start }) ->
             localDateTimeKey start > localDateTimeKey (utcPosixToLocalDateTime untilPosix)
+
+        Nothing ->
+            False
+
+
+occurrenceCountForDateCandidate : RecurrenceRule -> EventTime -> Date.Date -> Date.Date -> Int
+occurrenceCountForDateCandidate rule originalTime seed candidateDate =
+    if List.isEmpty rule.byHour && List.isEmpty rule.byMinute && List.isEmpty rule.bySecond then
+        case shiftRecurringTime originalTime seed candidateDate of
+            Just _ ->
+                1
+
+            Nothing ->
+                0
+
+    else
+        case originalTime of
+            WithTime { start } ->
+                case ( start.timeZoneName, start.localDateTime, start.timeZoneContext ) of
+                    ( Just timeZoneName, Just startLocalDateTime, Just timeZoneContext ) ->
+                        timePartCombinations
+                            { defaultHour = startLocalDateTime.hour
+                            , defaultMinute = startLocalDateTime.minute
+                            , defaultSecond = startLocalDateTime.second
+                            , byHour = rule.byHour
+                            , byMinute = rule.byMinute
+                            , bySecond = rule.bySecond
+                            }
+                            |> List.length
+                            |> (\_ ->
+                                    timePartCombinations
+                                        { defaultHour = startLocalDateTime.hour
+                                        , defaultMinute = startLocalDateTime.minute
+                                        , defaultSecond = startLocalDateTime.second
+                                        , byHour = rule.byHour
+                                        , byMinute = rule.byMinute
+                                        , bySecond = rule.bySecond
+                                        }
+                                        |> List.filterMap
+                                            (\( h, m, s ) ->
+                                                resolveRecurringTimeZoneLocalDateTime
+                                                    timeZoneName
+                                                    timeZoneContext
+                                                    { year = Date.year candidateDate
+                                                    , month = Date.month candidateDate
+                                                    , day = Date.day candidateDate
+                                                    , hour = h
+                                                    , minute = m
+                                                    , second = s
+                                                    }
+                                            )
+                                        |> List.length
+                               )
+
+                    _ ->
+                        timePartCombinations
+                            { defaultHour = Time.toHour Time.utc start.posix
+                            , defaultMinute = Time.toMinute Time.utc start.posix
+                            , defaultSecond = Time.toSecond Time.utc start.posix
+                            , byHour = rule.byHour
+                            , byMinute = rule.byMinute
+                            , bySecond = rule.bySecond
+                            }
+                            |> List.length
+
+            FloatingTime { start } ->
+                timePartCombinations
+                    { defaultHour = start.hour
+                    , defaultMinute = start.minute
+                    , defaultSecond = start.second
+                    , byHour = rule.byHour
+                    , byMinute = rule.byMinute
+                    , bySecond = rule.bySecond
+                    }
+                    |> List.length
+
+            AllDay _ ->
+                1
+
+
+timePartCombinations :
+    { defaultHour : Int
+    , defaultMinute : Int
+    , defaultSecond : Int
+    , byHour : List Int
+    , byMinute : List Int
+    , bySecond : List Int
+    }
+    -> List ( Int, Int, Int )
+timePartCombinations config =
+    let
+        hours : List Int
+        hours =
+            if List.isEmpty config.byHour then
+                [ config.defaultHour ]
+
+            else
+                config.byHour
+
+        minutes : List Int
+        minutes =
+            if List.isEmpty config.byMinute then
+                [ config.defaultMinute ]
+
+            else
+                config.byMinute
+
+        seconds : List Int
+        seconds =
+            if List.isEmpty config.bySecond then
+                [ config.defaultSecond ]
+
+            else
+                config.bySecond
+    in
+    hours
+        |> List.concatMap
+            (\hour ->
+                minutes
+                    |> List.concatMap
+                        (\minute ->
+                            seconds
+                                |> List.map (\second -> ( hour, minute, second ))
+                        )
+            )
 
 
 isCountLimited : RecurrenceEnd -> Bool
@@ -3801,6 +4016,66 @@ shiftTime originalTime originalDate newDate =
                 { start = shiftLocalDateTime dayDelta start
                 , end = Maybe.map (shiftLocalDateTime dayDelta) end
                 }
+
+
+shiftRecurringTime : EventTime -> Date.Date -> Date.Date -> Maybe EventTime
+shiftRecurringTime originalTime originalDate newDate =
+    let
+        dayDelta : Int
+        dayDelta =
+            Date.toRataDie newDate - Date.toRataDie originalDate
+    in
+    case originalTime of
+        WithTime { start, end } ->
+            case ( start.timeZoneName, start.localDateTime, start.timeZoneContext ) of
+                ( Just timeZoneName, Just startLocalDateTime, Just timeZoneContext ) ->
+                    let
+                        durationMs : Int
+                        durationMs =
+                            case end of
+                                Just endTime ->
+                                    Time.posixToMillis endTime.posix - Time.posixToMillis start.posix
+
+                                Nothing ->
+                                    0
+
+                        shiftedStart : Maybe ResolvedTime
+                        shiftedStart =
+                            resolveRecurringTimeZoneLocalDateTime timeZoneName timeZoneContext (shiftLocalDateTime dayDelta startLocalDateTime)
+
+                        shiftedEnd : Maybe ResolvedTime
+                        shiftedEnd =
+                            case ( shiftedStart, end ) of
+                                ( Just shiftedStartResolved, Just endResolved ) ->
+                                    case endResolved.localDateTime of
+                                        Just endLocalDateTime ->
+                                            resolveRecurringTimeZoneLocalDateTime timeZoneName timeZoneContext (shiftLocalDateTime dayDelta endLocalDateTime)
+
+                                        Nothing ->
+                                            Just
+                                                (resolvedTimeFromPosixInTimeZone
+                                                    timeZoneName
+                                                    timeZoneContext
+                                                    (Time.millisToPosix (Time.posixToMillis shiftedStartResolved.posix + durationMs))
+                                                )
+
+                                _ ->
+                                    Nothing
+                    in
+                    shiftedStart
+                        |> Maybe.map
+                            (\shiftedStartResolved ->
+                                WithTime
+                                    { start = shiftedStartResolved
+                                    , end = shiftedEnd
+                                    }
+                            )
+
+                _ ->
+                    Just (shiftTime originalTime originalDate newDate)
+
+        _ ->
+            Just (shiftTime originalTime originalDate newDate)
 
 
 shiftLocalDateTime : Int -> LocalDateTime -> LocalDateTime
