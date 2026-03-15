@@ -169,6 +169,7 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
   - `TZID` date-times resolved through matching `VTIMEZONE`
 - Attendees: `CN`, `ROLE`, `PARTSTAT`, `RSVP`
 - `VJOURNAL` parsing: journal entries with optional `DTSTART` (date, datetime, or floating), `STATUS` (`DRAFT`/`FINAL`/`CANCELLED`), `SUMMARY`, `DESCRIPTION`, `ORGANIZER`
+- `VALARM` parsing: alarm sub-components with `ACTION` (`DISPLAY`/`AUDIO`), `TRIGGER` (duration relative to start/end, or absolute `DATE-TIME`), `DESCRIPTION`
 
 ### Recurrence Subset
 
@@ -182,7 +183,6 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 ## Not Supported Yet
 
 - Generating `TZID` date-times or `VTIMEZONE` components
-- Typed `VALARM` parsing (VALARM sub-components inside events are silently skipped; generation is supported)
 - `VTODO` and `VFREEBUSY`
 
 ## Known Limitations

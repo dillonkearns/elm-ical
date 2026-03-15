@@ -1950,6 +1950,7 @@ makeAllDayEvent { summary, start, end } =
     , recurrenceDates = []
     , recurrenceId = Nothing
     , attendees = []
+    , alarms = []
     , extraProperties = []
     }
 
@@ -1986,6 +1987,7 @@ makeTimedEvent { summary, start, end } =
     , recurrenceDates = []
     , recurrenceId = Nothing
     , attendees = []
+    , alarms = []
     , extraProperties = []
     }
 
@@ -2027,6 +2029,7 @@ makeFloatingEvent { summary, year, month, day, hour, minute, second } =
     , recurrenceDates = []
     , recurrenceId = Nothing
     , attendees = []
+    , alarms = []
     , extraProperties = []
     }
 

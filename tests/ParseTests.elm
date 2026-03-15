@@ -1835,6 +1835,173 @@ endToEndTests =
 
                     Err err ->
                         Expect.fail err
+        , test "parse event with DISPLAY VALARM" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Meeting"
+                            , "UID:alarm-1"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T100000Z"
+                            , "BEGIN:VALARM"
+                            , "TRIGGER:-PT15M"
+                            , "ACTION:DISPLAY"
+                            , "DESCRIPTION:Meeting in 15 minutes"
+                            , "END:VALARM"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.alarms
+                                    |> Expect.equal
+                                        [ { action = Parser.Display
+                                          , trigger = Parser.TriggerDuration (Parser.SecondsFromStart (-15 * 60))
+                                          , description = Just "Meeting in 15 minutes"
+                                          }
+                                        ]
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "parse event with AUDIO VALARM and RELATED=END" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Deadline"
+                            , "UID:alarm-2"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T100000Z"
+                            , "BEGIN:VALARM"
+                            , "TRIGGER;RELATED=END:PT0S"
+                            , "ACTION:AUDIO"
+                            , "END:VALARM"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.alarms
+                                    |> Expect.equal
+                                        [ { action = Parser.Audio
+                                          , trigger = Parser.TriggerDuration (Parser.SecondsFromEnd 0)
+                                          , description = Nothing
+                                          }
+                                        ]
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "parse event with multiple VALARMs" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Important"
+                            , "UID:alarm-3"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T100000Z"
+                            , "BEGIN:VALARM"
+                            , "TRIGGER:-PT1H"
+                            , "ACTION:DISPLAY"
+                            , "DESCRIPTION:1 hour warning"
+                            , "END:VALARM"
+                            , "BEGIN:VALARM"
+                            , "TRIGGER:-PT15M"
+                            , "ACTION:DISPLAY"
+                            , "DESCRIPTION:15 minute warning"
+                            , "END:VALARM"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.alarms
+                                    |> List.map .description
+                                    |> Expect.equal
+                                        [ Just "1 hour warning"
+                                        , Just "15 minute warning"
+                                        ]
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
+        , test "parse event with absolute TRIGGER" <|
+            \() ->
+                let
+                    input : String
+                    input =
+                        String.join "\u{000D}\n"
+                            [ "BEGIN:VCALENDAR"
+                            , "VERSION:2.0"
+                            , "PRODID:-//test//EN"
+                            , "BEGIN:VEVENT"
+                            , "SUMMARY:Scheduled alert"
+                            , "UID:alarm-4"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "DTSTART:20210318T100000Z"
+                            , "BEGIN:VALARM"
+                            , "TRIGGER;VALUE=DATE-TIME:20210318T093000Z"
+                            , "ACTION:DISPLAY"
+                            , "DESCRIPTION:Alert at 9:30"
+                            , "END:VALARM"
+                            , "END:VEVENT"
+                            , "END:VCALENDAR"
+                            , ""
+                            ]
+                in
+                case Parser.parse input of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                ev.alarms
+                                    |> Expect.equal
+                                        [ { action = Parser.Display
+                                          , trigger = Parser.TriggerAbsolute (toIso8601 "2021-03-18T09:30:00.000Z")
+                                          , description = Just "Alert at 9:30"
+                                          }
+                                        ]
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
         ]
 
 

@@ -5,6 +5,7 @@ module Ical.Parser exposing
     , Status(..), Transparency(..)
     , Organizer, RawProperty
     , Attendee, AttendeeRole(..), ParticipationStatus(..)
+    , Alarm, AlarmAction(..), AlarmTrigger(..), AlarmTriggerRelative(..)
     , Journal, JournalTime(..), JournalStatus(..)
     , Occurrence, expand, expandNext
     )
@@ -75,6 +76,11 @@ Parsed types are transparent record aliases so you can read fields directly.
 @docs Status, Transparency
 @docs Organizer, RawProperty
 @docs Attendee, AttendeeRole, ParticipationStatus
+
+
+## Alarms
+
+@docs Alarm, AlarmAction, AlarmTrigger, AlarmTriggerRelative
 
 
 ## Journals
@@ -148,6 +154,7 @@ type alias Event =
     , recurrenceDates : List Time.Posix
     , recurrenceId : Maybe Time.Posix
     , attendees : List Attendee
+    , alarms : List Alarm
     , extraProperties : List RawProperty
     }
 
@@ -257,6 +264,57 @@ type ParticipationStatus
     | Declined
     | TentativeParticipation
     | Delegated
+
+
+{-| A parsed alarm (VALARM) attached to an event.
+
+    case List.head event.alarms of
+        Just alarm ->
+            alarm.action -- Display or Audio
+            alarm.trigger -- when the alarm fires
+
+        Nothing ->
+            -- no alarms
+
+-}
+type alias Alarm =
+    { action : AlarmAction
+    , trigger : AlarmTrigger
+    , description : Maybe String
+    }
+
+
+{-| The type of alarm.
+-}
+type AlarmAction
+    = Display
+    | Audio
+
+
+{-| When the alarm fires.
+
+  - `TriggerDuration` — a relative offset from the event start or end.
+  - `TriggerAbsolute` — a fixed UTC time (used with `VALUE=DATE-TIME`).
+
+-}
+type AlarmTrigger
+    = TriggerDuration AlarmTriggerRelative
+    | TriggerAbsolute Time.Posix
+
+
+{-| A relative alarm trigger as a signed offset in seconds.
+Negative values mean before, positive values mean after.
+
+    -- 15 minutes before start
+    SecondsFromStart (-15 * 60)
+
+    -- at the moment the event ends
+    SecondsFromEnd 0
+
+-}
+type AlarmTriggerRelative
+    = SecondsFromStart Int
+    | SecondsFromEnd Int
 
 
 {-| A parsed iCal journal entry
@@ -498,6 +556,7 @@ type alias EventAccum =
     , recurrenceDates : List Time.Posix
     , recurrenceId : Maybe Time.Posix
     , attendees : List Attendee
+    , alarms : List Alarm
     , extraProperties : List RawProperty
     , errors : List String
     }
@@ -523,6 +582,7 @@ emptyEventAccum =
     , recurrenceDates = []
     , recurrenceId = Nothing
     , attendees = []
+    , alarms = []
     , extraProperties = []
     , errors = []
     }
@@ -565,6 +625,7 @@ finalizeEvent accum =
                                                                     , recurrenceDates = List.reverse accum.recurrenceDates
                                                                     , recurrenceId = accum.recurrenceId
                                                                     , attendees = List.reverse accum.attendees
+                                                                    , alarms = List.reverse accum.alarms
                                                                     , extraProperties = List.reverse accum.extraProperties
                                                                     }
                                                                 )
@@ -738,6 +799,14 @@ parseEvent lines timezones accum =
 
             else if line.name == "END" then
                 Err ("Mismatched END: expected VEVENT, got " ++ line.value)
+
+            else if line.name == "BEGIN" && String.toUpper line.value == "VALARM" then
+                case parseAlarm rest of
+                    Ok ( alarm, remaining ) ->
+                        parseEvent remaining timezones { accum | alarms = alarm :: accum.alarms }
+
+                    Err err ->
+                        Err err
 
             else if line.name == "BEGIN" then
                 case skipComponent (String.toUpper line.value) rest of
@@ -1345,6 +1414,165 @@ finalizeJournal accum =
 
                 ( _, Nothing ) ->
                     Err "VJOURNAL missing required DTSTAMP"
+
+
+type alias AlarmAccum =
+    { action : Maybe AlarmAction
+    , trigger : Maybe AlarmTrigger
+    , description : Maybe String
+    }
+
+
+parseAlarm : List ContentLine -> Result String ( Alarm, List ContentLine )
+parseAlarm lines =
+    parseAlarmBody lines { action = Nothing, trigger = Nothing, description = Nothing }
+
+
+parseAlarmBody : List ContentLine -> AlarmAccum -> Result String ( Alarm, List ContentLine )
+parseAlarmBody lines accum =
+    case lines of
+        [] ->
+            Err "Unexpected end of input, expected END:VALARM"
+
+        line :: rest ->
+            if line.name == "END" && String.toUpper line.value == "VALARM" then
+                case ( accum.action, accum.trigger ) of
+                    ( Just action, Just trigger ) ->
+                        Ok
+                            ( { action = action
+                              , trigger = trigger
+                              , description = accum.description
+                              }
+                            , rest
+                            )
+
+                    ( Nothing, _ ) ->
+                        Err "VALARM missing required ACTION"
+
+                    ( _, Nothing ) ->
+                        Err "VALARM missing required TRIGGER"
+
+            else
+                parseAlarmBody rest (applyAlarmProperty line accum)
+
+
+applyAlarmProperty : ContentLine -> AlarmAccum -> AlarmAccum
+applyAlarmProperty line accum =
+    case String.toUpper line.name of
+        "ACTION" ->
+            case String.toUpper line.value of
+                "DISPLAY" ->
+                    { accum | action = Just Display }
+
+                "AUDIO" ->
+                    { accum | action = Just Audio }
+
+                _ ->
+                    accum
+
+        "TRIGGER" ->
+            case parseTrigger line of
+                Ok trigger ->
+                    { accum | trigger = Just trigger }
+
+                Err _ ->
+                    accum
+
+        "DESCRIPTION" ->
+            { accum | description = Just (ValueParser.unescapeText line.value) }
+
+        _ ->
+            accum
+
+
+parseTrigger : ContentLine -> Result String AlarmTrigger
+parseTrigger line =
+    let
+        hasValueDateTime : Bool
+        hasValueDateTime =
+            line.parameters
+                |> List.any
+                    (\( k, v ) ->
+                        String.toUpper k == "VALUE" && String.toUpper v == "DATE-TIME"
+                    )
+
+        relatedEnd : Bool
+        relatedEnd =
+            line.parameters
+                |> List.any
+                    (\( k, v ) ->
+                        String.toUpper k == "RELATED" && String.toUpper v == "END"
+                    )
+    in
+    if hasValueDateTime then
+        ValueParser.parseDateTime line.value
+            |> Result.map
+                (\parts ->
+                    let
+                        date : Date.Date
+                        date =
+                            Date.fromCalendarDate parts.year (Date.numberToMonth parts.month) parts.day
+
+                        millis : Int
+                        millis =
+                            dateToUnixMs date
+                                + parts.hour
+                                * 3600000
+                                + parts.minute
+                                * 60000
+                                + parts.second
+                                * 1000
+                    in
+                    TriggerAbsolute (Time.millisToPosix millis)
+                )
+
+    else
+        parseSignedDuration line.value
+            |> Result.map
+                (\totalSeconds ->
+                    if relatedEnd then
+                        TriggerDuration (SecondsFromEnd totalSeconds)
+
+                    else
+                        TriggerDuration (SecondsFromStart totalSeconds)
+                )
+
+
+parseSignedDuration : String -> Result String Int
+parseSignedDuration input =
+    let
+        ( isNegative, stripped ) =
+            if String.startsWith "-" input then
+                ( True, String.dropLeft 1 input )
+
+            else if String.startsWith "+" input then
+                ( False, String.dropLeft 1 input )
+
+            else
+                ( False, input )
+    in
+    ValueParser.parseDuration stripped
+        |> Result.map
+            (\dur ->
+                let
+                    totalSeconds : Int
+                    totalSeconds =
+                        dur.weeks
+                            * 604800
+                            + dur.days
+                            * 86400
+                            + dur.hours
+                            * 3600
+                            + dur.minutes
+                            * 60
+                            + dur.seconds
+                in
+                if isNegative then
+                    -totalSeconds
+
+                else
+                    totalSeconds
+            )
 
 
 skipComponent : String -> List ContentLine -> Result String (List ContentLine)
