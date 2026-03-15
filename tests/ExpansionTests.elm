@@ -742,6 +742,49 @@ suite =
 
                         Err err ->
                             Expect.fail err
+            , test "floating EXDATE excludes only the targeted floating occurrence when multiple share a day" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            String.join "\u{000D}\n"
+                                [ "BEGIN:VCALENDAR"
+                                , "VERSION:2.0"
+                                , "PRODID:-//Test//EN"
+                                , "BEGIN:VEVENT"
+                                , "UID:floating-exdate-same-day@test"
+                                , "DTSTAMP:20240101T000000Z"
+                                , "DTSTART:20240101T090000"
+                                , "DTEND:20240101T093000"
+                                , "RRULE:FREQ=DAILY;COUNT=4;BYHOUR=9,10"
+                                , "EXDATE:20240102T100000"
+                                , "SUMMARY:Floating EXDATE exact occurrence"
+                                , "END:VEVENT"
+                                , "END:VCALENDAR"
+                                , ""
+                                ]
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            case cal.events of
+                                [ event ] ->
+                                    Parser.expand
+                                        { start = Date.fromCalendarDate 2024 Time.Jan 1
+                                        , end = Date.fromCalendarDate 2024 Time.Jan 2
+                                        }
+                                        [ event ]
+                                        |> List.map occurrenceFloatingDateHour
+                                        |> Expect.equal
+                                            [ ( Date.fromCalendarDate 2024 Time.Jan 1, 9 )
+                                            , ( Date.fromCalendarDate 2024 Time.Jan 1, 10 )
+                                            , ( Date.fromCalendarDate 2024 Time.Jan 2, 9 )
+                                            ]
+
+                                _ ->
+                                    Expect.fail "Expected 1 event"
+
+                        Err err ->
+                            Expect.fail err
             , test "EXDATE excludes only the targeted timed occurrence when multiple share a day" <|
                 \() ->
                     let
@@ -869,6 +912,47 @@ suite =
                                         |> List.map (\occ -> ( occurrenceDate Time.utc occ, occurrenceHour Time.utc occ ))
                                         |> Expect.equal
                                             [ ( Date.fromCalendarDate 2024 Time.Jan 1, 10 )
+                                            , ( Date.fromCalendarDate 2024 Time.Jan 2, 14 )
+                                            ]
+
+                                _ ->
+                                    Expect.fail "Expected 1 event"
+
+                        Err err ->
+                            Expect.fail err
+            , test "floating RDATE preserves its explicit local time-of-day during expansion" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            String.join "\u{000D}\n"
+                                [ "BEGIN:VCALENDAR"
+                                , "VERSION:2.0"
+                                , "PRODID:-//Test//EN"
+                                , "BEGIN:VEVENT"
+                                , "UID:floating-rdate@test"
+                                , "DTSTAMP:20240101T000000Z"
+                                , "DTSTART:20240101T090000"
+                                , "DTEND:20240101T100000"
+                                , "RDATE:20240102T140000"
+                                , "SUMMARY:Floating RDATE explicit time"
+                                , "END:VEVENT"
+                                , "END:VCALENDAR"
+                                , ""
+                                ]
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            case cal.events of
+                                [ event ] ->
+                                    Parser.expand
+                                        { start = Date.fromCalendarDate 2024 Time.Jan 1
+                                        , end = Date.fromCalendarDate 2024 Time.Jan 2
+                                        }
+                                        [ event ]
+                                        |> List.map occurrenceFloatingDateHour
+                                        |> Expect.equal
+                                            [ ( Date.fromCalendarDate 2024 Time.Jan 1, 9 )
                                             , ( Date.fromCalendarDate 2024 Time.Jan 2, 14 )
                                             ]
 
@@ -1623,6 +1707,50 @@ suite =
                         |> List.map occurrenceFloatingHour
                         |> Expect.equal [ 9, 17, 9, 17 ]
             ]
+        , describe "Floating sub-daily recurrence"
+            [ test "HOURLY recurrence expands in local floating time" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            String.join "\u{000D}\n"
+                                [ "BEGIN:VCALENDAR"
+                                , "VERSION:2.0"
+                                , "PRODID:-//Test//EN"
+                                , "BEGIN:VEVENT"
+                                , "UID:floating-hourly@test"
+                                , "DTSTAMP:20240101T000000Z"
+                                , "DTSTART:20240101T090000"
+                                , "DTEND:20240101T100000"
+                                , "RRULE:FREQ=HOURLY;COUNT=3"
+                                , "SUMMARY:Floating hourly"
+                                , "END:VEVENT"
+                                , "END:VCALENDAR"
+                                , ""
+                                ]
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            case cal.events of
+                                [ event ] ->
+                                    Parser.expand
+                                        { start = Date.fromCalendarDate 2024 Time.Jan 1
+                                        , end = Date.fromCalendarDate 2024 Time.Jan 1
+                                        }
+                                        [ event ]
+                                        |> List.map occurrenceFloatingDateHour
+                                        |> Expect.equal
+                                            [ ( Date.fromCalendarDate 2024 Time.Jan 1, 9 )
+                                            , ( Date.fromCalendarDate 2024 Time.Jan 1, 10 )
+                                            , ( Date.fromCalendarDate 2024 Time.Jan 1, 11 )
+                                            ]
+
+                                _ ->
+                                    Expect.fail "Expected 1 event"
+
+                        Err err ->
+                            Expect.fail err
+            ]
         , describe "BYYEARDAY"
             [ test "YEARLY with BYYEARDAY expands to specific days of the year" <|
                 \() ->
@@ -2191,6 +2319,52 @@ suite =
 
                         Err err ->
                             Expect.fail err
+            , test "floating override replaces only the targeted floating occurrence when multiple share a day" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            String.join "\u{000D}\n"
+                                [ "BEGIN:VCALENDAR"
+                                , "VERSION:2.0"
+                                , "PRODID:-//Test//EN"
+                                , "BEGIN:VEVENT"
+                                , "UID:floating-override@test"
+                                , "DTSTAMP:20240101T000000Z"
+                                , "DTSTART:20240101T090000"
+                                , "DTEND:20240101T093000"
+                                , "RRULE:FREQ=DAILY;COUNT=4;BYHOUR=9,10"
+                                , "SUMMARY:Floating master"
+                                , "END:VEVENT"
+                                , "BEGIN:VEVENT"
+                                , "UID:floating-override@test"
+                                , "DTSTAMP:20240101T000000Z"
+                                , "RECURRENCE-ID:20240102T100000"
+                                , "DTSTART:20240102T140000"
+                                , "DTEND:20240102T143000"
+                                , "SUMMARY:Floating override"
+                                , "END:VEVENT"
+                                , "END:VCALENDAR"
+                                , ""
+                                ]
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            Parser.expand
+                                { start = Date.fromCalendarDate 2024 Time.Jan 1
+                                , end = Date.fromCalendarDate 2024 Time.Jan 2
+                                }
+                                cal.events
+                                |> List.map occurrenceFloatingDateHour
+                                |> Expect.equal
+                                    [ ( Date.fromCalendarDate 2024 Time.Jan 1, 9 )
+                                    , ( Date.fromCalendarDate 2024 Time.Jan 1, 10 )
+                                    , ( Date.fromCalendarDate 2024 Time.Jan 2, 9 )
+                                    , ( Date.fromCalendarDate 2024 Time.Jan 2, 14 )
+                                    ]
+
+                        Err err ->
+                            Expect.fail err
             ]
         ]
 
@@ -2246,7 +2420,7 @@ nthDaySpec n weekday =
 
 addExclusion : Time.Posix -> Parser.Event -> Parser.Event
 addExclusion posix event =
-    { event | exclusions = posix :: event.exclusions }
+    { event | exclusions = Parser.AtTime (utcResolved posix) :: event.exclusions }
 
 
 makeTimedEvent : { summary : String, start : Time.Posix, end : Time.Posix } -> Parser.Event
@@ -2326,6 +2500,16 @@ occurrenceFloatingHour occ =
 
         _ ->
             -1
+
+
+occurrenceFloatingDateHour : Parser.Occurrence -> ( Date.Date, Int )
+occurrenceFloatingDateHour occ =
+    case occ.time of
+        Parser.FloatingTime { start } ->
+            ( Date.fromCalendarDate start.year start.month start.day, start.hour )
+
+        _ ->
+            ( Date.fromCalendarDate 1900 Time.Jan 1, -1 )
 
 
 occurrenceDate : Time.Zone -> Parser.Occurrence -> Date.Date

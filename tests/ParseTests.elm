@@ -1381,8 +1381,8 @@ endToEndTests =
                             [ ev ] ->
                                 ev.exclusions
                                     |> Expect.equal
-                                        [ toIso8601 "2021-03-25T16:20:44.000Z"
-                                        , toIso8601 "2021-04-01T16:20:44.000Z"
+                                        [ timedReference "2021-03-25T16:20:44.000Z"
+                                        , timedReference "2021-04-01T16:20:44.000Z"
                                         ]
 
                             _ ->
@@ -1671,8 +1671,8 @@ endToEndTests =
                             [ ev ] ->
                                 ev.recurrenceDates
                                     |> Expect.equal
-                                        [ toIso8601 "2021-03-25T16:20:44.000Z"
-                                        , toIso8601 "2021-04-01T16:20:44.000Z"
+                                        [ timedReference "2021-03-25T16:20:44.000Z"
+                                        , timedReference "2021-04-01T16:20:44.000Z"
                                         ]
 
                             _ ->
@@ -1705,10 +1705,9 @@ endToEndTests =
                         case cal.events of
                             [ ev ] ->
                                 ev.recurrenceDates
-                                    |> List.map (\posix -> Date.fromPosix Time.utc posix)
                                     |> Expect.equal
-                                        [ Date.fromCalendarDate 2021 Time.Mar 25
-                                        , Date.fromCalendarDate 2021 Time.Apr 1
+                                        [ Parser.OnDate (Date.fromCalendarDate 2021 Time.Mar 25)
+                                        , Parser.OnDate (Date.fromCalendarDate 2021 Time.Apr 1)
                                         ]
 
                             _ ->
@@ -1768,7 +1767,7 @@ endToEndTests =
                         case cal.events of
                             [ ev ] ->
                                 ev.recurrenceId
-                                    |> Expect.equal (Just (toIso8601 "2021-03-25T16:20:44.000Z"))
+                                    |> Expect.equal (Just (timedReference "2021-03-25T16:20:44.000Z"))
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -1800,7 +1799,7 @@ endToEndTests =
                         case cal.events of
                             [ ev ] ->
                                 ev.recurrenceId
-                                    |> Expect.equal (Just (Time.millisToPosix ((Date.toRataDie (Date.fromCalendarDate 2021 Time.Mar 25) - 719163) * 86400 * 1000)))
+                                    |> Expect.equal (Just (Parser.OnDate (Date.fromCalendarDate 2021 Time.Mar 25)))
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -2089,6 +2088,19 @@ endToEndTests =
                            , "END:VEVENT"
                            ]
                     )
+                    |> Parser.parse
+                    |> Expect.err
+        , test "DATE DTSTART with DATE-TIME UNTIL should be rejected" <|
+            \() ->
+                calendar
+                    [ "BEGIN:VEVENT"
+                    , "UID:date-until-datetime@test"
+                    , "DTSTAMP:20240101T000000Z"
+                    , "DTSTART;VALUE=DATE:20240101"
+                    , "RRULE:FREQ=DAILY;UNTIL=20240103T000000Z"
+                    , "SUMMARY:Invalid until value type"
+                    , "END:VEVENT"
+                    ]
                     |> Parser.parse
                     |> Expect.err
         ]
@@ -3020,6 +3032,11 @@ utcResolved posix =
     , localDateTime = Nothing
     , timeZoneContext = Nothing
     }
+
+
+timedReference : String -> Parser.OccurrenceReference
+timedReference isoString =
+    Parser.AtTime (utcResolved (toIso8601 isoString))
 
 
 nthDaySpec : Int -> Time.Weekday -> Recurrence.DaySpec

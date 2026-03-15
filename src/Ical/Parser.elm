@@ -1,7 +1,7 @@
 module Ical.Parser exposing
     ( parse
     , Calendar, Event
-    , EventTime(..), ResolvedTime, LocalDateTime, TimeZoneContext
+    , EventTime(..), OccurrenceReference(..), ResolvedTime, LocalDateTime, TimeZoneContext
     , Status(..), Transparency(..)
     , Organizer, RawProperty
     , Attendee, AttendeeRole(..), ParticipationStatus(..)
@@ -68,7 +68,7 @@ Parsed types are transparent record aliases so you can read fields directly.
 
 ## Event times
 
-@docs EventTime, ResolvedTime, LocalDateTime, TimeZoneContext
+@docs EventTime, OccurrenceReference, ResolvedTime, LocalDateTime, TimeZoneContext
 
 
 ## Enums and metadata
@@ -150,9 +150,9 @@ type alias Event =
     , status : Maybe Status
     , transparency : Maybe Transparency
     , recurrenceRules : List RecurrenceRule
-    , exclusions : List Time.Posix
-    , recurrenceDates : List Time.Posix
-    , recurrenceId : Maybe Time.Posix
+    , exclusions : List OccurrenceReference
+    , recurrenceDates : List OccurrenceReference
+    , recurrenceId : Maybe OccurrenceReference
     , attendees : List Attendee
     , alarms : List Alarm
     , extraProperties : List RawProperty
@@ -174,6 +174,22 @@ type EventTime
     = AllDay { start : Date.Date, end : Maybe Date.Date }
     | WithTime { start : ResolvedTime, end : Maybe ResolvedTime }
     | FloatingTime { start : LocalDateTime, end : Maybe LocalDateTime }
+
+
+{-| A typed reference to a specific recurrence instance as used by `EXDATE`,
+`RDATE`, and `RECURRENCE-ID`.
+
+The constructor matches the value type from the iCalendar data:
+
+  - `OnDate` for `VALUE=DATE`
+  - `AtTime` for resolved `DATE-TIME` values (UTC or TZID-backed)
+  - `AtFloatingTime` for floating local `DATE-TIME` values
+
+-}
+type OccurrenceReference
+    = OnDate Date.Date
+    | AtTime ResolvedTime
+    | AtFloatingTime LocalDateTime
 
 
 {-| A resolved date-time instant.
@@ -572,9 +588,9 @@ type alias EventAccum =
     , status : Maybe Status
     , transparency : Maybe Transparency
     , recurrenceRules : List RecurrenceRule
-    , exclusions : List Time.Posix
-    , recurrenceDates : List Time.Posix
-    , recurrenceId : Maybe Time.Posix
+    , exclusions : List OccurrenceReference
+    , recurrenceDates : List OccurrenceReference
+    , recurrenceId : Maybe OccurrenceReference
     , attendees : List Attendee
     , alarms : List Alarm
     , extraProperties : List RawProperty
@@ -623,31 +639,40 @@ finalizeEvent accum =
                                 buildEventTime dtstart accum.dtend accum.duration
                                     |> Result.andThen
                                         (\time ->
-                                            extractMaybePosix "CREATED" accum.created
+                                            validateEventRecurrenceFields
+                                                time
+                                                accum.recurrenceRules
+                                                accum.exclusions
+                                                accum.recurrenceDates
+                                                accum.recurrenceId
                                                 |> Result.andThen
-                                                    (\created ->
-                                                        extractMaybePosix "LAST-MODIFIED" accum.lastModified
-                                                            |> Result.map
-                                                                (\lastModified ->
-                                                                    { uid = uid
-                                                                    , stamp = stamp
-                                                                    , time = time
-                                                                    , created = created
-                                                                    , lastModified = lastModified
-                                                                    , summary = accum.summary
-                                                                    , description = accum.description
-                                                                    , location = accum.location
-                                                                    , organizer = accum.organizer
-                                                                    , status = accum.status
-                                                                    , transparency = accum.transparency
-                                                                    , recurrenceRules = List.reverse accum.recurrenceRules
-                                                                    , exclusions = List.reverse accum.exclusions
-                                                                    , recurrenceDates = List.reverse accum.recurrenceDates
-                                                                    , recurrenceId = accum.recurrenceId
-                                                                    , attendees = List.reverse accum.attendees
-                                                                    , alarms = List.reverse accum.alarms
-                                                                    , extraProperties = List.reverse accum.extraProperties
-                                                                    }
+                                                    (\() ->
+                                                        extractMaybePosix "CREATED" accum.created
+                                                            |> Result.andThen
+                                                                (\created ->
+                                                                    extractMaybePosix "LAST-MODIFIED" accum.lastModified
+                                                                        |> Result.map
+                                                                            (\lastModified ->
+                                                                                { uid = uid
+                                                                                , stamp = stamp
+                                                                                , time = time
+                                                                                , created = created
+                                                                                , lastModified = lastModified
+                                                                                , summary = accum.summary
+                                                                                , description = accum.description
+                                                                                , location = accum.location
+                                                                                , organizer = accum.organizer
+                                                                                , status = accum.status
+                                                                                , transparency = accum.transparency
+                                                                                , recurrenceRules = List.reverse accum.recurrenceRules
+                                                                                , exclusions = List.reverse accum.exclusions
+                                                                                , recurrenceDates = List.reverse accum.recurrenceDates
+                                                                                , recurrenceId = accum.recurrenceId
+                                                                                , attendees = List.reverse accum.attendees
+                                                                                , alarms = List.reverse accum.alarms
+                                                                                , extraProperties = List.reverse accum.extraProperties
+                                                                                }
+                                                                            )
                                                                 )
                                                     )
                                         )
@@ -722,6 +747,106 @@ buildEventTime dtstart maybeDtend maybeDuration =
 
                                 Nothing ->
                                     Ok (FloatingTime { start = startLocal, end = Just startLocal })
+
+
+validateEventRecurrenceFields :
+    EventTime
+    -> List RecurrenceRule
+    -> List OccurrenceReference
+    -> List OccurrenceReference
+    -> Maybe OccurrenceReference
+    -> Result String ()
+validateEventRecurrenceFields time recurrenceRules exclusions recurrenceDates recurrenceId =
+    validateOccurrenceReferenceList "EXDATE" time exclusions
+        |> Result.andThen (\() -> validateOccurrenceReferenceList "RDATE" time recurrenceDates)
+        |> Result.andThen (\() -> validateMaybeOccurrenceReference "RECURRENCE-ID" time recurrenceId)
+        |> Result.andThen (\() -> validateRecurrenceRuleUntilTypes time recurrenceRules)
+
+
+validateOccurrenceReferenceList : String -> EventTime -> List OccurrenceReference -> Result String ()
+validateOccurrenceReferenceList label time references =
+    references
+        |> List.foldl
+            (\reference resultSoFar ->
+                resultSoFar
+                    |> Result.andThen (\() -> validateOccurrenceReference label time reference)
+            )
+            (Ok ())
+
+
+validateMaybeOccurrenceReference : String -> EventTime -> Maybe OccurrenceReference -> Result String ()
+validateMaybeOccurrenceReference label time maybeReference =
+    case maybeReference of
+        Just reference ->
+            validateOccurrenceReference label time reference
+
+        Nothing ->
+            Ok ()
+
+
+validateOccurrenceReference : String -> EventTime -> OccurrenceReference -> Result String ()
+validateOccurrenceReference label time reference =
+    if occurrenceReferenceMatchesEventTime time reference then
+        Ok ()
+
+    else
+        Err (label ++ " value type must match DTSTART (expected " ++ expectedOccurrenceReferenceType time ++ ")")
+
+
+occurrenceReferenceMatchesEventTime : EventTime -> OccurrenceReference -> Bool
+occurrenceReferenceMatchesEventTime eventTime occurrenceReference =
+    case ( eventTime, occurrenceReference ) of
+        ( AllDay _, OnDate _ ) ->
+            True
+
+        ( WithTime _, AtTime _ ) ->
+            True
+
+        ( FloatingTime _, AtFloatingTime _ ) ->
+            True
+
+        _ ->
+            False
+
+
+expectedOccurrenceReferenceType : EventTime -> String
+expectedOccurrenceReferenceType eventTime =
+    case eventTime of
+        AllDay _ ->
+            "DATE"
+
+        WithTime _ ->
+            "DATE-TIME"
+
+        FloatingTime _ ->
+            "local DATE-TIME"
+
+
+validateRecurrenceRuleUntilTypes : EventTime -> List RecurrenceRule -> Result String ()
+validateRecurrenceRuleUntilTypes eventTime recurrenceRules =
+    recurrenceRules
+        |> List.foldl
+            (\rule resultSoFar ->
+                resultSoFar
+                    |> Result.andThen (\() -> validateRecurrenceRuleUntilType eventTime rule)
+            )
+            (Ok ())
+
+
+validateRecurrenceRuleUntilType : EventTime -> RecurrenceRule -> Result String ()
+validateRecurrenceRuleUntilType eventTime rule =
+    case ( eventTime, rule.end ) of
+        ( AllDay _, UntilDateTime _ ) ->
+            Err "RRULE UNTIL value type must match DTSTART (expected DATE)"
+
+        ( WithTime _, UntilDate _ ) ->
+            Err "RRULE UNTIL value type must match DTSTART (expected DATE-TIME)"
+
+        ( FloatingTime _, UntilDate _ ) ->
+            Err "RRULE UNTIL value type must match DTSTART (expected local DATE-TIME)"
+
+        _ ->
+            Ok ()
 
 
 durationHasTimeParts : ValueParser.Duration -> Bool
@@ -999,7 +1124,7 @@ applyEventProperty timezones line accum =
                     addEventError ("Invalid RRULE: " ++ err) accum
 
         "EXDATE" ->
-            case parseExdateValues timezones line of
+            case parseOccurrenceReferences timezones line of
                 Ok values ->
                     { accum | exclusions = List.reverse values ++ accum.exclusions }
 
@@ -1007,7 +1132,7 @@ applyEventProperty timezones line accum =
                     addEventError ("Invalid EXDATE: " ++ err) accum
 
         "RDATE" ->
-            case parseExdateValues timezones line of
+            case parseOccurrenceReferences timezones line of
                 Ok values ->
                     { accum | recurrenceDates = List.reverse values ++ accum.recurrenceDates }
 
@@ -1016,14 +1141,8 @@ applyEventProperty timezones line accum =
 
         "RECURRENCE-ID" ->
             case parseDateTimeValue timezones line of
-                Ok (IDate date) ->
-                    { accum | recurrenceId = Just (dateToUtcMidnight date) }
-
-                Ok (IDateTime { posix }) ->
-                    { accum | recurrenceId = Just posix }
-
-                Ok (IFloating localDateTime) ->
-                    { accum | recurrenceId = Just (dateToUtcMidnight (Date.fromCalendarDate localDateTime.year localDateTime.month localDateTime.day)) }
+                Ok value ->
+                    { accum | recurrenceId = Just (occurrenceReferenceFromValue value) }
 
                 Err err ->
                     addEventError ("Invalid RECURRENCE-ID: " ++ err) accum
@@ -1273,8 +1392,21 @@ parseAttendee line =
     }
 
 
-parseExdateValues : Dict String VTimeZone.ZoneDefinition -> ContentLine -> Result String (List Time.Posix)
-parseExdateValues timezones line =
+occurrenceReferenceFromValue : InternalDateTimeValue -> OccurrenceReference
+occurrenceReferenceFromValue value =
+    case value of
+        IDate date ->
+            OnDate date
+
+        IDateTime resolved ->
+            AtTime resolved
+
+        IFloating localDateTime ->
+            AtFloatingTime localDateTime
+
+
+parseOccurrenceReferences : Dict String VTimeZone.ZoneDefinition -> ContentLine -> Result String (List OccurrenceReference)
+parseOccurrenceReferences timezones line =
     String.split "," line.value
         |> List.foldr
             (\val resultSoFar ->
@@ -1287,18 +1419,8 @@ parseExdateValues timezones line =
                         }
                 in
                 case ( parseDateTimeValue timezones fakeLine, resultSoFar ) of
-                    ( Ok (IDate date), Ok soFar ) ->
-                        Ok (dateToUtcMidnight date :: soFar)
-
-                    ( Ok (IDateTime { posix }), Ok soFar ) ->
-                        Ok (posix :: soFar)
-
-                    ( Ok (IFloating localDateTime), Ok soFar ) ->
-                        Ok
-                            (dateToUtcMidnight
-                                (Date.fromCalendarDate localDateTime.year localDateTime.month localDateTime.day)
-                                :: soFar
-                            )
+                    ( Ok value, Ok soFar ) ->
+                        Ok (occurrenceReferenceFromValue value :: soFar)
 
                     ( Err err, _ ) ->
                         Err ("could not parse value \"" ++ val ++ "\": " ++ err)
@@ -1307,11 +1429,6 @@ parseExdateValues timezones line =
                         Err err
             )
             (Ok [])
-
-
-dateToUtcMidnight : Date.Date -> Time.Posix
-dateToUtcMidnight date =
-    Time.millisToPosix ((Date.toRataDie date - 719163) * 86400 * 1000)
 
 
 
@@ -1767,14 +1884,14 @@ expand range events =
             overrideEvents
                 |> List.concatMap (expandEvent range)
 
-        overriddenKeys : List ( String, Int )
+        overriddenKeys : List ( String, OccurrenceReferenceKey )
         overriddenKeys =
             overrideEvents
                 |> List.filterMap
                     (\e ->
                         e.recurrenceId
                             |> Maybe.map
-                                (\posix -> ( e.uid, recurrenceReferenceKey e.time posix ))
+                                (\reference -> ( e.uid, occurrenceReferenceKeyFromReference reference ))
                     )
 
         isOverridden : Occurrence -> Bool
@@ -1812,7 +1929,7 @@ expandEvent range event =
         rdateOccurrences : List Occurrence
         rdateOccurrences =
             event.recurrenceDates
-                |> List.map (occurrenceFromRecurrenceDate event)
+                |> List.map (occurrenceFromRecurrenceReference event)
                 |> List.filter
                     (\occ ->
                         let
@@ -1860,14 +1977,14 @@ expandNext n fromDate events =
             overrideEvents
                 |> List.concatMap (expandNextEvent n fromDate)
 
-        overriddenKeys : List ( String, Int )
+        overriddenKeys : List ( String, OccurrenceReferenceKey )
         overriddenKeys =
             overrideEvents
                 |> List.filterMap
                     (\e ->
                         e.recurrenceId
                             |> Maybe.map
-                                (\posix -> ( e.uid, recurrenceReferenceKey e.time posix ))
+                                (\reference -> ( e.uid, occurrenceReferenceKeyFromReference reference ))
                     )
 
         isOverridden : Occurrence -> Bool
@@ -1906,7 +2023,7 @@ expandNextEvent n fromDate event =
         rdateOccurrences : List Occurrence
         rdateOccurrences =
             event.recurrenceDates
-                |> List.map (occurrenceFromRecurrenceDate event)
+                |> List.map (occurrenceFromRecurrenceReference event)
                 |> List.filter (\occ -> Date.compare (occurrenceStartDate occ.time) fromDate /= LT)
     in
     (baseOccurrences ++ rdateOccurrences)
@@ -2049,12 +2166,43 @@ expandSubDaily range event rule intervalMs =
 
                 exclusionMs : List Int
                 exclusionMs =
-                    event.exclusions |> List.map Time.posixToMillis
+                    event.exclusions
+                        |> List.filterMap occurrenceReferenceMilliseconds
             in
             subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event start.timeZoneName 0 0 []
 
+        FloatingTime { start, end } ->
+            let
+                startSeconds : Int
+                startSeconds =
+                    localDateTimeKey start
+
+                durationSeconds : Int
+                durationSeconds =
+                    case end of
+                        Just endTime ->
+                            localDateTimeKey endTime - startSeconds
+
+                        Nothing ->
+                            0
+
+                rangeStartSeconds : Int
+                rangeStartSeconds =
+                    Date.toRataDie range.start * 86400
+
+                rangeEndSeconds : Int
+                rangeEndSeconds =
+                    (Date.toRataDie range.end + 1) * 86400
+
+                exclusionSeconds : List Int
+                exclusionSeconds =
+                    event.exclusions
+                        |> List.filterMap occurrenceReferenceFloatingSeconds
+            in
+            subDailyLoopFloating rule startSeconds (intervalMs // 1000) durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event 0 0 []
+
         _ ->
-            -- Sub-daily frequencies don't apply to all-day or floating events
+            -- Sub-daily frequencies don't apply to all-day events
             []
 
 
@@ -2152,6 +2300,99 @@ subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusio
                     subDailyLoop rule startMs intervalMs durationMs rangeStartMs rangeEndMs exclusionMs event tzName (stepIndex + 1) emittedCount acc
 
 
+subDailyLoopFloating :
+    RecurrenceRule
+    -> Int
+    -> Int
+    -> Int
+    -> Int
+    -> Int
+    -> List Int
+    -> Event
+    -> Int
+    -> Int
+    -> List Occurrence
+    -> List Occurrence
+subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event stepIndex emittedCount acc =
+    let
+        currentSeconds : Int
+        currentSeconds =
+            startSeconds + stepIndex * intervalSeconds
+
+        pastEnd : Bool
+        pastEnd =
+            currentSeconds >= rangeEndSeconds
+
+        excluded : Bool
+        excluded =
+            List.member currentSeconds exclusionSeconds
+
+        filtered : Bool
+        filtered =
+            not (passesFloatingSubDailyFilters rule currentSeconds)
+
+        inRange : Bool
+        inRange =
+            currentSeconds >= rangeStartSeconds
+    in
+    if pastEnd && not (isCountLimited rule.end) then
+        List.reverse acc
+
+    else
+        case rule.end of
+            Count n ->
+                if emittedCount >= n || pastEnd then
+                    List.reverse acc
+
+                else if excluded || filtered then
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) emittedCount acc
+
+                else if inRange then
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) (emittedCount + 1) (makeFloatingSubDailyOccurrence event currentSeconds durationSeconds :: acc)
+
+                else
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) emittedCount acc
+
+            UntilDateTime untilPosix ->
+                if currentSeconds > localDateTimeKey (utcPosixToLocalDateTime untilPosix) then
+                    List.reverse acc
+
+                else if excluded || filtered then
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) emittedCount acc
+
+                else if inRange then
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) (emittedCount + 1) (makeFloatingSubDailyOccurrence event currentSeconds durationSeconds :: acc)
+
+                else
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) emittedCount acc
+
+            UntilDate untilDate ->
+                if currentSeconds >= (Date.toRataDie untilDate + 1) * 86400 then
+                    List.reverse acc
+
+                else if excluded || filtered then
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) emittedCount acc
+
+                else if inRange then
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) (emittedCount + 1) (makeFloatingSubDailyOccurrence event currentSeconds durationSeconds :: acc)
+
+                else
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) emittedCount acc
+
+            Forever ->
+                if pastEnd then
+                    List.reverse acc
+
+                else if excluded || filtered then
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) emittedCount acc
+
+                else if inRange then
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) (emittedCount + 1) (makeFloatingSubDailyOccurrence event currentSeconds durationSeconds :: acc)
+
+                else
+                    subDailyLoopFloating rule startSeconds intervalSeconds durationSeconds rangeStartSeconds rangeEndSeconds exclusionSeconds event (stepIndex + 1) emittedCount acc
+
+
 passesSubDailyFilters : RecurrenceRule -> Int -> Bool
 passesSubDailyFilters rule currentMs =
     let
@@ -2200,6 +2441,47 @@ makeSubDailyOccurrence event tzName currentMs durationMs =
                     , localDateTime = Nothing
                     , timeZoneContext = Nothing
                     }
+            }
+    }
+
+
+passesFloatingSubDailyFilters : RecurrenceRule -> Int -> Bool
+passesFloatingSubDailyFilters rule currentSeconds =
+    let
+        localDateTime : LocalDateTime
+        localDateTime =
+            localDateTimeFromPseudoSeconds currentSeconds
+
+        date : Date.Date
+        date =
+            localDateTimeDate localDateTime
+    in
+    (List.isEmpty rule.byMonth || List.member (Date.month date) rule.byMonth)
+        && (List.isEmpty rule.byMonthDay || List.member (Date.day date) rule.byMonthDay)
+        && (List.isEmpty rule.byDay || List.member (Date.weekday date) (List.map daySpecWeekday rule.byDay))
+        && (List.isEmpty rule.byHour || List.member localDateTime.hour rule.byHour)
+        && (List.isEmpty rule.byMinute || List.member localDateTime.minute rule.byMinute)
+        && (List.isEmpty rule.bySecond || List.member localDateTime.second rule.bySecond)
+        && (List.isEmpty rule.byYearDay || List.member (Date.ordinalDay date) rule.byYearDay)
+        && (List.isEmpty rule.byWeekNo || List.member (Date.weekNumber date) rule.byWeekNo)
+
+
+makeFloatingSubDailyOccurrence : Event -> Int -> Int -> Occurrence
+makeFloatingSubDailyOccurrence event currentSeconds durationSeconds =
+    let
+        start : LocalDateTime
+        start =
+            localDateTimeFromPseudoSeconds currentSeconds
+
+        end : LocalDateTime
+        end =
+            localDateTimeFromPseudoSeconds (currentSeconds + durationSeconds)
+    in
+    { event = event
+    , time =
+        FloatingTime
+            { start = start
+            , end = Just end
             }
     }
 
@@ -2575,10 +2857,7 @@ occurrenceStartsAfterUntil originalTime seed candidateDate untilPosix =
             Date.compare start (Date.fromPosix Time.utc untilPosix) == GT
 
         FloatingTime { start } ->
-            Date.compare
-                (Date.fromCalendarDate start.year start.month start.day)
-                (Date.fromPosix Time.utc untilPosix)
-                == GT
+            localDateTimeKey start > localDateTimeKey (utcPosixToLocalDateTime untilPosix)
 
 
 isCountLimited : RecurrenceEnd -> Bool
@@ -3278,78 +3557,47 @@ applyBySetPos bySetPos dates =
             |> List.sortBy Date.toRataDie
 
 
-occurrenceFromRecurrenceDate : Event -> Time.Posix -> Occurrence
-occurrenceFromRecurrenceDate event recurrenceDate =
-    case event.time of
-        WithTime { start, end } ->
-            case ( start.timeZoneName, start.timeZoneContext ) of
-                ( Just timeZoneName, Just timeZoneContext ) ->
-                    let
-                        startMs : Int
-                        startMs =
-                            Time.posixToMillis recurrenceDate
-
-                        durationMs : Int
-                        durationMs =
-                            case end of
-                                Just endTime ->
-                                    Time.posixToMillis endTime.posix - Time.posixToMillis start.posix
-
-                                Nothing ->
-                                    0
-                    in
-                    { event = event
-                    , time =
-                        WithTime
-                            { start = resolvedTimeFromPosixInTimeZone timeZoneName timeZoneContext recurrenceDate
-                            , end =
-                                Maybe.map
-                                    (\_ ->
-                                        resolvedTimeFromPosixInTimeZone
-                                            timeZoneName
-                                            timeZoneContext
-                                            (Time.millisToPosix (startMs + durationMs))
-                                    )
-                                    end
-                            }
+occurrenceFromRecurrenceReference : Event -> OccurrenceReference -> Occurrence
+occurrenceFromRecurrenceReference event recurrenceReference =
+    case ( event.time, recurrenceReference ) of
+        ( WithTime { end }, AtTime recurrenceTime ) ->
+            let
+                durationMs : Int
+                durationMs =
+                    timedEventDurationMilliseconds event.time
+            in
+            { event = event
+            , time =
+                WithTime
+                    { start = recurrenceTime
+                    , end =
+                        Maybe.map
+                            (\_ -> addMillisecondsToResolved durationMs recurrenceTime)
+                            end
                     }
+            }
 
-                _ ->
-                    let
-                        startMs : Int
-                        startMs =
-                            Time.posixToMillis recurrenceDate
+        ( FloatingTime { start, end }, AtFloatingTime recurrenceTime ) ->
+            let
+                durationSeconds : Int
+                durationSeconds =
+                    case end of
+                        Just endTime ->
+                            localDateTimeKey endTime - localDateTimeKey start
 
-                        durationMs : Int
-                        durationMs =
-                            case end of
-                                Just endTime ->
-                                    Time.posixToMillis endTime.posix - Time.posixToMillis start.posix
-
-                                Nothing ->
-                                    0
-                    in
-                    { event = event
-                    , time =
-                        WithTime
-                            { start =
-                                { posix = recurrenceDate
-                                , timeZoneName = start.timeZoneName
-                                , localDateTime = Nothing
-                                , timeZoneContext = start.timeZoneContext
-                                }
-                            , end =
-                                Maybe.map
-                                    (\_ ->
-                                        { posix = Time.millisToPosix (startMs + durationMs)
-                                        , timeZoneName = start.timeZoneName
-                                        , localDateTime = Nothing
-                                        , timeZoneContext = start.timeZoneContext
-                                        }
-                                    )
-                                    end
-                            }
+                        Nothing ->
+                            0
+            in
+            { event = event
+            , time =
+                FloatingTime
+                    { start = recurrenceTime
+                    , end =
+                        Maybe.map
+                            (\_ -> localDateTimeFromPseudoSeconds (localDateTimeKey recurrenceTime + durationSeconds))
+                            end
                     }
+            }
 
         _ ->
             let
@@ -3358,7 +3606,7 @@ occurrenceFromRecurrenceDate event recurrenceDate =
                     occurrenceStartDate event.time
             in
             { event = event
-            , time = shiftTime event.time seed (Date.fromPosix Time.utc recurrenceDate)
+            , time = shiftTime event.time seed (occurrenceReferenceStartDate recurrenceReference)
             }
 
 
@@ -3369,32 +3617,80 @@ occurrenceIsExcluded event occurrence =
 
     else
         let
-            occurrenceKey : Int
+            occurrenceKey : OccurrenceReferenceKey
             occurrenceKey =
                 occurrenceReferenceKeyFromOccurrence occurrence
         in
         event.exclusions
-            |> List.any (\exclusion -> recurrenceReferenceKey occurrence.time exclusion == occurrenceKey)
+            |> List.any (\exclusion -> occurrenceReferenceKeyFromReference exclusion == occurrenceKey)
 
 
-occurrenceReferenceKeyFromOccurrence : Occurrence -> Int
+type alias OccurrenceReferenceKey =
+    ( Int, Int )
+
+
+occurrenceReferenceKeyFromOccurrence : Occurrence -> OccurrenceReferenceKey
 occurrenceReferenceKeyFromOccurrence occurrence =
     case occurrence.time of
         WithTime { start } ->
-            Time.posixToMillis start.posix
+            ( 1, Time.posixToMillis start.posix )
+
+        AllDay { start } ->
+            ( 0, Date.toRataDie start )
+
+        FloatingTime { start } ->
+            ( 2, localDateTimeKey start )
+
+
+occurrenceReferenceKeyFromReference : OccurrenceReference -> OccurrenceReferenceKey
+occurrenceReferenceKeyFromReference occurrenceReference =
+    case occurrenceReference of
+        OnDate date ->
+            ( 0, Date.toRataDie date )
+
+        AtTime resolved ->
+            ( 1, Time.posixToMillis resolved.posix )
+
+        AtFloatingTime localDateTime ->
+            ( 2, localDateTimeKey localDateTime )
+
+
+occurrenceReferenceStartDate : OccurrenceReference -> Date.Date
+occurrenceReferenceStartDate occurrenceReference =
+    case occurrenceReference of
+        OnDate date ->
+            date
+
+        AtTime resolved ->
+            case resolved.localDateTime of
+                Just localDateTime ->
+                    localDateTimeDate localDateTime
+
+                Nothing ->
+                    Date.fromPosix Time.utc resolved.posix
+
+        AtFloatingTime localDateTime ->
+            localDateTimeDate localDateTime
+
+
+occurrenceReferenceMilliseconds : OccurrenceReference -> Maybe Int
+occurrenceReferenceMilliseconds occurrenceReference =
+    case occurrenceReference of
+        AtTime resolved ->
+            Just (Time.posixToMillis resolved.posix)
 
         _ ->
-            Date.toRataDie (occurrenceStartDate occurrence.time)
+            Nothing
 
 
-recurrenceReferenceKey : EventTime -> Time.Posix -> Int
-recurrenceReferenceKey eventTime recurrenceReference =
-    case eventTime of
-        WithTime _ ->
-            Time.posixToMillis recurrenceReference
+occurrenceReferenceFloatingSeconds : OccurrenceReference -> Maybe Int
+occurrenceReferenceFloatingSeconds occurrenceReference =
+    case occurrenceReference of
+        AtFloatingTime localDateTime ->
+            Just (localDateTimeKey localDateTime)
 
         _ ->
-            Date.toRataDie (Date.fromPosix Time.utc recurrenceReference)
+            Nothing
 
 
 occurrenceStartDate : EventTime -> Date.Date
@@ -3412,7 +3708,7 @@ occurrenceStartDate eventTime =
                     Date.fromPosix Time.utc start.posix
 
         FloatingTime { start } ->
-            Date.fromCalendarDate start.year start.month start.day
+            localDateTimeDate start
 
 
 shiftTime : EventTime -> Date.Date -> Date.Date -> EventTime
@@ -3561,10 +3857,90 @@ occurrenceTimeKey eventTime =
             Date.toRataDie start
 
         FloatingTime { start } ->
-            Date.toRataDie (Date.fromCalendarDate start.year start.month start.day)
-                * 86400
-                + start.hour
-                * 3600
-                + start.minute
-                * 60
-                + start.second
+            localDateTimeKey start
+
+
+localDateTimeDate : LocalDateTime -> Date.Date
+localDateTimeDate localDateTime =
+    Date.fromCalendarDate localDateTime.year localDateTime.month localDateTime.day
+
+
+localDateTimeKey : LocalDateTime -> Int
+localDateTimeKey localDateTime =
+    Date.toRataDie (localDateTimeDate localDateTime)
+        * 86400
+        + localDateTime.hour
+        * 3600
+        + localDateTime.minute
+        * 60
+        + localDateTime.second
+
+
+localDateTimeFromPseudoSeconds : Int -> LocalDateTime
+localDateTimeFromPseudoSeconds totalSeconds =
+    let
+        date : Date.Date
+        date =
+            Date.fromRataDie (totalSeconds // 86400)
+
+        secondsOfDay : Int
+        secondsOfDay =
+            modBy 86400 totalSeconds
+    in
+    { year = Date.year date
+    , month = Date.month date
+    , day = Date.day date
+    , hour = secondsOfDay // 3600
+    , minute = modBy 60 (secondsOfDay // 60)
+    , second = modBy 60 secondsOfDay
+    }
+
+
+utcPosixToLocalDateTime : Time.Posix -> LocalDateTime
+utcPosixToLocalDateTime posix =
+    let
+        date : Date.Date
+        date =
+            Date.fromPosix Time.utc posix
+    in
+    { year = Date.year date
+    , month = Date.month date
+    , day = Date.day date
+    , hour = Time.toHour Time.utc posix
+    , minute = Time.toMinute Time.utc posix
+    , second = Time.toSecond Time.utc posix
+    }
+
+
+timedEventDurationMilliseconds : EventTime -> Int
+timedEventDurationMilliseconds eventTime =
+    case eventTime of
+        WithTime { start, end } ->
+            case end of
+                Just endTime ->
+                    Time.posixToMillis endTime.posix - Time.posixToMillis start.posix
+
+                Nothing ->
+                    0
+
+        _ ->
+            0
+
+
+addMillisecondsToResolved : Int -> ResolvedTime -> ResolvedTime
+addMillisecondsToResolved deltaMs resolved =
+    let
+        newPosix : Time.Posix
+        newPosix =
+            Time.millisToPosix (Time.posixToMillis resolved.posix + deltaMs)
+    in
+    case ( resolved.timeZoneName, resolved.timeZoneContext ) of
+        ( Just timeZoneName, Just timeZoneContext ) ->
+            resolvedTimeFromPosixInTimeZone timeZoneName timeZoneContext newPosix
+
+        _ ->
+            { posix = newPosix
+            , timeZoneName = resolved.timeZoneName
+            , localDateTime = Nothing
+            , timeZoneContext = resolved.timeZoneContext
+            }
