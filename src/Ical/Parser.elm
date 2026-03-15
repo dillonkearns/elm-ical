@@ -1790,10 +1790,6 @@ expand range events =
 expandEvent : { start : Date.Date, end : Date.Date } -> Event -> List Occurrence
 expandEvent range event =
     let
-        seed : Date.Date
-        seed =
-            occurrenceStartDate event.time
-
         baseOccurrences : List Occurrence
         baseOccurrences =
             case event.recurrenceRules of
@@ -1888,10 +1884,6 @@ expandNext n fromDate events =
 expandNextEvent : Int -> Date.Date -> Event -> List Occurrence
 expandNextEvent n fromDate event =
     let
-        seed : Date.Date
-        seed =
-            occurrenceStartDate event.time
-
         baseOccurrences : List Occurrence
         baseOccurrences =
             case event.recurrenceRules of
@@ -3284,21 +3276,6 @@ applyBySetPos bySetPos dates =
                         |> Maybe.map Tuple.second
                 )
             |> List.sortBy Date.toRataDie
-
-
-filterExclusions : Event -> List Date.Date -> List Date.Date
-filterExclusions event dates =
-    if List.isEmpty event.exclusions then
-        dates
-
-    else
-        let
-            exclusionRDs : List Int
-            exclusionRDs =
-                event.exclusions
-                    |> List.map (\posix -> Date.toRataDie (Date.fromPosix Time.utc posix))
-        in
-        List.filter (\d -> not (List.member (Date.toRataDie d) exclusionRDs)) dates
 
 
 occurrenceFromRecurrenceDate : Event -> Time.Posix -> Occurrence
