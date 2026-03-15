@@ -139,7 +139,7 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 - If a parsed `VEVENT` omits both `DTEND` and `DURATION`, the parser applies the RFC default:
   - all-day events end on the following date
   - timed and floating events end at the same instant they start
-- Recurrence expansion (`expand`, `expandNext`) works in UTC-date space. TZID-resolved times are converted to UTC before computing occurrence dates, EXDATE exclusions, and RDATE additions. This is internally consistent, but occurrence dates may differ from the local-timezone date. For example, an event at 11pm New York time has a UTC date of the following day. Use `ResolvedTime.timeZoneName` to convert back to local dates for display.
+- Recurrence expansion keeps all-day and floating events in their natural date space. For TZID-resolved timed events, date-based recurrence rules use the local wall-clock date from the matching `VTIMEZONE` definition, so `BYDAY`, `BYMONTHDAY`, `EXDATE`, `RDATE`, and `RECURRENCE-ID` line up with local calendar dates. Sub-daily `FREQ` values still operate on resolved instants.
 
 ## Supported Today
 

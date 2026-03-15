@@ -1034,8 +1034,8 @@ endToEndTests =
                                 ev.time
                                     |> Expect.equal
                                         (Parser.WithTime
-                                            { start = { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing }
-                                            , end = Just { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing }
+                                            { start = utcResolved (toIso8601 "2021-03-18T16:20:44.000Z")
+                                            , end = Just (utcResolved (toIso8601 "2021-03-18T16:20:44.000Z"))
                                             }
                                         )
 
@@ -1070,8 +1070,8 @@ endToEndTests =
                                 ev.time
                                     |> Expect.equal
                                         (Parser.WithTime
-                                            { start = { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing }
-                                            , end = Just { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing }
+                                            { start = utcResolved (toIso8601 "2021-03-18T16:20:44.000Z")
+                                            , end = Just (utcResolved (toIso8601 "2021-03-18T16:20:44.000Z"))
                                             }
                                         )
 
@@ -1106,8 +1106,8 @@ endToEndTests =
                                 ev.time
                                     |> Expect.equal
                                         (Parser.WithTime
-                                            { start = { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing }
-                                            , end = Just { posix = toIso8601 "2021-03-18T16:20:44.000Z", timeZoneName = Nothing }
+                                            { start = utcResolved (toIso8601 "2021-03-18T16:20:44.000Z")
+                                            , end = Just (utcResolved (toIso8601 "2021-03-18T16:20:44.000Z"))
                                             }
                                         )
 
@@ -1473,8 +1473,8 @@ endToEndTests =
                                 ev.time
                                     |> Expect.equal
                                         (Parser.WithTime
-                                            { start = { posix = toIso8601 "2021-03-18T10:00:00.000Z", timeZoneName = Nothing }
-                                            , end = Just { posix = toIso8601 "2021-03-18T11:30:00.000Z", timeZoneName = Nothing }
+                                            { start = utcResolved (toIso8601 "2021-03-18T10:00:00.000Z")
+                                            , end = Just (utcResolved (toIso8601 "2021-03-18T11:30:00.000Z"))
                                             }
                                         )
 
@@ -2658,6 +2658,63 @@ roundTripTests =
 
                     Err err ->
                         Expect.fail err
+        , test "round-trip builder drops invalid weekly all-day selectors before parsing" <|
+            \() ->
+                let
+                    icsString : String
+                    icsString =
+                        [ Ical.event
+                            { id = "rt-invalid-weekly-all-day"
+                            , stamp = toIso8601 "2024-01-01T00:00:00.000Z"
+                            , time = Ical.allDay (Date.fromCalendarDate 2024 Time.Jan 1)
+                            , summary = "Weekly all-day recurrence"
+                            }
+                            |> Ical.withRecurrenceRule
+                                (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
+                                    |> Ical.withByDay [ Recurrence.Every Time.Mon, Recurrence.Every2nd Time.Tue ]
+                                    |> Ical.withByMonthDay [ 1, -1 ]
+                                    |> Ical.withBySetPos [ 1 ]
+                                    |> Ical.withByHour [ 9 ]
+                                    |> Ical.withByMinute [ 30 ]
+                                    |> Ical.withBySecond [ 45 ]
+                                    |> Ical.withByYearDay [ 100 ]
+                                    |> Ical.withByWeekNo [ 20 ]
+                                )
+                        ]
+                            |> Ical.generate
+                                (Ical.config
+                                    { id = "//tests//elm-ical//EN"
+                                    , domain = "example.com"
+                                    }
+                                )
+                in
+                case Parser.parse icsString of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                case ev.recurrenceRules of
+                                    [ rule ] ->
+                                        Expect.all
+                                            [ \r -> r.frequency |> Expect.equal (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
+                                            , \r -> r.byDay |> Expect.equal [ Recurrence.Every Time.Mon ]
+                                            , \r -> r.byMonthDay |> Expect.equal []
+                                            , \r -> r.bySetPos |> Expect.equal [ 1 ]
+                                            , \r -> r.byHour |> Expect.equal []
+                                            , \r -> r.byMinute |> Expect.equal []
+                                            , \r -> r.bySecond |> Expect.equal []
+                                            , \r -> r.byYearDay |> Expect.equal []
+                                            , \r -> r.byWeekNo |> Expect.equal []
+                                            ]
+                                            rule
+
+                                    _ ->
+                                        Expect.fail ("Expected 1 recurrence rule, got " ++ String.fromInt (List.length ev.recurrenceRules))
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
         , test "round-trip event with ATTENDEE" <|
             \() ->
                 let
@@ -2923,6 +2980,15 @@ easternTimeZone =
     , "END:STANDARD"
     , "END:VTIMEZONE"
     ]
+
+
+utcResolved : Time.Posix -> Parser.ResolvedTime
+utcResolved posix =
+    { posix = posix
+    , timeZoneName = Nothing
+    , localDateTime = Nothing
+    , timeZoneContext = Nothing
+    }
 
 
 toIso8601 : String -> Time.Posix

@@ -208,13 +208,22 @@ integrationTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.time
-                                    |> Expect.equal
-                                        (Parser.WithTime
-                                            { start = { posix = toIso8601 "2024-06-15T18:30:00.000Z", timeZoneName = Just "America/New_York" }
-                                            , end = Just { posix = toIso8601 "2024-06-15T18:30:00.000Z", timeZoneName = Just "America/New_York" }
-                                            }
-                                        )
+                                case ev.time of
+                                    Parser.WithTime { start, end } ->
+                                        Expect.all
+                                            [ \_ ->
+                                                expectTzResolvedTime
+                                                    { posix = toIso8601 "2024-06-15T18:30:00.000Z"
+                                                    , timeZoneName = "America/New_York"
+                                                    , localDateTime = { year = 2024, month = Time.Jun, day = 15, hour = 14, minute = 30, second = 0 }
+                                                    }
+                                                    start
+                                            , \_ -> end |> Expect.equal (Just start)
+                                            ]
+                                            ()
+
+                                    other ->
+                                        Expect.fail ("Expected WithTime, got " ++ Debug.toString other)
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -259,13 +268,22 @@ integrationTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.time
-                                    |> Expect.equal
-                                        (Parser.WithTime
-                                            { start = { posix = toIso8601 "2024-12-15T19:30:00.000Z", timeZoneName = Just "America/New_York" }
-                                            , end = Just { posix = toIso8601 "2024-12-15T19:30:00.000Z", timeZoneName = Just "America/New_York" }
-                                            }
-                                        )
+                                case ev.time of
+                                    Parser.WithTime { start, end } ->
+                                        Expect.all
+                                            [ \_ ->
+                                                expectTzResolvedTime
+                                                    { posix = toIso8601 "2024-12-15T19:30:00.000Z"
+                                                    , timeZoneName = "America/New_York"
+                                                    , localDateTime = { year = 2024, month = Time.Dec, day = 15, hour = 14, minute = 30, second = 0 }
+                                                    }
+                                                    start
+                                            , \_ -> end |> Expect.equal (Just start)
+                                            ]
+                                            ()
+
+                                    other ->
+                                        Expect.fail ("Expected WithTime, got " ++ Debug.toString other)
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -334,20 +352,22 @@ integrationTests =
                     Ok cal ->
                         case cal.events of
                             [ ev ] ->
-                                ev.time
-                                    |> Expect.equal
-                                        (Parser.WithTime
-                                            { start =
-                                                { posix = toIso8601 "2006-11-01T17:00:00.000Z"
-                                                , timeZoneName = Just "America/New_York"
-                                                }
-                                            , end =
-                                                Just
+                                case ev.time of
+                                    Parser.WithTime { start, end } ->
+                                        Expect.all
+                                            [ \_ ->
+                                                expectTzResolvedTime
                                                     { posix = toIso8601 "2006-11-01T17:00:00.000Z"
-                                                    , timeZoneName = Just "America/New_York"
+                                                    , timeZoneName = "America/New_York"
+                                                    , localDateTime = { year = 2006, month = Time.Nov, day = 1, hour = 12, minute = 0, second = 0 }
                                                     }
-                                            }
-                                        )
+                                                    start
+                                            , \_ -> end |> Expect.equal (Just start)
+                                            ]
+                                            ()
+
+                                    other ->
+                                        Expect.fail ("Expected WithTime, got " ++ Debug.toString other)
 
                             _ ->
                                 Expect.fail "Expected 1 event"
@@ -392,3 +412,20 @@ parseZone lines =
 
         Err err ->
             Debug.todo err
+
+
+expectTzResolvedTime :
+    { posix : Time.Posix
+    , timeZoneName : String
+    , localDateTime : Parser.LocalDateTime
+    }
+    -> Parser.ResolvedTime
+    -> Expect.Expectation
+expectTzResolvedTime expected resolved =
+    Expect.all
+        [ \r -> r.posix |> Expect.equal expected.posix
+        , \r -> r.timeZoneName |> Expect.equal (Just expected.timeZoneName)
+        , \r -> r.localDateTime |> Expect.equal (Just expected.localDateTime)
+        , \r -> r.timeZoneContext |> Expect.notEqual Nothing
+        ]
+        resolved

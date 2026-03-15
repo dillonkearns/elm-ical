@@ -1187,6 +1187,57 @@ suite =
 
                         Err err ->
                             Expect.fail err
+            , test "TZID weekly recurrence near midnight follows the local weekday" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            String.join "\u{000D}\n"
+                                [ "BEGIN:VCALENDAR"
+                                , "VERSION:2.0"
+                                , "PRODID:-//Test//EN"
+                                , "BEGIN:VTIMEZONE"
+                                , "TZID:America/New_York"
+                                , "BEGIN:DAYLIGHT"
+                                , "TZOFFSETFROM:-0500"
+                                , "TZOFFSETTO:-0400"
+                                , "DTSTART:19700308T020000"
+                                , "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU"
+                                , "END:DAYLIGHT"
+                                , "BEGIN:STANDARD"
+                                , "TZOFFSETFROM:-0400"
+                                , "TZOFFSETTO:-0500"
+                                , "DTSTART:19701101T020000"
+                                , "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU"
+                                , "END:STANDARD"
+                                , "END:VTIMEZONE"
+                                , "BEGIN:VEVENT"
+                                , "UID:late-night-monday@test"
+                                , "DTSTAMP:20240101T000000Z"
+                                , "DTSTART;TZID=America/New_York:20240101T233000"
+                                , "DTEND;TZID=America/New_York:20240102T003000"
+                                , "RRULE:FREQ=WEEKLY;COUNT=2;BYDAY=MO"
+                                , "SUMMARY:Late Monday event"
+                                , "END:VEVENT"
+                                , "END:VCALENDAR"
+                                , ""
+                                ]
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            Parser.expand
+                                { start = Date.fromCalendarDate 2024 Time.Jan 1
+                                , end = Date.fromCalendarDate 2024 Time.Jan 31
+                                }
+                                cal.events
+                                |> List.map (\occ -> ( occurrenceDate Time.utc occ, occurrenceHourMinute Time.utc occ ))
+                                |> Expect.equal
+                                    [ ( Date.fromCalendarDate 2024 Time.Jan 2, ( 4, 30 ) )
+                                    , ( Date.fromCalendarDate 2024 Time.Jan 9, ( 4, 30 ) )
+                                    ]
+
+                        Err err ->
+                            Expect.fail err
             , test "parse ICS with RRULE and EXDATE then expand" <|
                 \() ->
                     let
@@ -2101,8 +2152,8 @@ makeTimedEvent { summary, start, end } =
     , stamp = start
     , time =
         Parser.WithTime
-            { start = { posix = start, timeZoneName = Nothing }
-            , end = Just { posix = end, timeZoneName = Nothing }
+            { start = utcResolved start
+            , end = Just (utcResolved end)
             }
     , created = Nothing
     , lastModified = Nothing
@@ -2215,3 +2266,12 @@ occurrenceSecond zone occ =
 
         _ ->
             -1
+
+
+utcResolved : Time.Posix -> Parser.ResolvedTime
+utcResolved posix =
+    { posix = posix
+    , timeZoneName = Nothing
+    , localDateTime = Nothing
+    , timeZoneContext = Nothing
+    }

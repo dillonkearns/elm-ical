@@ -74,7 +74,8 @@ from typed Elm values.
         Time.millisToPosix 1616068800000
 
 All generation types are opaque with builder functions. Invalid inputs like
-reversed start/end times or negative intervals are silently normalized.
+reversed start/end times, negative intervals, or incompatible recurrence
+parts are silently normalized.
 
 
 ## Generating output
@@ -428,18 +429,20 @@ are clamped to 1.
 rule : Recurrence.Frequency -> Rule
 rule frequency =
     Rule
-        { frequency = clampFrequencyEvery frequency
-        , end = Recurrence.Forever
-        , byDay = []
-        , byMonthDay = []
-        , byMonth = []
-        , bySetPos = []
-        , byHour = []
-        , byMinute = []
-        , bySecond = []
-        , byYearDay = []
-        , byWeekNo = []
-        }
+        (normalizeRule
+            { frequency = clampFrequencyEvery frequency
+            , end = Recurrence.Forever
+            , byDay = []
+            , byMonthDay = []
+            , byMonth = []
+            , bySetPos = []
+            , byHour = []
+            , byMinute = []
+            , bySecond = []
+            , byYearDay = []
+            , byWeekNo = []
+            }
+        )
 
 
 frequencyEvery : Frequency -> Int
@@ -496,37 +499,42 @@ clampFrequencyEvery frequency =
 -}
 withCount : Int -> Rule -> Rule
 withCount n (Rule r) =
-    Rule { r | end = Recurrence.Count (max 1 n) }
+    Rule (normalizeRule { r | end = Recurrence.Count (max 1 n) })
 
 
 {-| Set the recurrence end to a specific date.
 -}
 withUntilDate : Date -> Rule -> Rule
 withUntilDate date (Rule r) =
-    Rule { r | end = Recurrence.UntilDate date }
+    Rule (normalizeRule { r | end = Recurrence.UntilDate date })
 
 
 {-| Set the recurrence end to a specific date-time.
 -}
 withUntilDateTime : Time.Posix -> Rule -> Rule
 withUntilDateTime posix (Rule r) =
-    Rule { r | end = Recurrence.UntilDateTime posix }
+    Rule (normalizeRule { r | end = Recurrence.UntilDateTime posix })
 
 
 {-| Set which days of the week the rule applies to.
+
+Ordinal day specs are kept only for monthly rules and yearly rules without
+`BYWEEKNO`. In other frequencies they are dropped.
+
 -}
 withByDay : List DaySpec -> Rule -> Rule
 withByDay days (Rule r) =
-    Rule { r | byDay = days }
+    Rule (normalizeRule { r | byDay = days })
 
 
 {-| Set which days of the month the rule applies to. Valid values are
 -31 to -1 and 1 to 31. Negative values count from the end of the month
-(e.g. -1 is the last day). Invalid values are dropped.
+(e.g. -1 is the last day). Invalid values are dropped. This part is also
+dropped for weekly rules.
 -}
 withByMonthDay : List Int -> Rule -> Rule
 withByMonthDay days (Rule r) =
-    Rule { r | byMonthDay = List.filter isValidMonthDay days }
+    Rule (normalizeRule { r | byMonthDay = List.filter isValidMonthDay days })
 
 
 {-| Set which months the rule applies to.
@@ -537,56 +545,210 @@ withByMonthDay days (Rule r) =
 -}
 withByMonth : List Time.Month -> Rule -> Rule
 withByMonth months (Rule r) =
-    Rule { r | byMonth = months }
+    Rule (normalizeRule { r | byMonth = months })
 
 
 {-| Filter to specific positions within each recurrence period. For example,
 with `BYDAY=MO,TU,WE,TH,FR`, a `bySetPos` of `[ -1 ]` means "the last weekday."
-Invalid values are dropped.
+Invalid values are dropped. If no other `BY*` filters remain, `BYSETPOS` is
+dropped too.
 -}
 withBySetPos : List Int -> Rule -> Rule
 withBySetPos positions (Rule r) =
-    Rule { r | bySetPos = List.filter isValidSetPos positions }
+    Rule (normalizeRule { r | bySetPos = List.filter isValidSetPos positions })
 
 
 {-| Set which hours the rule applies to. Valid values are 0–23. Invalid values are dropped.
+This part is dropped for all-day events when the rule is attached.
 -}
 withByHour : List Int -> Rule -> Rule
 withByHour hours (Rule r) =
-    Rule { r | byHour = List.filter isValidHour hours }
+    Rule (normalizeRule { r | byHour = List.filter isValidHour hours })
 
 
 {-| Set which minutes the rule applies to. Valid values are 0–59. Invalid values are dropped.
+This part is dropped for all-day events when the rule is attached.
 -}
 withByMinute : List Int -> Rule -> Rule
 withByMinute minutes (Rule r) =
-    Rule { r | byMinute = List.filter isValidMinute minutes }
+    Rule (normalizeRule { r | byMinute = List.filter isValidMinute minutes })
 
 
 {-| Set which seconds the rule applies to. Valid values are 0–60 (60 for leap second).
-Invalid values are dropped.
+Invalid values are dropped. This part is dropped for all-day events when the
+rule is attached.
 -}
 withBySecond : List Int -> Rule -> Rule
 withBySecond seconds (Rule r) =
-    Rule { r | bySecond = List.filter isValidSecond seconds }
+    Rule (normalizeRule { r | bySecond = List.filter isValidSecond seconds })
 
 
 {-| Set which days of the year the rule applies to. Valid values are
 1 to 366 and -366 to -1. Negative values count from the end of the year.
-Invalid values are dropped.
+Invalid values are dropped. This part is dropped for daily, weekly, and
+monthly rules.
 -}
 withByYearDay : List Int -> Rule -> Rule
 withByYearDay days (Rule r) =
-    Rule { r | byYearDay = List.filter isValidYearDay days }
+    Rule (normalizeRule { r | byYearDay = List.filter isValidYearDay days })
 
 
 {-| Set which ISO week numbers the rule applies to. Valid values are
 1 to 53 and -53 to -1. Negative values count from the end of the year.
-Invalid values are dropped.
+Invalid values are dropped. This part is dropped unless the rule frequency is
+yearly.
 -}
 withByWeekNo : List Int -> Rule -> Rule
 withByWeekNo weeks (Rule r) =
-    Rule { r | byWeekNo = List.filter isValidWeekNo weeks }
+    Rule (normalizeRule { r | byWeekNo = List.filter isValidWeekNo weeks })
+
+
+normalizeRule : RuleData -> RuleData
+normalizeRule ruleData =
+    let
+        normalizedByWeekNo : List Int
+        normalizedByWeekNo =
+            if frequencyAllowsByWeekNo ruleData.frequency then
+                ruleData.byWeekNo
+
+            else
+                []
+
+        normalizedRuleData : RuleData
+        normalizedRuleData =
+            { ruleData
+                | byDay =
+                    normalizeByDayForFrequency ruleData.frequency normalizedByWeekNo ruleData.byDay
+                , byMonthDay =
+                    if frequencyAllowsByMonthDay ruleData.frequency then
+                        ruleData.byMonthDay
+
+                    else
+                        []
+                , byYearDay =
+                    if frequencyAllowsByYearDay ruleData.frequency then
+                        ruleData.byYearDay
+
+                    else
+                        []
+                , byWeekNo = normalizedByWeekNo
+            }
+    in
+    normalizeBySetPos normalizedRuleData
+
+
+normalizeRuleForEventTime : EventTime -> RuleData -> RuleData
+normalizeRuleForEventTime eventTime ruleData =
+    let
+        normalizedRuleData : RuleData
+        normalizedRuleData =
+            normalizeRule ruleData
+
+        eventAdjustedRuleData : RuleData
+        eventAdjustedRuleData =
+            case eventTime of
+                AllDay _ ->
+                    { normalizedRuleData
+                        | byHour = []
+                        , byMinute = []
+                        , bySecond = []
+                    }
+
+                _ ->
+                    normalizedRuleData
+    in
+    normalizeBySetPos eventAdjustedRuleData
+
+
+normalizeBySetPos : RuleData -> RuleData
+normalizeBySetPos ruleData =
+    if hasSelectorParts ruleData then
+        ruleData
+
+    else
+        { ruleData | bySetPos = [] }
+
+
+hasSelectorParts : RuleData -> Bool
+hasSelectorParts ruleData =
+    not
+        (List.isEmpty ruleData.byDay
+            && List.isEmpty ruleData.byMonthDay
+            && List.isEmpty ruleData.byMonth
+            && List.isEmpty ruleData.byHour
+            && List.isEmpty ruleData.byMinute
+            && List.isEmpty ruleData.bySecond
+            && List.isEmpty ruleData.byYearDay
+            && List.isEmpty ruleData.byWeekNo
+        )
+
+
+frequencyAllowsByMonthDay : Frequency -> Bool
+frequencyAllowsByMonthDay frequency =
+    case frequency of
+        Weekly _ ->
+            False
+
+        _ ->
+            True
+
+
+frequencyAllowsByYearDay : Frequency -> Bool
+frequencyAllowsByYearDay frequency =
+    case frequency of
+        Daily _ ->
+            False
+
+        Weekly _ ->
+            False
+
+        Monthly _ ->
+            False
+
+        _ ->
+            True
+
+
+frequencyAllowsByWeekNo : Frequency -> Bool
+frequencyAllowsByWeekNo frequency =
+    case frequency of
+        Yearly _ ->
+            True
+
+        _ ->
+            False
+
+
+normalizeByDayForFrequency : Frequency -> List Int -> List DaySpec -> List DaySpec
+normalizeByDayForFrequency frequency byWeekNo daySpecs =
+    let
+        keepsOrdinalDaySpecs : Bool
+        keepsOrdinalDaySpecs =
+            case frequency of
+                Monthly _ ->
+                    True
+
+                Yearly _ ->
+                    List.isEmpty byWeekNo
+
+                _ ->
+                    False
+    in
+    if keepsOrdinalDaySpecs then
+        daySpecs
+
+    else
+        List.filter (not << daySpecHasOrdinal) daySpecs
+
+
+daySpecHasOrdinal : DaySpec -> Bool
+daySpecHasOrdinal daySpec =
+    case daySpec of
+        Recurrence.Every _ ->
+            False
+
+        _ ->
+            True
 
 
 isValidMonthDay : Int -> Bool
@@ -799,10 +961,17 @@ withLastModified lastModified (Event e) =
                 |> Ical.withCount 10
             )
 
+Incompatible rule parts are dropped to match the event time shape. For
+example, all-day events do not keep `BYHOUR`, `BYMINUTE`, or `BYSECOND`.
+
 -}
 withRecurrenceRule : Rule -> Event -> Event
-withRecurrenceRule rrule (Event e) =
-    Event { e | recurrenceRule = Just rrule }
+withRecurrenceRule (Rule ruleData) (Event e) =
+    Event
+        { e
+            | recurrenceRule =
+                Just (Rule (normalizeRuleForEventTime e.time ruleData))
+        }
 
 
 {-| Add an attendee to the event.

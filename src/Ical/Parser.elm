@@ -1,7 +1,7 @@
 module Ical.Parser exposing
     ( parse
     , Calendar, Event
-    , EventTime(..), ResolvedTime, LocalDateTime
+    , EventTime(..), ResolvedTime, LocalDateTime, TimeZoneContext
     , Status(..), Transparency(..)
     , Organizer, RawProperty
     , Attendee, AttendeeRole(..), ParticipationStatus(..)
@@ -68,7 +68,7 @@ Parsed types are transparent record aliases so you can read fields directly.
 
 ## Event times
 
-@docs EventTime, ResolvedTime, LocalDateTime
+@docs EventTime, ResolvedTime, LocalDateTime, TimeZoneContext
 
 
 ## Enums and metadata
@@ -176,14 +176,35 @@ type EventTime
     | FloatingTime { start : LocalDateTime, end : Maybe LocalDateTime }
 
 
-{-| A resolved date-time instant. The `timeZoneName` is `Nothing` for UTC
-datetimes, or a [IANA Time Zone Database](https://www.iana.org/time-zones)
-name (e.g. `Just "America/New_York"`) for TZID-resolved datetimes.
+{-| A resolved date-time instant.
+
+The `timeZoneName` is `Nothing` for UTC datetimes, or a
+[IANA Time Zone Database](https://www.iana.org/time-zones) name
+(e.g. `Just "America/New_York"`) for TZID-resolved datetimes.
+
+For TZID values, `localDateTime` retains the original wall-clock datetime and
+`timeZoneContext` keeps the parsed timezone definition so recurrence expansion
+can stay in local calendar dates. Most consumers can ignore those fields and
+just use `posix`.
+
 -}
 type alias ResolvedTime =
     { posix : Time.Posix
     , timeZoneName : Maybe String
+    , localDateTime : Maybe LocalDateTime
+    , timeZoneContext : Maybe TimeZoneContext
     }
+
+
+{-| Opaque timezone data retained for parsed TZID date-times so recurrence
+expansion can resolve future local wall-clock occurrences correctly.
+
+Most code will only need [`ResolvedTime.posix`](#ResolvedTime) and
+[`ResolvedTime.timeZoneName`](#ResolvedTime).
+
+-}
+type TimeZoneContext
+    = TimeZoneContext VTimeZone.ZoneDefinition
 
 
 {-| A date-time without timezone information. Represents a "floating" local
@@ -720,6 +741,17 @@ addDurationToDate dur date =
 
 addDurationToResolved : ValueParser.Duration -> ResolvedTime -> ResolvedTime
 addDurationToResolved dur resolved =
+    case ( resolved.timeZoneName, resolved.localDateTime, resolved.timeZoneContext ) of
+        ( Just timeZoneName, Just localDateTime, Just timeZoneContext ) ->
+            resolveTimeZoneLocalDateTime timeZoneName timeZoneContext (addDurationToLocal dur localDateTime)
+                |> Maybe.withDefault (addDurationToResolvedUtc dur resolved)
+
+        _ ->
+            addDurationToResolvedUtc dur resolved
+
+
+addDurationToResolvedUtc : ValueParser.Duration -> ResolvedTime -> ResolvedTime
+addDurationToResolvedUtc dur resolved =
     let
         totalSeconds : Int
         totalSeconds =
@@ -731,6 +763,8 @@ addDurationToResolved dur resolved =
     in
     { posix = Time.millisToPosix millis
     , timeZoneName = resolved.timeZoneName
+    , localDateTime = Nothing
+    , timeZoneContext = resolved.timeZoneContext
     }
 
 
@@ -769,6 +803,44 @@ addDurationToLocal dur dt =
     , minute = modBy 60 (remainingSeconds // 60)
     , second = modBy 60 remainingSeconds
     }
+
+
+resolveTimeZoneLocalDateTime : String -> TimeZoneContext -> LocalDateTime -> Maybe ResolvedTime
+resolveTimeZoneLocalDateTime timeZoneName timeZoneContext localDateTime =
+    let
+        zoneDefinition : VTimeZone.ZoneDefinition
+        zoneDefinition =
+            timeZoneDefinitionFromContext timeZoneContext
+    in
+    VTimeZone.resolve zoneDefinition localDateTime
+        |> Result.toMaybe
+        |> Maybe.map
+            (\posix ->
+                { posix = posix
+                , timeZoneName = Just timeZoneName
+                , localDateTime = Just localDateTime
+                , timeZoneContext = Just timeZoneContext
+                }
+            )
+
+
+resolvedTimeFromPosixInTimeZone : String -> TimeZoneContext -> Time.Posix -> ResolvedTime
+resolvedTimeFromPosixInTimeZone timeZoneName timeZoneContext posix =
+    let
+        zoneDefinition : VTimeZone.ZoneDefinition
+        zoneDefinition =
+            timeZoneDefinitionFromContext timeZoneContext
+    in
+    { posix = posix
+    , timeZoneName = Just timeZoneName
+    , localDateTime = VTimeZone.toLocal zoneDefinition posix |> Result.toMaybe
+    , timeZoneContext = Just timeZoneContext
+    }
+
+
+timeZoneDefinitionFromContext : TimeZoneContext -> VTimeZone.ZoneDefinition
+timeZoneDefinitionFromContext (TimeZoneContext zoneDefinition) =
+    zoneDefinition
 
 
 extractPosix : String -> InternalDateTimeValue -> Result String Time.Posix
@@ -1057,7 +1129,15 @@ dateTimePartsToValue timezones maybeTzid parts =
                 case Dict.get tz timezones of
                     Just zoneDef ->
                         VTimeZone.resolve zoneDef dt
-                            |> Result.map (\posix -> IDateTime { posix = posix, timeZoneName = Just tz })
+                            |> Result.map
+                                (\posix ->
+                                    IDateTime
+                                        { posix = posix
+                                        , timeZoneName = Just tz
+                                        , localDateTime = Just dt
+                                        , timeZoneContext = Just (TimeZoneContext zoneDef)
+                                        }
+                                )
 
                     Nothing ->
                         Err ("TZID \"" ++ tz ++ "\" has no matching VTIMEZONE definition")
@@ -1077,7 +1157,14 @@ dateTimePartsToValue timezones maybeTzid parts =
                     totalSeconds =
                         daysSinceEpoch * 86400 + parts.hour * 3600 + parts.minute * 60 + parts.second
                 in
-                Ok (IDateTime { posix = Time.millisToPosix (totalSeconds * 1000), timeZoneName = Nothing })
+                Ok
+                    (IDateTime
+                        { posix = Time.millisToPosix (totalSeconds * 1000)
+                        , timeZoneName = Nothing
+                        , localDateTime = Nothing
+                        , timeZoneContext = Nothing
+                        }
+                    )
 
             else
                 Ok (IFloating dt)
@@ -2108,8 +2195,19 @@ makeSubDailyOccurrence event tzName currentMs durationMs =
     { event = event
     , time =
         WithTime
-            { start = { posix = startPosix, timeZoneName = tzName }
-            , end = Just { posix = endPosix, timeZoneName = tzName }
+            { start =
+                { posix = startPosix
+                , timeZoneName = tzName
+                , localDateTime = Nothing
+                , timeZoneContext = Nothing
+                }
+            , end =
+                Just
+                    { posix = endPosix
+                    , timeZoneName = tzName
+                    , localDateTime = Nothing
+                    , timeZoneContext = Nothing
+                    }
             }
     }
 
@@ -2122,85 +2220,176 @@ expandByTimeParts rule event seed candidateDate =
     else
         case event.time of
             WithTime { start, end } ->
-                let
-                    dayDelta : Int
-                    dayDelta =
-                        Date.toRataDie candidateDate - Date.toRataDie seed
+                case ( start.timeZoneName, start.localDateTime, start.timeZoneContext ) of
+                    ( Just timeZoneName, Just startLocalDateTime, Just timeZoneContext ) ->
+                        let
+                            durationMs : Int
+                            durationMs =
+                                case end of
+                                    Just e ->
+                                        Time.posixToMillis e.posix - Time.posixToMillis start.posix
 
-                    durationMs : Int
-                    durationMs =
-                        case end of
-                            Just e ->
-                                Time.posixToMillis e.posix - Time.posixToMillis start.posix
+                                    Nothing ->
+                                        0
 
-                            Nothing ->
-                                0
+                            hours : List Int
+                            hours =
+                                if List.isEmpty rule.byHour then
+                                    [ startLocalDateTime.hour ]
 
-                    origHour : Int
-                    origHour =
-                        Time.toHour Time.utc start.posix
+                                else
+                                    rule.byHour
 
-                    origMinute : Int
-                    origMinute =
-                        Time.toMinute Time.utc start.posix
+                            minutes : List Int
+                            minutes =
+                                if List.isEmpty rule.byMinute then
+                                    [ startLocalDateTime.minute ]
 
-                    origSecond : Int
-                    origSecond =
-                        Time.toSecond Time.utc start.posix
+                                else
+                                    rule.byMinute
 
-                    hours : List Int
-                    hours =
-                        if List.isEmpty rule.byHour then
-                            [ origHour ]
+                            seconds : List Int
+                            seconds =
+                                if List.isEmpty rule.bySecond then
+                                    [ startLocalDateTime.second ]
 
-                        else
-                            rule.byHour
+                                else
+                                    rule.bySecond
+                        in
+                        hours
+                            |> List.concatMap
+                                (\h ->
+                                    minutes
+                                        |> List.concatMap
+                                            (\m ->
+                                                seconds
+                                                    |> List.filterMap
+                                                        (\s ->
+                                                            let
+                                                                candidateLocalDateTime : LocalDateTime
+                                                                candidateLocalDateTime =
+                                                                    { year = Date.year candidateDate
+                                                                    , month = Date.month candidateDate
+                                                                    , day = Date.day candidateDate
+                                                                    , hour = h
+                                                                    , minute = m
+                                                                    , second = s
+                                                                    }
+                                                            in
+                                                            resolveTimeZoneLocalDateTime timeZoneName timeZoneContext candidateLocalDateTime
+                                                                |> Maybe.map
+                                                                    (\resolvedStart ->
+                                                                        { event = event
+                                                                        , time =
+                                                                            WithTime
+                                                                                { start = resolvedStart
+                                                                                , end =
+                                                                                    Maybe.map
+                                                                                        (\_ ->
+                                                                                            resolvedTimeFromPosixInTimeZone
+                                                                                                timeZoneName
+                                                                                                timeZoneContext
+                                                                                                (Time.millisToPosix (Time.posixToMillis resolvedStart.posix + durationMs))
+                                                                                        )
+                                                                                        end
+                                                                                }
+                                                                        }
+                                                                    )
+                                                        )
+                                            )
+                                )
 
-                    minutes : List Int
-                    minutes =
-                        if List.isEmpty rule.byMinute then
-                            [ origMinute ]
+                    _ ->
+                        let
+                            dayDelta : Int
+                            dayDelta =
+                                Date.toRataDie candidateDate - Date.toRataDie seed
 
-                        else
-                            rule.byMinute
+                            durationMs : Int
+                            durationMs =
+                                case end of
+                                    Just e ->
+                                        Time.posixToMillis e.posix - Time.posixToMillis start.posix
 
-                    seconds : List Int
-                    seconds =
-                        if List.isEmpty rule.bySecond then
-                            [ origSecond ]
+                                    Nothing ->
+                                        0
 
-                        else
-                            rule.bySecond
+                            origHour : Int
+                            origHour =
+                                Time.toHour Time.utc start.posix
 
-                    -- Midnight of the candidate date in ms
-                    baseDayMs : Int
-                    baseDayMs =
-                        Time.posixToMillis start.posix + dayDelta * 86400000 - (origHour * 3600000 + origMinute * 60000 + origSecond * 1000)
-                in
-                hours
-                    |> List.concatMap
-                        (\h ->
-                            minutes
-                                |> List.concatMap
-                                    (\m ->
-                                        seconds
-                                            |> List.map
-                                                (\s ->
-                                                    let
-                                                        newStartMs : Int
-                                                        newStartMs =
-                                                            baseDayMs + h * 3600000 + m * 60000 + s * 1000
-                                                    in
-                                                    { event = event
-                                                    , time =
-                                                        WithTime
-                                                            { start = { posix = Time.millisToPosix newStartMs, timeZoneName = start.timeZoneName }
-                                                            , end = Just { posix = Time.millisToPosix (newStartMs + durationMs), timeZoneName = start.timeZoneName }
+                            origMinute : Int
+                            origMinute =
+                                Time.toMinute Time.utc start.posix
+
+                            origSecond : Int
+                            origSecond =
+                                Time.toSecond Time.utc start.posix
+
+                            hours : List Int
+                            hours =
+                                if List.isEmpty rule.byHour then
+                                    [ origHour ]
+
+                                else
+                                    rule.byHour
+
+                            minutes : List Int
+                            minutes =
+                                if List.isEmpty rule.byMinute then
+                                    [ origMinute ]
+
+                                else
+                                    rule.byMinute
+
+                            seconds : List Int
+                            seconds =
+                                if List.isEmpty rule.bySecond then
+                                    [ origSecond ]
+
+                                else
+                                    rule.bySecond
+
+                            -- Midnight of the candidate date in ms
+                            baseDayMs : Int
+                            baseDayMs =
+                                Time.posixToMillis start.posix + dayDelta * 86400000 - (origHour * 3600000 + origMinute * 60000 + origSecond * 1000)
+                        in
+                        hours
+                            |> List.concatMap
+                                (\h ->
+                                    minutes
+                                        |> List.concatMap
+                                            (\m ->
+                                                seconds
+                                                    |> List.map
+                                                        (\s ->
+                                                            let
+                                                                newStartMs : Int
+                                                                newStartMs =
+                                                                    baseDayMs + h * 3600000 + m * 60000 + s * 1000
+                                                            in
+                                                            { event = event
+                                                            , time =
+                                                                WithTime
+                                                                    { start =
+                                                                        { posix = Time.millisToPosix newStartMs
+                                                                        , timeZoneName = start.timeZoneName
+                                                                        , localDateTime = Nothing
+                                                                        , timeZoneContext = start.timeZoneContext
+                                                                        }
+                                                                    , end =
+                                                                        Just
+                                                                            { posix = Time.millisToPosix (newStartMs + durationMs)
+                                                                            , timeZoneName = start.timeZoneName
+                                                                            , localDateTime = Nothing
+                                                                            , timeZoneContext = start.timeZoneContext
+                                                                            }
+                                                                    }
                                                             }
-                                                    }
-                                                )
-                                    )
-                        )
+                                                        )
+                                            )
+                                )
 
             FloatingTime { start, end } ->
                 let
@@ -3089,34 +3278,74 @@ occurrenceFromRecurrenceDate : Event -> Time.Posix -> Occurrence
 occurrenceFromRecurrenceDate event recurrenceDate =
     case event.time of
         WithTime { start, end } ->
-            let
-                startMs : Int
-                startMs =
-                    Time.posixToMillis recurrenceDate
+            case ( start.timeZoneName, start.timeZoneContext ) of
+                ( Just timeZoneName, Just timeZoneContext ) ->
+                    let
+                        startMs : Int
+                        startMs =
+                            Time.posixToMillis recurrenceDate
 
-                durationMs : Int
-                durationMs =
-                    case end of
-                        Just endTime ->
-                            Time.posixToMillis endTime.posix - Time.posixToMillis start.posix
+                        durationMs : Int
+                        durationMs =
+                            case end of
+                                Just endTime ->
+                                    Time.posixToMillis endTime.posix - Time.posixToMillis start.posix
 
-                        Nothing ->
-                            0
-            in
-            { event = event
-            , time =
-                WithTime
-                    { start = { posix = recurrenceDate, timeZoneName = start.timeZoneName }
-                    , end =
-                        Maybe.map
-                            (\_ ->
-                                { posix = Time.millisToPosix (startMs + durationMs)
-                                , timeZoneName = start.timeZoneName
-                                }
-                            )
-                            end
+                                Nothing ->
+                                    0
+                    in
+                    { event = event
+                    , time =
+                        WithTime
+                            { start = resolvedTimeFromPosixInTimeZone timeZoneName timeZoneContext recurrenceDate
+                            , end =
+                                Maybe.map
+                                    (\_ ->
+                                        resolvedTimeFromPosixInTimeZone
+                                            timeZoneName
+                                            timeZoneContext
+                                            (Time.millisToPosix (startMs + durationMs))
+                                    )
+                                    end
+                            }
                     }
-            }
+
+                _ ->
+                    let
+                        startMs : Int
+                        startMs =
+                            Time.posixToMillis recurrenceDate
+
+                        durationMs : Int
+                        durationMs =
+                            case end of
+                                Just endTime ->
+                                    Time.posixToMillis endTime.posix - Time.posixToMillis start.posix
+
+                                Nothing ->
+                                    0
+                    in
+                    { event = event
+                    , time =
+                        WithTime
+                            { start =
+                                { posix = recurrenceDate
+                                , timeZoneName = start.timeZoneName
+                                , localDateTime = Nothing
+                                , timeZoneContext = start.timeZoneContext
+                                }
+                            , end =
+                                Maybe.map
+                                    (\_ ->
+                                        { posix = Time.millisToPosix (startMs + durationMs)
+                                        , timeZoneName = start.timeZoneName
+                                        , localDateTime = Nothing
+                                        , timeZoneContext = start.timeZoneContext
+                                        }
+                                    )
+                                    end
+                            }
+                    }
 
         _ ->
             let
@@ -3171,7 +3400,12 @@ occurrenceStartDate eventTime =
             start
 
         WithTime { start } ->
-            Date.fromPosix Time.utc start.posix
+            case start.localDateTime of
+                Just localDateTime ->
+                    Date.fromCalendarDate localDateTime.year localDateTime.month localDateTime.day
+
+                Nothing ->
+                    Date.fromPosix Time.utc start.posix
 
         FloatingTime { start } ->
             Date.fromCalendarDate start.year start.month start.day
@@ -3192,18 +3426,75 @@ shiftTime originalTime originalDate newDate =
                 }
 
         WithTime { start, end } ->
-            let
-                deltaMs : Int
-                deltaMs =
-                    dayDelta * 86400000
-            in
-            WithTime
-                { start = { start | posix = Time.millisToPosix (Time.posixToMillis start.posix + deltaMs) }
-                , end =
-                    Maybe.map
-                        (\e -> { e | posix = Time.millisToPosix (Time.posixToMillis e.posix + deltaMs) })
-                        end
-                }
+            case ( start.timeZoneName, start.localDateTime, start.timeZoneContext ) of
+                ( Just timeZoneName, Just startLocalDateTime, Just timeZoneContext ) ->
+                    let
+                        durationMs : Int
+                        durationMs =
+                            case end of
+                                Just endTime ->
+                                    Time.posixToMillis endTime.posix - Time.posixToMillis start.posix
+
+                                Nothing ->
+                                    0
+
+                        shiftedStart : Maybe ResolvedTime
+                        shiftedStart =
+                            resolveTimeZoneLocalDateTime timeZoneName timeZoneContext (shiftLocalDateTime dayDelta startLocalDateTime)
+
+                        shiftedEnd : Maybe ResolvedTime
+                        shiftedEnd =
+                            case ( shiftedStart, end ) of
+                                ( Just shiftedStartResolved, Just endResolved ) ->
+                                    case endResolved.localDateTime of
+                                        Just endLocalDateTime ->
+                                            resolveTimeZoneLocalDateTime timeZoneName timeZoneContext (shiftLocalDateTime dayDelta endLocalDateTime)
+
+                                        Nothing ->
+                                            Just
+                                                (resolvedTimeFromPosixInTimeZone
+                                                    timeZoneName
+                                                    timeZoneContext
+                                                    (Time.millisToPosix (Time.posixToMillis shiftedStartResolved.posix + durationMs))
+                                                )
+
+                                _ ->
+                                    Nothing
+                    in
+                    case shiftedStart of
+                        Just shiftedStartResolved ->
+                            WithTime
+                                { start = shiftedStartResolved
+                                , end = shiftedEnd
+                                }
+
+                        Nothing ->
+                            let
+                                deltaMs : Int
+                                deltaMs =
+                                    dayDelta * 86400000
+                            in
+                            WithTime
+                                { start = { start | posix = Time.millisToPosix (Time.posixToMillis start.posix + deltaMs), localDateTime = Nothing }
+                                , end =
+                                    Maybe.map
+                                        (\e -> { e | posix = Time.millisToPosix (Time.posixToMillis e.posix + deltaMs), localDateTime = Nothing })
+                                        end
+                                }
+
+                _ ->
+                    let
+                        deltaMs : Int
+                        deltaMs =
+                            dayDelta * 86400000
+                    in
+                    WithTime
+                        { start = { start | posix = Time.millisToPosix (Time.posixToMillis start.posix + deltaMs), localDateTime = Nothing }
+                        , end =
+                            Maybe.map
+                                (\e -> { e | posix = Time.millisToPosix (Time.posixToMillis e.posix + deltaMs), localDateTime = Nothing })
+                                end
+                        }
 
         FloatingTime { start, end } ->
             FloatingTime

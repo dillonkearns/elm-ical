@@ -596,6 +596,72 @@ END:VEVENT"""
                             , "END:VEVENT"
                             ]
                         )
+        , test "generate RRULE drops invalid combinations for weekly all-day events" <|
+            \() ->
+                Ical.event
+                    { id = "weekly-all-day-normalized"
+                    , stamp = toIso8601 "2024-01-01T00:00:00.000Z"
+                    , time = Ical.allDay (Date.fromCalendarDate 2024 Time.Jan 1)
+                    , summary = "Normalized weekly all-day recurrence"
+                    }
+                    |> Ical.withRecurrenceRule
+                        (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
+                            |> Ical.withByDay [ Recurrence.Every Time.Mon, Recurrence.Every2nd Time.Tue ]
+                            |> Ical.withByMonthDay [ 1, -1 ]
+                            |> Ical.withBySetPos [ 1 ]
+                            |> Ical.withByHour [ 9 ]
+                            |> Ical.withByMinute [ 30 ]
+                            |> Ical.withBySecond [ 45 ]
+                            |> Ical.withByYearDay [ 100 ]
+                            |> Ical.withByWeekNo [ 20 ]
+                        )
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART;VALUE=DATE:20240101
+DTEND;VALUE=DATE:20240102
+DTSTAMP:20240101T000000Z
+UID:weekly-all-day-normalized@test.com
+SUMMARY:Normalized weekly all-day recurrence
+RRULE:FREQ=WEEKLY;BYDAY=MO;BYSETPOS=1
+END:VEVENT"""
+        , test "generate RRULE drops BYSETPOS when no valid selectors remain" <|
+            \() ->
+                Ical.event
+                    { id = "weekly-all-day-no-selectors"
+                    , stamp = toIso8601 "2024-01-01T00:00:00.000Z"
+                    , time = Ical.allDay (Date.fromCalendarDate 2024 Time.Jan 1)
+                    , summary = "Weekly all-day without selectors"
+                    }
+                    |> Ical.withRecurrenceRule
+                        (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
+                            |> Ical.withByDay [ Recurrence.Every2nd Time.Tue ]
+                            |> Ical.withByMonthDay [ 1 ]
+                            |> Ical.withBySetPos [ 1 ]
+                            |> Ical.withByHour [ 9 ]
+                            |> Ical.withByMinute [ 30 ]
+                            |> Ical.withBySecond [ 45 ]
+                            |> Ical.withByYearDay [ 100 ]
+                            |> Ical.withByWeekNo [ 20 ]
+                        )
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines """BEGIN:VEVENT
+DTSTART;VALUE=DATE:20240101
+DTEND;VALUE=DATE:20240102
+DTSTAMP:20240101T000000Z
+UID:weekly-all-day-no-selectors@test.com
+SUMMARY:Weekly all-day without selectors
+RRULE:FREQ=WEEKLY
+END:VEVENT"""
         , test "generate RRULE with FREQ=HOURLY" <|
             \() ->
                 Ical.event

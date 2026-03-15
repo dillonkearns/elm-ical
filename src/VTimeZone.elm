@@ -1,4 +1,4 @@
-module VTimeZone exposing (TransitionRule, ZoneDefinition, ZoneTransition, parseFromContentLines, parseOffset, parseTransitionRule, resolve, transitionDate)
+module VTimeZone exposing (TransitionRule, ZoneDefinition, ZoneTransition, parseFromContentLines, parseOffset, parseTransitionRule, resolve, toLocal, transitionDate)
 
 {-| Internal module for VTIMEZONE parsing and timezone resolution.
 -}
@@ -529,6 +529,55 @@ resolve (ZoneDefinition observances) dt =
             Ok (Time.millisToPosix (utcSeconds * 1000))
 
 
+toLocal : ZoneDefinition -> Time.Posix -> Result String LocalDateTime
+toLocal (ZoneDefinition observances) posix =
+    let
+        utcDate : Date.Date
+        utcDate =
+            Date.fromPosix Time.utc posix
+
+        transitions : List ZoneTransition
+        transitions =
+            observances
+                |> List.concatMap (transitionsForYearRange (Date.year utcDate - 2) (Date.year utcDate + 2))
+                |> List.sortBy transitionUtcSeconds
+    in
+    case transitions of
+        [] ->
+            Err "VTIMEZONE has no usable transitions"
+
+        firstTransition :: _ ->
+            let
+                utcSeconds : Int
+                utcSeconds =
+                    Time.posixToMillis posix // 1000
+
+                offsetSeconds : Int
+                offsetSeconds =
+                    offsetAtUtcSeconds firstTransition.offsetFrom transitions utcSeconds
+
+                localSeconds : Int
+                localSeconds =
+                    utcSeconds + offsetSeconds
+
+                localPosix : Time.Posix
+                localPosix =
+                    Time.millisToPosix (localSeconds * 1000)
+
+                localDate : Date.Date
+                localDate =
+                    Date.fromPosix Time.utc localPosix
+            in
+            Ok
+                { year = Date.year localDate
+                , month = Date.month localDate
+                , day = Date.day localDate
+                , hour = Time.toHour Time.utc localPosix
+                , minute = Time.toMinute Time.utc localPosix
+                , second = normalizeSecond (Time.toSecond Time.utc localPosix)
+                }
+
+
 transitionsForYearRange : Int -> Int -> Observance -> List ZoneTransition
 transitionsForYearRange startYear endYear observance =
     let
@@ -640,6 +689,20 @@ activeOffset currentOffset transitions localDateTime =
 
             else
                 activeOffset transition.offsetTo rest localDateTime
+
+
+offsetAtUtcSeconds : Int -> List ZoneTransition -> Int -> Int
+offsetAtUtcSeconds currentOffset transitions targetUtcSeconds =
+    case transitions of
+        [] ->
+            currentOffset
+
+        transition :: rest ->
+            if targetUtcSeconds < transitionUtcSeconds transition then
+                currentOffset
+
+            else
+                offsetAtUtcSeconds transition.offsetTo rest targetUtcSeconds
 
 
 transitionUtcSeconds : ZoneTransition -> Int
