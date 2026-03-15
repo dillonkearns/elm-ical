@@ -661,7 +661,11 @@ buildEventTime dtstart maybeDtend maybeDuration =
                         Nothing ->
                             case maybeDuration of
                                 Just dur ->
-                                    Ok (AllDay { start = startDate, end = Just (addDurationToDate dur startDate) })
+                                    if durationHasTimeParts dur then
+                                        Err "DATE DTSTART must use a day- or week-based DURATION"
+
+                                    else
+                                        Ok (AllDay { start = startDate, end = Just (addDurationToDate dur startDate) })
 
                                 Nothing ->
                                     Ok (AllDay { start = startDate, end = Just (Date.add Date.Days 1 startDate) })
@@ -697,6 +701,11 @@ buildEventTime dtstart maybeDtend maybeDuration =
 
                                 Nothing ->
                                     Ok (FloatingTime { start = startLocal, end = Just startLocal })
+
+
+durationHasTimeParts : ValueParser.Duration -> Bool
+durationHasTimeParts duration =
+    duration.hours /= 0 || duration.minutes /= 0 || duration.seconds /= 0
 
 
 addDurationToDate : ValueParser.Duration -> Date.Date -> Date.Date
@@ -1010,11 +1019,16 @@ parseDateTimeValue timezones line =
                 |> List.head
     in
     if isDate then
-        ValueParser.parseDate line.value
-            |> Result.map
-                (\{ year, month, day } ->
-                    IDate (Date.fromCalendarDate year (Date.numberToMonth month) day)
-                )
+        case tzid of
+            Just _ ->
+                Err "TZID must not be applied to DATE values"
+
+            Nothing ->
+                ValueParser.parseDate line.value
+                    |> Result.map
+                        (\{ year, month, day } ->
+                            IDate (Date.fromCalendarDate year (Date.numberToMonth month) day)
+                        )
 
     else
         ValueParser.parseDateTime line.value
@@ -1036,13 +1050,17 @@ dateTimePartsToValue timezones maybeTzid parts =
     in
     case maybeTzid of
         Just tz ->
-            case Dict.get tz timezones of
-                Just zoneDef ->
-                    VTimeZone.resolve zoneDef dt
-                        |> Result.map (\posix -> IDateTime { posix = posix, timeZoneName = Just tz })
+            if parts.isUtc then
+                Err "TZID must not be applied to UTC DATE-TIME values"
 
-                Nothing ->
-                    Err ("TZID \"" ++ tz ++ "\" has no matching VTIMEZONE definition")
+            else
+                case Dict.get tz timezones of
+                    Just zoneDef ->
+                        VTimeZone.resolve zoneDef dt
+                            |> Result.map (\posix -> IDateTime { posix = posix, timeZoneName = Just tz })
+
+                    Nothing ->
+                        Err ("TZID \"" ++ tz ++ "\" has no matching VTIMEZONE definition")
 
         Nothing ->
             if parts.isUtc then
@@ -1419,12 +1437,13 @@ type alias AlarmAccum =
     { action : Maybe AlarmAction
     , trigger : Maybe AlarmTrigger
     , description : Maybe String
+    , errors : List String
     }
 
 
 parseAlarm : List ContentLine -> Result String ( Alarm, List ContentLine )
 parseAlarm lines =
-    parseAlarmBody lines { action = Nothing, trigger = Nothing, description = Nothing }
+    parseAlarmBody lines { action = Nothing, trigger = Nothing, description = Nothing, errors = [] }
 
 
 parseAlarmBody : List ContentLine -> AlarmAccum -> Result String ( Alarm, List ContentLine )
@@ -1435,21 +1454,26 @@ parseAlarmBody lines accum =
 
         line :: rest ->
             if line.name == "END" && String.toUpper line.value == "VALARM" then
-                case ( accum.action, accum.trigger ) of
-                    ( Just action, Just trigger ) ->
-                        Ok
-                            ( { action = action
-                              , trigger = trigger
-                              , description = accum.description
-                              }
-                            , rest
-                            )
+                case List.reverse accum.errors of
+                    firstError :: _ ->
+                        Err firstError
 
-                    ( Nothing, _ ) ->
-                        Err "VALARM missing required ACTION"
+                    [] ->
+                        case ( accum.action, accum.trigger ) of
+                            ( Just action, Just trigger ) ->
+                                Ok
+                                    ( { action = action
+                                      , trigger = trigger
+                                      , description = accum.description
+                                      }
+                                    , rest
+                                    )
 
-                    ( _, Nothing ) ->
-                        Err "VALARM missing required TRIGGER"
+                            ( Nothing, _ ) ->
+                                Err "VALARM missing required ACTION"
+
+                            ( _, Nothing ) ->
+                                Err "VALARM missing required TRIGGER"
 
             else
                 parseAlarmBody rest (applyAlarmProperty line accum)
@@ -1467,15 +1491,15 @@ applyAlarmProperty line accum =
                     { accum | action = Just Audio }
 
                 _ ->
-                    accum
+                    { accum | errors = ("Invalid VALARM ACTION: " ++ line.value) :: accum.errors }
 
         "TRIGGER" ->
             case parseTrigger line of
                 Ok trigger ->
                     { accum | trigger = Just trigger }
 
-                Err _ ->
-                    accum
+                Err err ->
+                    { accum | errors = ("Invalid VALARM TRIGGER: " ++ err) :: accum.errors }
 
         "DESCRIPTION" ->
             { accum | description = Just (ValueParser.unescapeText line.value) }
@@ -1495,41 +1519,53 @@ parseTrigger line =
                         String.toUpper k == "VALUE" && String.toUpper v == "DATE-TIME"
                     )
 
-        relatedEnd : Bool
-        relatedEnd =
+        maybeRelated : Maybe String
+        maybeRelated =
             line.parameters
-                |> List.any
+                |> List.filterMap
                     (\( k, v ) ->
-                        String.toUpper k == "RELATED" && String.toUpper v == "END"
+                        if String.toUpper k == "RELATED" then
+                            Just (String.toUpper v)
+
+                        else
+                            Nothing
                     )
+                |> List.head
     in
     if hasValueDateTime then
         ValueParser.parseDateTime line.value
-            |> Result.map
+            |> Result.andThen
                 (\parts ->
-                    let
-                        date : Date.Date
-                        date =
-                            Date.fromCalendarDate parts.year (Date.numberToMonth parts.month) parts.day
+                    if maybeRelated /= Nothing then
+                        Err "RELATED is only valid for DURATION triggers"
 
-                        millis : Int
-                        millis =
-                            dateToUnixMs date
-                                + parts.hour
-                                * 3600000
-                                + parts.minute
-                                * 60000
-                                + parts.second
-                                * 1000
-                    in
-                    TriggerAbsolute (Time.millisToPosix millis)
+                    else if not parts.isUtc then
+                        Err "Absolute DATE-TIME triggers must be UTC"
+
+                    else
+                        let
+                            date : Date.Date
+                            date =
+                                Date.fromCalendarDate parts.year (Date.numberToMonth parts.month) parts.day
+
+                            millis : Int
+                            millis =
+                                dateToUnixMs date
+                                    + parts.hour
+                                    * 3600000
+                                    + parts.minute
+                                    * 60000
+                                    + parts.second
+                                    * 1000
+                        in
+                        Ok (TriggerAbsolute (Time.millisToPosix millis))
                 )
 
     else
         parseSignedDuration line.value
             |> Result.map
                 (\totalSeconds ->
-                    if relatedEnd then
+                    if maybeRelated == Just "END" then
                         TriggerDuration (SecondsFromEnd totalSeconds)
 
                     else

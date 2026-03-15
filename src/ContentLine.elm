@@ -127,13 +127,14 @@ parseOneParameter input =
                 Just ( '"', afterQuote ) ->
                     case findChar '"' afterQuote of
                         Nothing ->
-                            Just ( ( paramName, afterQuote ), "" )
+                            Just ( ( paramName, decodeParameterValue afterQuote ), "" )
 
                         Just closeIndex ->
                             let
                                 paramValue : String
                                 paramValue =
                                     String.left closeIndex afterQuote
+                                        |> decodeParameterValue
 
                                 remaining : String
                                 remaining =
@@ -146,7 +147,7 @@ parseOneParameter input =
                         ( paramValue, remaining ) =
                             takeUntilParamEnd afterEq
                     in
-                    Just ( ( paramName, paramValue ), remaining )
+                    Just ( ( paramName, decodeParameterValue paramValue ), remaining )
 
 
 takeUntilParamEnd : String -> ( String, String )
@@ -185,3 +186,32 @@ findCharHelp target i input =
 
             else
                 findCharHelp target (i + 1) input
+
+
+decodeParameterValue : String -> String
+decodeParameterValue input =
+    decodeParameterValueHelp (String.toList input) []
+        |> List.reverse
+        |> String.fromList
+
+
+decodeParameterValueHelp : List Char -> List Char -> List Char
+decodeParameterValueHelp remaining acc =
+    case remaining of
+        '^' :: '^' :: rest ->
+            decodeParameterValueHelp rest ('^' :: acc)
+
+        '^' :: '\'' :: rest ->
+            decodeParameterValueHelp rest ('"' :: acc)
+
+        '^' :: 'n' :: rest ->
+            decodeParameterValueHelp rest ('\n' :: acc)
+
+        '^' :: 'N' :: rest ->
+            decodeParameterValueHelp rest ('\n' :: acc)
+
+        c :: rest ->
+            decodeParameterValueHelp rest (c :: acc)
+
+        [] ->
+            acc

@@ -1239,6 +1239,19 @@ endToEndTests =
 
                     Ok _ ->
                         Expect.fail "Expected parsing to fail for negative DURATION"
+        , test "DATE DTSTART with time-based DURATION should be rejected" <|
+            \() ->
+                calendar
+                    [ "BEGIN:VEVENT"
+                    , "UID:date-plus-hours@test"
+                    , "DTSTAMP:20240101T000000Z"
+                    , "DTSTART;VALUE=DATE:20240101"
+                    , "DURATION:PT1H"
+                    , "SUMMARY:Invalid all-day duration"
+                    , "END:VEVENT"
+                    ]
+                    |> Parser.parse
+                    |> Expect.err
         , test "invalid RRULE value fails parsing" <|
             \() ->
                 let
@@ -2002,6 +2015,51 @@ endToEndTests =
 
                     Err err ->
                         Expect.fail err
+        , test "absolute VALARM trigger without UTC should be rejected" <|
+            \() ->
+                calendar
+                    [ "BEGIN:VEVENT"
+                    , "UID:absolute-trigger@test"
+                    , "DTSTAMP:20240101T000000Z"
+                    , "DTSTART:20240101T090000Z"
+                    , "SUMMARY:Alarm test"
+                    , "BEGIN:VALARM"
+                    , "TRIGGER;VALUE=DATE-TIME:20240101T080000"
+                    , "ACTION:DISPLAY"
+                    , "DESCRIPTION:Wake up"
+                    , "END:VALARM"
+                    , "END:VEVENT"
+                    ]
+                    |> Parser.parse
+                    |> Expect.err
+        , test "TZID on VALUE=DATE should be rejected" <|
+            \() ->
+                calendar
+                    (easternTimeZone
+                        ++ [ "BEGIN:VEVENT"
+                           , "UID:tzid-on-date@test"
+                           , "DTSTAMP:20240101T000000Z"
+                           , "DTSTART;VALUE=DATE;TZID=America/New_York:20240101"
+                           , "SUMMARY:Invalid TZID on DATE"
+                           , "END:VEVENT"
+                           ]
+                    )
+                    |> Parser.parse
+                    |> Expect.err
+        , test "TZID on a UTC DATE-TIME should be rejected" <|
+            \() ->
+                calendar
+                    (easternTimeZone
+                        ++ [ "BEGIN:VEVENT"
+                           , "UID:tzid-on-utc@test"
+                           , "DTSTAMP:20240101T000000Z"
+                           , "DTSTART;TZID=America/New_York:20240101T090000Z"
+                           , "SUMMARY:Invalid TZID on UTC"
+                           , "END:VEVENT"
+                           ]
+                    )
+                    |> Parser.parse
+                    |> Expect.err
         ]
 
 
@@ -2375,6 +2433,50 @@ roundTripTests =
 
                     Err err ->
                         Expect.fail err
+        , test "RFC 6868 parameter encoding round-trips through the parser" <|
+            \() ->
+                let
+                    organizerName : String
+                    organizerName =
+                        "She said \"hi\" ^ there"
+
+                    icsString : String
+                    icsString =
+                        [ Ical.event
+                            { id = "organizer-roundtrip"
+                            , stamp = toIso8601 "2024-01-01T00:00:00.000Z"
+                            , time =
+                                Ical.withTime
+                                    { start = toIso8601 "2024-01-01T09:00:00.000Z"
+                                    , end = toIso8601 "2024-01-01T10:00:00.000Z"
+                                    }
+                            , summary = "Organizer round-trip"
+                            }
+                            |> Ical.withOrganizer
+                                { name = organizerName
+                                , email = "jane@example.com"
+                                }
+                        ]
+                            |> Ical.generate
+                                (Ical.config
+                                    { id = "//tests//elm-ical//EN"
+                                    , domain = "example.com"
+                                    }
+                                )
+                in
+                case Parser.parse icsString of
+                    Ok cal ->
+                        case cal.events of
+                            [ event ] ->
+                                event.organizer
+                                    |> Maybe.andThen .name
+                                    |> Expect.equal (Just organizerName)
+
+                            _ ->
+                                Expect.fail "Expected exactly one event"
+
+                    Err err ->
+                        Expect.fail err
         , test "round-trip long description with line folding" <|
             \() ->
                 let
@@ -2731,6 +2833,38 @@ normalizeNewlines : String -> String
 normalizeNewlines =
     String.replace "\u{000D}\n" "\n"
         >> String.replace "\u{000D}" "\n"
+
+
+calendar : List String -> String
+calendar lines =
+    String.join "\u{000D}\n"
+        ([ "BEGIN:VCALENDAR"
+         , "VERSION:2.0"
+         , "PRODID:-//test//EN"
+         ]
+            ++ lines
+            ++ [ "END:VCALENDAR", "" ]
+        )
+
+
+easternTimeZone : List String
+easternTimeZone =
+    [ "BEGIN:VTIMEZONE"
+    , "TZID:America/New_York"
+    , "BEGIN:DAYLIGHT"
+    , "TZOFFSETFROM:-0500"
+    , "TZOFFSETTO:-0400"
+    , "DTSTART:19700308T020000"
+    , "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU"
+    , "END:DAYLIGHT"
+    , "BEGIN:STANDARD"
+    , "TZOFFSETFROM:-0400"
+    , "TZOFFSETTO:-0500"
+    , "DTSTART:19701101T020000"
+    , "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU"
+    , "END:STANDARD"
+    , "END:VTIMEZONE"
+    ]
 
 
 toIso8601 : String -> Time.Posix
