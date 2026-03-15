@@ -37,6 +37,11 @@ rules for generation, use [`Ical.Rule`](Ical#Rule) and its builder functions.
     , byMonthDay = []
     , byMonth = []
     , bySetPos = []
+    , byHour = []
+    , byMinute = []
+    , bySecond = []
+    , byYearDay = []
+    , byWeekNo = []
     }
 
   - `byDay` — which days of the week (with optional ordinals for monthly/yearly).

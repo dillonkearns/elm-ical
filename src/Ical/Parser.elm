@@ -268,13 +268,12 @@ type ParticipationStatus
 
 {-| A parsed alarm (VALARM) attached to an event.
 
-    case List.head event.alarms of
-        Just alarm ->
-            alarm.action -- Display or Audio
-            alarm.trigger -- when the alarm fires
+Each alarm has an `action` (`Display` or `Audio`), a `trigger` (when the alarm
+fires), and an optional `description`.
 
-        Nothing ->
-            -- no alarms
+    event.alarms
+        |> List.map .trigger
+        -- [ TriggerDuration (SecondsFromStart (-900)), ... ]
 
 -}
 type alias Alarm =
