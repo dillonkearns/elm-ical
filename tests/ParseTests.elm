@@ -2600,6 +2600,64 @@ roundTripTests =
 
                     Err err ->
                         Expect.fail err
+        , test "round-trip builder drops invalid numeric BY* values before parsing" <|
+            \() ->
+                let
+                    icsString : String
+                    icsString =
+                        [ Ical.event
+                            { id = "rt-invalid-by-values"
+                            , stamp = toIso8601 "2024-01-01T00:00:00.000Z"
+                            , time =
+                                Ical.withTime
+                                    { start = toIso8601 "2024-01-01T09:00:00.000Z"
+                                    , end = toIso8601 "2024-01-01T10:00:00.000Z"
+                                    }
+                            , summary = "Sanitized builder values"
+                            }
+                            |> Ical.withRecurrenceRule
+                                (Ical.rule (Recurrence.Yearly { every = 1 })
+                                    |> Ical.withByMonthDay [ 0, 1, 32, -1, -32 ]
+                                    |> Ical.withBySetPos [ 0, 1, 366, 367, -1, -367 ]
+                                    |> Ical.withByHour [ -1, 0, 23, 24 ]
+                                    |> Ical.withByMinute [ -1, 0, 59, 60 ]
+                                    |> Ical.withBySecond [ -1, 0, 60, 61 ]
+                                    |> Ical.withByYearDay [ -367, -1, 0, 1, 366, 367 ]
+                                    |> Ical.withByWeekNo [ -54, -1, 0, 1, 53, 54 ]
+                                )
+                        ]
+                            |> Ical.generate
+                                (Ical.config
+                                    { id = "//tests//elm-ical//EN"
+                                    , domain = "example.com"
+                                    }
+                                )
+                in
+                case Parser.parse icsString of
+                    Ok cal ->
+                        case cal.events of
+                            [ ev ] ->
+                                case ev.recurrenceRules of
+                                    [ rule ] ->
+                                        Expect.all
+                                            [ \r -> r.byMonthDay |> Expect.equal [ 1, -1 ]
+                                            , \r -> r.bySetPos |> Expect.equal [ 1, 366, -1 ]
+                                            , \r -> r.byHour |> Expect.equal [ 0, 23 ]
+                                            , \r -> r.byMinute |> Expect.equal [ 0, 59 ]
+                                            , \r -> r.bySecond |> Expect.equal [ 0, 60 ]
+                                            , \r -> r.byYearDay |> Expect.equal [ -1, 1, 366 ]
+                                            , \r -> r.byWeekNo |> Expect.equal [ -1, 1, 53 ]
+                                            ]
+                                            rule
+
+                                    _ ->
+                                        Expect.fail ("Expected 1 recurrence rule, got " ++ String.fromInt (List.length ev.recurrenceRules))
+
+                            _ ->
+                                Expect.fail "Expected 1 event"
+
+                    Err err ->
+                        Expect.fail err
         , test "round-trip event with ATTENDEE" <|
             \() ->
                 let

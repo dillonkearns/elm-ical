@@ -522,11 +522,11 @@ withByDay days (Rule r) =
 
 {-| Set which days of the month the rule applies to. Valid values are
 -31 to -1 and 1 to 31. Negative values count from the end of the month
-(e.g. -1 is the last day).
+(e.g. -1 is the last day). Invalid values are dropped.
 -}
 withByMonthDay : List Int -> Rule -> Rule
 withByMonthDay days (Rule r) =
-    Rule { r | byMonthDay = days }
+    Rule { r | byMonthDay = List.filter isValidMonthDay days }
 
 
 {-| Set which months the rule applies to.
@@ -542,47 +542,86 @@ withByMonth months (Rule r) =
 
 {-| Filter to specific positions within each recurrence period. For example,
 with `BYDAY=MO,TU,WE,TH,FR`, a `bySetPos` of `[ -1 ]` means "the last weekday."
+Invalid values are dropped.
 -}
 withBySetPos : List Int -> Rule -> Rule
 withBySetPos positions (Rule r) =
-    Rule { r | bySetPos = positions }
+    Rule { r | bySetPos = List.filter isValidSetPos positions }
 
 
-{-| Set which hours the rule applies to. Valid values are 0–23.
+{-| Set which hours the rule applies to. Valid values are 0–23. Invalid values are dropped.
 -}
 withByHour : List Int -> Rule -> Rule
 withByHour hours (Rule r) =
-    Rule { r | byHour = hours }
+    Rule { r | byHour = List.filter isValidHour hours }
 
 
-{-| Set which minutes the rule applies to. Valid values are 0–59.
+{-| Set which minutes the rule applies to. Valid values are 0–59. Invalid values are dropped.
 -}
 withByMinute : List Int -> Rule -> Rule
 withByMinute minutes (Rule r) =
-    Rule { r | byMinute = minutes }
+    Rule { r | byMinute = List.filter isValidMinute minutes }
 
 
 {-| Set which seconds the rule applies to. Valid values are 0–60 (60 for leap second).
+Invalid values are dropped.
 -}
 withBySecond : List Int -> Rule -> Rule
 withBySecond seconds (Rule r) =
-    Rule { r | bySecond = seconds }
+    Rule { r | bySecond = List.filter isValidSecond seconds }
 
 
 {-| Set which days of the year the rule applies to. Valid values are
 1 to 366 and -366 to -1. Negative values count from the end of the year.
+Invalid values are dropped.
 -}
 withByYearDay : List Int -> Rule -> Rule
 withByYearDay days (Rule r) =
-    Rule { r | byYearDay = days }
+    Rule { r | byYearDay = List.filter isValidYearDay days }
 
 
 {-| Set which ISO week numbers the rule applies to. Valid values are
 1 to 53 and -53 to -1. Negative values count from the end of the year.
+Invalid values are dropped.
 -}
 withByWeekNo : List Int -> Rule -> Rule
 withByWeekNo weeks (Rule r) =
-    Rule { r | byWeekNo = weeks }
+    Rule { r | byWeekNo = List.filter isValidWeekNo weeks }
+
+
+isValidMonthDay : Int -> Bool
+isValidMonthDay day =
+    day /= 0 && abs day <= 31
+
+
+isValidSetPos : Int -> Bool
+isValidSetPos position =
+    position /= 0 && abs position <= 366
+
+
+isValidHour : Int -> Bool
+isValidHour hour =
+    hour >= 0 && hour <= 23
+
+
+isValidMinute : Int -> Bool
+isValidMinute minute =
+    minute >= 0 && minute <= 59
+
+
+isValidSecond : Int -> Bool
+isValidSecond second =
+    second >= 0 && second <= 60
+
+
+isValidYearDay : Int -> Bool
+isValidYearDay day =
+    day /= 0 && abs day <= 366
+
+
+isValidWeekNo : Int -> Bool
+isValidWeekNo week =
+    week /= 0 && abs week <= 53
 
 
 {-| An opaque type representing calendar configuration. Create one with

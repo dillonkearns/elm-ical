@@ -555,6 +555,47 @@ UID:bymonth-1@test.com
 SUMMARY:Quarterly
 RRULE:FREQ=YEARLY;BYMONTH=1,4,7,10
 END:VEVENT"""
+        , test "generate RRULE drops invalid numeric BY* values" <|
+            \() ->
+                Ical.event
+                    { id = "sanitized-rrule"
+                    , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
+                    , time =
+                        Ical.withTime
+                            { start = toIso8601 "2021-03-18T10:00:00.000Z"
+                            , end = toIso8601 "2021-03-18T11:00:00.000Z"
+                            }
+                    , summary = "Sanitized recurrence"
+                    }
+                    |> Ical.withRecurrenceRule
+                        (Ical.rule (Recurrence.Yearly { every = 1 })
+                            |> Ical.withByMonthDay [ 0, 1, 32, -1, -32 ]
+                            |> Ical.withBySetPos [ 0, 1, 366, 367, -1, -367 ]
+                            |> Ical.withByHour [ -1, 0, 23, 24 ]
+                            |> Ical.withByMinute [ -1, 0, 59, 60 ]
+                            |> Ical.withBySecond [ -1, 0, 60, 61 ]
+                            |> Ical.withByYearDay [ -367, -1, 0, 1, 366, 367 ]
+                            |> Ical.withByWeekNo [ -54, -1, 0, 1, 53, 54 ]
+                        )
+                    |> Ical.generateEvent
+                        (Ical.config
+                            { id = "//test//test//EN"
+                            , domain = "test.com"
+                            }
+                        )
+                    |> expectEqualLines
+                        (String.join "\n"
+                            [ "BEGIN:VEVENT"
+                            , "DTSTART:20210318T100000Z"
+                            , "DTEND:20210318T110000Z"
+                            , "DTSTAMP:20210318T162044Z"
+                            , "UID:sanitized-rrule@test.com"
+                            , "SUMMARY:Sanitized recurrence"
+                            , "RRULE:FREQ=YEARLY;BYMONTHDAY=1,-1;BYSETPOS=1,366,-1;BYHOUR=0,23;BYMINUTE=0,"
+                            , " 59;BYSECOND=0,60;BYYEARDAY=-1,1,366;BYWEEKNO=-1,1,53"
+                            , "END:VEVENT"
+                            ]
+                        )
         , test "generate RRULE with FREQ=HOURLY" <|
             \() ->
                 Ical.event
