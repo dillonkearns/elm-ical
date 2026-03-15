@@ -1680,23 +1680,21 @@ expand range events =
             overrideEvents
                 |> List.concatMap (expandEvent range)
 
-        overriddenDates : List ( String, Int )
-        overriddenDates =
+        overriddenKeys : List ( String, Int )
+        overriddenKeys =
             overrideEvents
                 |> List.filterMap
                     (\e ->
                         e.recurrenceId
                             |> Maybe.map
-                                (\posix ->
-                                    ( e.uid, Date.toRataDie (Date.fromPosix Time.utc posix) )
-                                )
+                                (\posix -> ( e.uid, recurrenceReferenceKey e.time posix ))
                     )
 
         isOverridden : Occurrence -> Bool
         isOverridden occ =
             List.member
-                ( occ.event.uid, Date.toRataDie (occurrenceStartDate occ.time) )
-                overriddenDates
+                ( occ.event.uid, occurrenceReferenceKeyFromOccurrence occ )
+                overriddenKeys
     in
     (List.filter (\occ -> not (isOverridden occ)) masterOccurrences ++ overrideOccurrences)
         |> List.sortBy (\occ -> occurrenceTimeKey occ.time)
@@ -1731,11 +1729,19 @@ expandEvent range event =
         rdateOccurrences : List Occurrence
         rdateOccurrences =
             event.recurrenceDates
-                |> List.map (\posix -> Date.fromPosix Time.utc posix)
-                |> List.filter (\d -> Date.compare d range.start /= LT && Date.compare d range.end /= GT)
-                |> List.map (\d -> { event = event, time = shiftTime event.time seed d })
+                |> List.map (occurrenceFromRecurrenceDate event)
+                |> List.filter
+                    (\occ ->
+                        let
+                            startDate : Date.Date
+                            startDate =
+                                occurrenceStartDate occ.time
+                        in
+                        Date.compare startDate range.start /= LT && Date.compare startDate range.end /= GT
+                    )
     in
     (baseOccurrences ++ rdateOccurrences)
+        |> List.filter (not << occurrenceIsExcluded event)
         |> List.sortBy (\occ -> occurrenceTimeKey occ.time)
         |> dedupOccurrences
 
@@ -1771,23 +1777,21 @@ expandNext n fromDate events =
             overrideEvents
                 |> List.concatMap (expandNextEvent n fromDate)
 
-        overriddenDates : List ( String, Int )
-        overriddenDates =
+        overriddenKeys : List ( String, Int )
+        overriddenKeys =
             overrideEvents
                 |> List.filterMap
                     (\e ->
                         e.recurrenceId
                             |> Maybe.map
-                                (\posix ->
-                                    ( e.uid, Date.toRataDie (Date.fromPosix Time.utc posix) )
-                                )
+                                (\posix -> ( e.uid, recurrenceReferenceKey e.time posix ))
                     )
 
         isOverridden : Occurrence -> Bool
         isOverridden occ =
             List.member
-                ( occ.event.uid, Date.toRataDie (occurrenceStartDate occ.time) )
-                overriddenDates
+                ( occ.event.uid, occurrenceReferenceKeyFromOccurrence occ )
+                overriddenKeys
     in
     (List.filter (\occ -> not (isOverridden occ)) masterOccurrences ++ overrideOccurrences)
         |> List.sortBy (\occ -> occurrenceTimeKey occ.time)
@@ -1818,16 +1822,16 @@ expandNextEvent n fromDate event =
 
                 rules ->
                     rules
-                        |> List.concatMap (\rule -> expandNextRule n fromDate event rule)
+                        |> List.concatMap (\rule -> expandNextRule (n + List.length event.exclusions) fromDate event rule)
 
         rdateOccurrences : List Occurrence
         rdateOccurrences =
             event.recurrenceDates
-                |> List.map (\posix -> Date.fromPosix Time.utc posix)
-                |> List.filter (\d -> Date.compare d fromDate /= LT)
-                |> List.map (\d -> { event = event, time = shiftTime event.time seed d })
+                |> List.map (occurrenceFromRecurrenceDate event)
+                |> List.filter (\occ -> Date.compare (occurrenceStartDate occ.time) fromDate /= LT)
     in
     (baseOccurrences ++ rdateOccurrences)
+        |> List.filter (not << occurrenceIsExcluded event)
         |> List.sortBy (\occ -> occurrenceTimeKey occ.time)
         |> dedupOccurrences
         |> List.take n
@@ -1899,14 +1903,9 @@ expandRule range event rule =
                 candidates =
                     generateCandidates rule event.time seed rangeEndRD
 
-                filtered : List Date.Date
-                filtered =
-                    candidates
-                        |> filterExclusions event
-
                 occurrences : List Occurrence
                 occurrences =
-                    filtered
+                    candidates
                         |> List.filter (\d -> Date.toRataDie d >= rangeStartRD && Date.toRataDie d <= rangeEndRD)
                         |> List.concatMap
                             (\d ->
@@ -3084,6 +3083,85 @@ filterExclusions event dates =
                     |> List.map (\posix -> Date.toRataDie (Date.fromPosix Time.utc posix))
         in
         List.filter (\d -> not (List.member (Date.toRataDie d) exclusionRDs)) dates
+
+
+occurrenceFromRecurrenceDate : Event -> Time.Posix -> Occurrence
+occurrenceFromRecurrenceDate event recurrenceDate =
+    case event.time of
+        WithTime { start, end } ->
+            let
+                startMs : Int
+                startMs =
+                    Time.posixToMillis recurrenceDate
+
+                durationMs : Int
+                durationMs =
+                    case end of
+                        Just endTime ->
+                            Time.posixToMillis endTime.posix - Time.posixToMillis start.posix
+
+                        Nothing ->
+                            0
+            in
+            { event = event
+            , time =
+                WithTime
+                    { start = { posix = recurrenceDate, timeZoneName = start.timeZoneName }
+                    , end =
+                        Maybe.map
+                            (\_ ->
+                                { posix = Time.millisToPosix (startMs + durationMs)
+                                , timeZoneName = start.timeZoneName
+                                }
+                            )
+                            end
+                    }
+            }
+
+        _ ->
+            let
+                seed : Date.Date
+                seed =
+                    occurrenceStartDate event.time
+            in
+            { event = event
+            , time = shiftTime event.time seed (Date.fromPosix Time.utc recurrenceDate)
+            }
+
+
+occurrenceIsExcluded : Event -> Occurrence -> Bool
+occurrenceIsExcluded event occurrence =
+    if List.isEmpty event.exclusions then
+        False
+
+    else
+        let
+            occurrenceKey : Int
+            occurrenceKey =
+                occurrenceReferenceKeyFromOccurrence occurrence
+        in
+        event.exclusions
+            |> List.any (\exclusion -> recurrenceReferenceKey occurrence.time exclusion == occurrenceKey)
+
+
+occurrenceReferenceKeyFromOccurrence : Occurrence -> Int
+occurrenceReferenceKeyFromOccurrence occurrence =
+    case occurrence.time of
+        WithTime { start } ->
+            Time.posixToMillis start.posix
+
+        _ ->
+            Date.toRataDie (occurrenceStartDate occurrence.time)
+
+
+recurrenceReferenceKey : EventTime -> Time.Posix -> Int
+recurrenceReferenceKey eventTime recurrenceReference =
+    case eventTime of
+        WithTime _ ->
+            Time.posixToMillis recurrenceReference
+
+        _ ->
+            Date.toRataDie (Date.fromPosix Time.utc recurrenceReference)
 
 
 occurrenceStartDate : EventTime -> Date.Date

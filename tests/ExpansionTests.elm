@@ -742,6 +742,49 @@ suite =
 
                         Err err ->
                             Expect.fail err
+            , test "EXDATE excludes only the targeted timed occurrence when multiple share a day" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            String.join "\u{000D}\n"
+                                [ "BEGIN:VCALENDAR"
+                                , "VERSION:2.0"
+                                , "PRODID:-//Test//EN"
+                                , "BEGIN:VEVENT"
+                                , "UID:exdate-one-slot@test"
+                                , "DTSTAMP:20240101T000000Z"
+                                , "DTSTART:20240101T090000Z"
+                                , "DTEND:20240101T100000Z"
+                                , "RRULE:FREQ=DAILY;COUNT=4;BYHOUR=9,10"
+                                , "EXDATE:20240102T100000Z"
+                                , "SUMMARY:Two slots per day"
+                                , "END:VEVENT"
+                                , "END:VCALENDAR"
+                                , ""
+                                ]
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            case cal.events of
+                                [ event ] ->
+                                    Parser.expand
+                                        { start = Date.fromCalendarDate 2024 Time.Jan 1
+                                        , end = Date.fromCalendarDate 2024 Time.Jan 2
+                                        }
+                                        [ event ]
+                                        |> List.map (\occ -> ( occurrenceDate Time.utc occ, occurrenceHour Time.utc occ ))
+                                        |> Expect.equal
+                                            [ ( Date.fromCalendarDate 2024 Time.Jan 1, 9 )
+                                            , ( Date.fromCalendarDate 2024 Time.Jan 1, 10 )
+                                            , ( Date.fromCalendarDate 2024 Time.Jan 2, 9 )
+                                            ]
+
+                                _ ->
+                                    Expect.fail "Expected 1 event"
+
+                        Err err ->
+                            Expect.fail err
             ]
         , describe "RDATE"
             [ test "RDATE adds additional occurrences to expansion" <|
@@ -786,6 +829,47 @@ suite =
                                             [ Date.fromCalendarDate 2021 Time.Mar 18
                                             , Date.fromCalendarDate 2021 Time.Mar 19
                                             , Date.fromCalendarDate 2021 Time.Mar 20
+                                            ]
+
+                                _ ->
+                                    Expect.fail "Expected 1 event"
+
+                        Err err ->
+                            Expect.fail err
+            , test "timed RDATE preserves its explicit time-of-day during expansion" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            String.join "\u{000D}\n"
+                                [ "BEGIN:VCALENDAR"
+                                , "VERSION:2.0"
+                                , "PRODID:-//Test//EN"
+                                , "BEGIN:VEVENT"
+                                , "UID:rdate-time@test"
+                                , "DTSTAMP:20240101T000000Z"
+                                , "DTSTART:20240101T100000Z"
+                                , "DTEND:20240101T110000Z"
+                                , "RDATE:20240102T140000Z"
+                                , "SUMMARY:RDATE explicit time"
+                                , "END:VEVENT"
+                                , "END:VCALENDAR"
+                                , ""
+                                ]
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            case cal.events of
+                                [ event ] ->
+                                    Parser.expand
+                                        { start = Date.fromCalendarDate 2024 Time.Jan 1
+                                        , end = Date.fromCalendarDate 2024 Time.Jan 3
+                                        }
+                                        [ event ]
+                                        |> List.map (\occ -> ( occurrenceDate Time.utc occ, occurrenceHour Time.utc occ ))
+                                        |> Expect.equal
+                                            [ ( Date.fromCalendarDate 2024 Time.Jan 1, 10 )
+                                            , ( Date.fromCalendarDate 2024 Time.Jan 2, 14 )
                                             ]
 
                                 _ ->
@@ -1913,6 +1997,52 @@ suite =
                                     , ( Date.fromCalendarDate 2021 Time.Mar 25, Just "Event A (moved)" )
                                     , ( Date.fromCalendarDate 2021 Time.Mar 18, Just "Event B" )
                                     , ( Date.fromCalendarDate 2021 Time.Mar 25, Just "Event B" )
+                                    ]
+
+                        Err err ->
+                            Expect.fail err
+            , test "override replaces only the targeted timed occurrence when multiple share a day" <|
+                \() ->
+                    let
+                        input : String
+                        input =
+                            String.join "\u{000D}\n"
+                                [ "BEGIN:VCALENDAR"
+                                , "VERSION:2.0"
+                                , "PRODID:-//Test//EN"
+                                , "BEGIN:VEVENT"
+                                , "UID:override-one-slot@test"
+                                , "DTSTAMP:20240101T000000Z"
+                                , "DTSTART:20240101T090000Z"
+                                , "DTEND:20240101T100000Z"
+                                , "RRULE:FREQ=DAILY;COUNT=4;BYHOUR=9,10"
+                                , "SUMMARY:Original slot"
+                                , "END:VEVENT"
+                                , "BEGIN:VEVENT"
+                                , "UID:override-one-slot@test"
+                                , "DTSTAMP:20240101T000000Z"
+                                , "DTSTART:20240102T150000Z"
+                                , "DTEND:20240102T160000Z"
+                                , "SUMMARY:Moved 10am slot"
+                                , "RECURRENCE-ID:20240102T100000Z"
+                                , "END:VEVENT"
+                                , "END:VCALENDAR"
+                                , ""
+                                ]
+                    in
+                    case Parser.parse input of
+                        Ok cal ->
+                            Parser.expand
+                                { start = Date.fromCalendarDate 2024 Time.Jan 1
+                                , end = Date.fromCalendarDate 2024 Time.Jan 2
+                                }
+                                cal.events
+                                |> List.map (\occ -> ( occurrenceDate Time.utc occ, occurrenceHour Time.utc occ, occ.event.summary ))
+                                |> Expect.equal
+                                    [ ( Date.fromCalendarDate 2024 Time.Jan 1, 9, Just "Original slot" )
+                                    , ( Date.fromCalendarDate 2024 Time.Jan 1, 10, Just "Original slot" )
+                                    , ( Date.fromCalendarDate 2024 Time.Jan 2, 9, Just "Original slot" )
+                                    , ( Date.fromCalendarDate 2024 Time.Jan 2, 15, Just "Moved 10am slot" )
                                     ]
 
                         Err err ->
