@@ -11,7 +11,7 @@ module Ical.Recurrence exposing
 [`RecurrenceRule`](#RecurrenceRule) is the transparent record returned by
 [`Ical.Parser`](Ical-Parser) for reading parsed recurrence data.
 [`Frequency`](#Frequency) and [`DaySpec`](#DaySpec) are also used when
-building rules for generation via [`Ical.Rule`](Ical#Rule).
+building rules for generation via [`Ical.Generator.Rule`](Ical-Generator#Rule).
 
 
 ## Parsed rule data
@@ -33,7 +33,7 @@ import Time
 
 {-| A parsed recurrence rule (RRULE). This is the transparent record returned
 by [`Ical.Parser`](Ical-Parser) for reading parsed rule data. For constructing
-rules for generation, use [`Ical.Rule`](Ical#Rule) and its builder functions.
+rules for generation, use [`Ical.Generator.Rule`](Ical-Generator#Rule) and its builder functions.
 
     { frequency = Weekly { every = 1, weekStart = Time.Mon }
     , end = Forever
