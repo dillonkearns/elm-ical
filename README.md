@@ -21,7 +21,7 @@ It is not a complete RFC 5545 implementation yet. The current scope is calendar/
 
 ```elm
 import Date
-import Ical
+import Ical.Generator as Generator
 import Ical.Recurrence as Recurrence
 import Time
 
@@ -29,43 +29,45 @@ import Time
 teamCalendar : Time.Posix -> String
 teamCalendar now =
     let
-        weeklySync : Ical.Event
+        weeklySync : Generator.Event
         weeklySync =
-            Ical.event
+            Generator.event
                 { id = "weekly-sync"
                 , stamp = now
                 , time =
-                    Ical.withTime
+                    Generator.timedEvent
                         { start = mar18at10am
                         , end = mar18at11am
                         }
                 , summary = "Weekly Team Sync"
                 }
-                |> Ical.withRecurrenceRule
-                    (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon }))
+                |> Generator.withRecurrenceRule
+                    (Generator.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon }))
 
-        offsite : Ical.Event
+        offsite : Generator.Event
         offsite =
-            Ical.event
+            Generator.event
                 { id = "offsite-q2"
                 , stamp = now
                 , time =
-                    Ical.allDayRange
+                    Generator.allDayRange
                         { start = Date.fromCalendarDate 2021 Time.Jun 14
                         , end = Date.fromCalendarDate 2021 Time.Jun 16
                         }
                 , summary = "Q2 Team Offsite"
                 }
-                |> Ical.withLocation "Moscone Center, 747 Howard St, San Francisco, CA 94103"
+                |> Generator.withLocation "Moscone Center, 747 Howard St, San Francisco, CA 94103"
     in
-    Ical.generate
-        (Ical.config
+    Generator.generate
+        (Generator.config
             { id = "//mycompany//team//EN"
             , domain = "mycompany.com"
             }
-            |> Ical.withName "Engineering Team"
+            |> Generator.withName "Engineering Team"
         )
-        [ weeklySync, offsite ]
+        { events = [ weeklySync, offsite ]
+        , journals = []
+        }
 
 mar18at10am : Time.Posix
 mar18at10am =
@@ -126,15 +128,15 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 ## What You Get
 
 - Strict parsing. Malformed content lines, invalid dates/times/durations/RRULE values, and invalid `DTEND`/`DURATION` combinations return `Err`. A `TZID` parameter without a matching `VTIMEZONE` definition is a hard parse error.
-- Typed event times. Parsed events are `AllDay`, `WithTime`, or `FloatingTime`.
+- Typed event times. Parsed events are `AllDay`, `WithTime`, or `FloatingTime`. The `end` is always populated (from DTEND, DURATION, or the RFC default).
 - TZID-aware parsing. `DATE-TIME` values with a `TZID` parameter are resolved through matching `VTIMEZONE` data.
-- Typed enums. `STATUS`, `TRANSP`, attendee role, and participation status are decoded into Elm union types.
+- Typed enums. `STATUS`, `TRANSP`, attendee role, and participation status are decoded into Elm union types. Shared types like `Status` and `Transparency` live in the `Ical` module.
 - Unknown-property preservation. Unhandled and extension properties are kept in `extraProperties`.
 - Invalid states prevented. Generation-side types like `EventTime` and `Rule` are opaque with builder functions that normalize inputs (e.g. reversed start/end dates are swapped, negative intervals are clamped to 1).
 
 ## Important Semantics
 
-- `Ical.allDay` creates a single-day event; `Ical.allDayRange` uses an inclusive end date for multi-day spans.
+- `Generator.allDay` creates a single-day event; `Generator.allDayRange` uses an inclusive end date for multi-day spans.
 - `Ical.Parser.EventTime.AllDay` uses RFC-style exclusive end semantics when parsing.
 - If a parsed `VEVENT` omits both `DTEND` and `DURATION`, the parser applies the RFC default:
   - all-day events end on the following date
@@ -143,7 +145,7 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 
 ## Supported Today
 
-### Generation (`Ical`)
+### Generation (`Ical.Generator`)
 
 - Calendar properties: `VERSION`, `PRODID`, `NAME` (non-standard but widely used), `DESCRIPTION`, `URL`
 - Event properties: `DTSTART`, `DTEND`, `DTSTAMP`, `UID`, `SUMMARY`, `DESCRIPTION`, `LOCATION`, `ORGANIZER`, `X-ALT-DESC`, `STATUS`, `TRANSP`, `CREATED`, `LAST-MODIFIED`, `RRULE`, `ATTENDEE`
@@ -170,6 +172,12 @@ See [`examples/`](examples/) for a full runnable script that fetches and parses 
 - Attendees: `CN`, `ROLE`, `PARTSTAT`, `RSVP`
 - `VJOURNAL` parsing: journal entries with optional `DTSTART` (date, datetime, or floating), `STATUS` (`DRAFT`/`FINAL`/`CANCELLED`), `SUMMARY`, `DESCRIPTION`, `ORGANIZER`
 - `VALARM` parsing: alarm sub-components with `ACTION` (`DISPLAY`/`AUDIO`), `TRIGGER` (duration relative to start/end, or absolute `DATE-TIME`), `DESCRIPTION`
+
+### Shared types (`Ical`)
+
+- `Status` (`Tentative`, `Confirmed`, `Cancelled`)
+- `Transparency` (`Opaque`, `Transparent`)
+- `JournalStatus` (`Draft`, `Final`, `CancelledJournal`)
 
 ### Recurrence Subset
 

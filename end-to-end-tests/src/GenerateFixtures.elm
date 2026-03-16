@@ -1,7 +1,8 @@
 port module GenerateFixtures exposing (main)
 
 import Date
-import Ical
+import Ical exposing (JournalStatus(..), Status(..), Transparency(..))
+import Ical.Generator as Ical
 import Ical.Parser as Parser
 import Json.Encode
 import Time
@@ -103,41 +104,23 @@ encodeEventTime eventTime =
                 , ( "day", Json.Encode.int (Date.day start) )
                 ]
             )
-                :: (case end of
-                        Just endDate ->
-                            [ ( "dtend"
-                              , Json.Encode.object
-                                    [ ( "type", Json.Encode.string "date" )
-                                    , ( "year", Json.Encode.int (Date.year endDate) )
-                                    , ( "month", Json.Encode.int (Date.monthNumber endDate) )
-                                    , ( "day", Json.Encode.int (Date.day endDate) )
-                                    ]
-                              )
-                            ]
-
-                        Nothing ->
-                            []
-                   )
+                :: [ ( "dtend"
+                     , Json.Encode.object
+                        [ ( "type", Json.Encode.string "date" )
+                        , ( "year", Json.Encode.int (Date.year end) )
+                        , ( "month", Json.Encode.int (Date.monthNumber end) )
+                        , ( "day", Json.Encode.int (Date.day end) )
+                        ]
+                     )
+                   ]
 
         Parser.WithTime { start, end } ->
             ( "dtstart", encodeResolvedTime start )
-                :: (case end of
-                        Just endTime ->
-                            [ ( "dtend", encodeResolvedTime endTime ) ]
-
-                        Nothing ->
-                            []
-                   )
+                :: [ ( "dtend", encodeResolvedTime end ) ]
 
         Parser.FloatingTime { start, end } ->
             ( "dtstart", encodeLocalDateTime start )
-                :: (case end of
-                        Just endTime ->
-                            [ ( "dtend", encodeLocalDateTime endTime ) ]
-
-                        Nothing ->
-                            []
-                   )
+                :: [ ( "dtend", encodeLocalDateTime end ) ]
 
 
 encodeResolvedTime : Parser.ResolvedTime -> Json.Encode.Value
@@ -187,29 +170,29 @@ encodePosix posix =
         ]
 
 
-encodeStatus : Parser.Status -> Json.Encode.Value
+encodeStatus : Status -> Json.Encode.Value
 encodeStatus status =
     Json.Encode.string
         (case status of
-            Parser.Tentative ->
+            Tentative ->
                 "TENTATIVE"
 
-            Parser.Confirmed ->
+            Confirmed ->
                 "CONFIRMED"
 
-            Parser.Cancelled ->
+            Cancelled ->
                 "CANCELLED"
         )
 
 
-encodeTransparency : Parser.Transparency -> Json.Encode.Value
+encodeTransparency : Transparency -> Json.Encode.Value
 encodeTransparency transparency =
     Json.Encode.string
         (case transparency of
-            Parser.Opaque ->
+            Opaque ->
                 "OPAQUE"
 
-            Parser.Transparent ->
+            Transparent ->
                 "TRANSPARENT"
         )
 
@@ -270,7 +253,7 @@ basicFeed =
         { id = "1"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.withTime
+            Ical.timedEvent
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1381100100000
                 }
@@ -281,7 +264,7 @@ basicFeed =
         { id = "2"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.withTime
+            Ical.timedEvent
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1381100100000
                 }
@@ -289,7 +272,7 @@ basicFeed =
         }
         |> Ical.withDescription "This is the description, it escapes commas"
     ]
-        |> Ical.generate
+        |> generateEvents
             (Ical.config
                 { id = "//incrementalelm.com//elm-ical.tests//EN"
                 , domain = "incrementalelm.com"
@@ -306,7 +289,7 @@ simpleEvent =
         { id = "123"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.withTime
+            Ical.timedEvent
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
@@ -315,7 +298,7 @@ simpleEvent =
         |> Ical.withCreated (millisToPosix 1380929693000)
         |> Ical.withLastModified (millisToPosix 1380929693000)
     ]
-        |> Ical.generate
+        |> generateEvents
             (Ical.config
                 { id = "//sebbo.net//ical-generator.tests//EN"
                 , domain = "sebbo.net"
@@ -329,7 +312,7 @@ longDescription =
         { id = "123"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.withTime
+            Ical.timedEvent
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
@@ -339,7 +322,7 @@ longDescription =
         |> Ical.withLocation "localhost"
         |> Ical.withHtmlDescription "<p>Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua.\nbeep boop</p>"
     ]
-        |> Ical.generate
+        |> generateEvents
             (Ical.config
                 { id = "//sebbo.net//ical-generator.tests//EN"
                 , domain = "sebbo.net"
@@ -358,10 +341,10 @@ allDayEvent =
         }
         |> Ical.withCreated (millisToPosix 1616079577000)
         |> Ical.withLastModified (millisToPosix 1616079577000)
-        |> Ical.withStatus Ical.Confirmed
-        |> Ical.withTransparency Ical.Transparent
+        |> Ical.withStatus Confirmed
+        |> Ical.withTransparency Transparent
     ]
-        |> Ical.generate
+        |> generateEvents
             (Ical.config
                 { id = "//sebbo.net//ical-generator.tests//EN"
                 , domain = "incrementalelm.com"
@@ -375,7 +358,7 @@ organizerEvent =
         { id = "org-test"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.withTime
+            Ical.timedEvent
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
@@ -386,7 +369,7 @@ organizerEvent =
             , email = "dillon@incrementalelm.com"
             }
     ]
-        |> Ical.generate
+        |> generateEvents
             (Ical.config
                 { id = "//test//test//EN"
                 , domain = "test.com"
@@ -400,14 +383,14 @@ doubleQuotes =
         { id = "quote-test"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.withTime
+            Ical.timedEvent
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
         , summary = "She said \"hello\""
         }
     ]
-        |> Ical.generate
+        |> generateEvents
             (Ical.config
                 { id = "//test//test//EN"
                 , domain = "test.com"
@@ -421,14 +404,14 @@ emojiEvent =
         { id = "emoji-test"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.withTime
+            Ical.timedEvent
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
         , summary = String.repeat 60 "a" ++ "🎉🎊🥳" ++ "bbb"
         }
     ]
-        |> Ical.generate
+        |> generateEvents
             (Ical.config
                 { id = "//test//test//EN"
                 , domain = "test.com"
@@ -442,7 +425,7 @@ emptyFieldsEvent =
         { id = "empty-test"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.withTime
+            Ical.timedEvent
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
@@ -451,7 +434,7 @@ emptyFieldsEvent =
         |> Ical.withDescription ""
         |> Ical.withLocation ""
     ]
-        |> Ical.generate
+        |> generateEvents
             (Ical.config
                 { id = "//test//test//EN"
                 , domain = "test.com"
@@ -465,7 +448,7 @@ specialEmailEvent =
         { id = "special-email-test"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.withTime
+            Ical.timedEvent
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
@@ -476,7 +459,7 @@ specialEmailEvent =
             , email = "user;tag@example.com"
             }
     ]
-        |> Ical.generate
+        |> generateEvents
             (Ical.config
                 { id = "//test//test//EN"
                 , domain = "test.com"
@@ -490,14 +473,14 @@ urlWithSpecialChars =
         { id = "url-test"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.withTime
+            Ical.timedEvent
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
         , summary = "Event with URL"
         }
     ]
-        |> Ical.generate
+        |> generateEvents
             (Ical.config
                 { id = "//test//test//EN"
                 , domain = "test.com"
@@ -512,14 +495,14 @@ emptyCalendarFields =
         { id = "empty-cal-test"
         , stamp = millisToPosix 1380929693000
         , time =
-            Ical.withTime
+            Ical.timedEvent
                 { start = millisToPosix 1380926370000
                 , end = millisToPosix 1380928500000
                 }
         , summary = "Event with empty cal fields"
         }
     ]
-        |> Ical.generate
+        |> generateEvents
             (Ical.config
                 { id = "//test//test//EN"
                 , domain = "test.com"
@@ -533,3 +516,8 @@ emptyCalendarFields =
 millisToPosix : Int -> Time.Posix
 millisToPosix =
     Time.millisToPosix
+
+
+generateEvents : Ical.Config -> List Ical.Event -> String
+generateEvents cfg events =
+    Ical.generate cfg { events = events, journals = [] }

@@ -218,7 +218,7 @@ integrationTests =
                                                     , localDateTime = { year = 2024, month = Time.Jun, day = 15, hour = 14, minute = 30, second = 0 }
                                                     }
                                                     start
-                                            , \_ -> end |> Expect.equal (Just start)
+                                            , \_ -> end |> Expect.equal start
                                             ]
                                             ()
 
@@ -278,7 +278,7 @@ integrationTests =
                                                     , localDateTime = { year = 2024, month = Time.Dec, day = 15, hour = 14, minute = 30, second = 0 }
                                                     }
                                                     start
-                                            , \_ -> end |> Expect.equal (Just start)
+                                            , \_ -> end |> Expect.equal start
                                             ]
                                             ()
 
@@ -362,7 +362,7 @@ integrationTests =
                                                     , localDateTime = { year = 2006, month = Time.Nov, day = 1, hour = 12, minute = 0, second = 0 }
                                                     }
                                                     start
-                                            , \_ -> end |> Expect.equal (Just start)
+                                            , \_ -> end |> Expect.equal start
                                             ]
                                             ()
 

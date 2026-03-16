@@ -116,8 +116,8 @@ suite =
                     withoutEscapes : String
                     withoutEscapes =
                         output
-                            |> String.replace "\\n" ""
                             |> String.replace "\\\\" ""
+                            |> String.replace "\\n" ""
                             |> String.replace "\\," ""
                             |> String.replace "\\;" ""
                 in

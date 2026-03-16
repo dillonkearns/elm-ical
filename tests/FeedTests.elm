@@ -2,7 +2,8 @@ module FeedTests exposing (suite)
 
 import Date
 import Expect exposing (Expectation)
-import Ical
+import Ical exposing (Status(..), Transparency(..))
+import Ical.Generator as Ical
 import Ical.Recurrence as Recurrence
 import Iso8601
 import Test exposing (..)
@@ -18,7 +19,7 @@ suite =
                     { id = "1"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-06T23:15:00.000Z"
                             }
@@ -29,7 +30,7 @@ suite =
                     { id = "2"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-06T23:15:00.000Z"
                             }
@@ -37,7 +38,7 @@ suite =
                     }
                     |> Ical.withDescription "This is the description, it escapes commas"
                 ]
-                    |> Ical.generate
+                    |> generateEvents
                         (Ical.config
                             { id = "//incrementalelm.com//elm-ical.tests//EN"
                             , domain = "incrementalelm.com"
@@ -75,7 +76,7 @@ END:VCALENDAR"""
                     { id = "123"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-04T23:15:00.000Z"
                             }
@@ -84,7 +85,7 @@ END:VCALENDAR"""
                     |> Ical.withCreated (toIso8601 "2013-10-04T23:34:53.000Z")
                     |> Ical.withLastModified (toIso8601 "2013-10-04T23:34:53.000Z")
                 ]
-                    |> Ical.generate
+                    |> generateEvents
                         (Ical.config
                             { id = "//sebbo.net//ical-generator.tests//EN"
                             , domain = "sebbo.net"
@@ -110,7 +111,7 @@ END:VCALENDAR"""
                     { id = "123"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-04T23:15:00.000Z"
                             }
@@ -120,7 +121,7 @@ END:VCALENDAR"""
                     |> Ical.withLocation "localhost"
                     |> Ical.withHtmlDescription "<p>Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua.\nbeep boop</p>"
                 ]
-                    |> Ical.generate
+                    |> generateEvents
                         (Ical.config
                             { id = "//sebbo.net//ical-generator.tests//EN"
                             , domain = "sebbo.net"
@@ -161,8 +162,8 @@ END:VCALENDAR"""
                     |> Ical.withLastModified (toIso8601 "2021-03-18T14:59:37.000Z")
                     |> Ical.withLocation ""
                     |> Ical.withDescription ""
-                    |> Ical.withTransparency Ical.Transparent
-                    |> Ical.withStatus Ical.Confirmed
+                    |> Ical.withTransparency Transparent
+                    |> Ical.withStatus Confirmed
                     |> Ical.generateEvent
                         (Ical.config
                             { id = "//sebbo.net//ical-generator.tests//EN"
@@ -186,14 +187,14 @@ END:VEVENT"""
                     { id = "1"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-06T23:15:00.000Z"
                             }
                     , summary = "test"
                     }
                 ]
-                    |> Ical.generate
+                    |> generateEvents
                         (Ical.config
                             { id = "//test//test//EN"
                             , domain = "test.com"
@@ -207,14 +208,14 @@ END:VEVENT"""
                     { id = "1"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-06T23:15:00.000Z"
                             }
                     , summary = "She said \"hello\""
                     }
                 ]
-                    |> Ical.generate
+                    |> generateEvents
                         (Ical.config
                             { id = "//test//test//EN"
                             , domain = "test.com"
@@ -228,14 +229,14 @@ END:VEVENT"""
                     { id = "1"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-06T23:15:00.000Z"
                             }
                     , summary = "test"
                     }
                 ]
-                    |> Ical.generate
+                    |> generateEvents
                         (Ical.config
                             { id = "//test//test//EN"
                             , domain = "test.com"
@@ -252,7 +253,7 @@ END:VEVENT"""
                             { id = "1"
                             , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                             , time =
-                                Ical.withTime
+                                Ical.timedEvent
                                     { start = toIso8601 "2013-10-04T22:39:30.000Z"
                                     , end = toIso8601 "2013-10-06T23:15:00.000Z"
                                     }
@@ -278,7 +279,7 @@ END:VEVENT"""
                     { id = "1"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-06T23:15:00.000Z"
                             }
@@ -299,14 +300,14 @@ END:VEVENT"""
                     { id = "1"
                     , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2013-10-04T22:39:30.000Z"
                             , end = toIso8601 "2013-10-06T23:15:00.000Z"
                             }
                     , summary = "test"
                     }
                 ]
-                    |> Ical.generate
+                    |> generateEvents
                         (Ical.config
                             { id = "//test//test//EN"
                             , domain = "test.com"
@@ -324,14 +325,14 @@ END:VEVENT"""
                             { id = "1"
                             , stamp = toIso8601 "2013-10-04T23:34:53.000Z"
                             , time =
-                                Ical.withTime
+                                Ical.timedEvent
                                     { start = toIso8601 "2013-10-04T22:39:30.000Z"
                                     , end = toIso8601 "2013-10-06T23:15:00.000Z"
                                     }
                             , summary = "test"
                             }
                         ]
-                            |> Ical.generate
+                            |> generateEvents
                                 (Ical.config
                                     { id = "//test//test//EN"
                                     , domain = "test.com"
@@ -355,7 +356,7 @@ END:VEVENT"""
                         , domain = "test.com"
                         }
                     )
-                    []
+                    { events = [], journals = [] }
                     |> expectEqualLines """BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//test//test//EN
@@ -416,7 +417,7 @@ END:VEVENT"""
                     { id = "reversed-time"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T11:00:00.000Z"
                             , end = toIso8601 "2021-03-18T10:00:00.000Z"
                             }
@@ -441,7 +442,7 @@ END:VEVENT"""
                     { id = "recurring-1"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }
@@ -471,7 +472,7 @@ END:VEVENT"""
                     { id = "count-1"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }
@@ -501,7 +502,7 @@ END:VEVENT"""
                     { id = "clamped"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }
@@ -531,7 +532,7 @@ END:VEVENT"""
                     { id = "bymonth-1"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }
@@ -561,7 +562,7 @@ END:VEVENT"""
                     { id = "yearly-nth-weekday"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }
@@ -591,7 +592,7 @@ END:VEVENT"""
                     { id = "sanitized-rrule"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }
@@ -698,7 +699,7 @@ END:VEVENT"""
                     { id = "hourly-1"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }
@@ -728,7 +729,7 @@ END:VEVENT"""
                     { id = "minutely-1"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T10:30:00.000Z"
                             }
@@ -756,7 +757,7 @@ END:VEVENT"""
                     { id = "secondly-1"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T10:00:15.000Z"
                             }
@@ -786,7 +787,7 @@ END:VEVENT"""
                     { id = "meeting-1"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }
@@ -859,7 +860,7 @@ SUMMARY:Reversed floating
 END:VEVENT"""
         , test "journal entry with date" <|
             \() ->
-                Ical.generateWithJournals
+                Ical.generate
                     (Ical.config
                         { id = "//test//test//EN"
                         , domain = "test.com"
@@ -918,7 +919,7 @@ END:VEVENT"""
                     { id = "alarm-1"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }
@@ -954,7 +955,7 @@ END:VEVENT"""
                     { id = "alarm-2"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }
@@ -988,7 +989,7 @@ END:VEVENT"""
                     { id = "alarm-3"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }
@@ -1024,7 +1025,7 @@ END:VEVENT"""
                     { id = "alarm-4"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }
@@ -1060,7 +1061,7 @@ END:VEVENT"""
                     { id = "alarm-5"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }
@@ -1107,7 +1108,7 @@ END:VEVENT"""
                     { id = "alarm-6"
                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                     , time =
-                        Ical.withTime
+                        Ical.timedEvent
                             { start = toIso8601 "2021-03-18T10:00:00.000Z"
                             , end = toIso8601 "2021-03-18T11:00:00.000Z"
                             }
@@ -1173,3 +1174,8 @@ toIso8601 string =
 
         Err error ->
             Debug.todo (Debug.toString error)
+
+
+generateEvents : Ical.Config -> List Ical.Event -> String
+generateEvents cfg events =
+    Ical.generate cfg { events = events, journals = [] }

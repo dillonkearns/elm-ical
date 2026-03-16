@@ -2,11 +2,10 @@ module Ical.Parser exposing
     ( parse
     , Calendar, Event
     , EventTime(..), OccurrenceReference(..), ResolvedTime, LocalDateTime, TimeZoneContext
-    , Status(..), Transparency(..)
     , Organizer, RawProperty
     , Attendee, AttendeeRole(..), ParticipationStatus(..)
     , Alarm, AlarmAction(..), AlarmTrigger(..), AlarmTriggerRelative(..)
-    , Journal, JournalTime(..), JournalStatus(..)
+    , Journal, JournalTime(..)
     , Occurrence, expand, expandNext
     )
 
@@ -73,7 +72,6 @@ Parsed types are transparent record aliases so you can read fields directly.
 
 ## Enums and metadata
 
-@docs Status, Transparency
 @docs Organizer, RawProperty
 @docs Attendee, AttendeeRole, ParticipationStatus
 
@@ -85,7 +83,7 @@ Parsed types are transparent record aliases so you can read fields directly.
 
 ## Journals
 
-@docs Journal, JournalTime, JournalStatus
+@docs Journal, JournalTime
 
 
 ## Recurrence expansion
@@ -98,6 +96,7 @@ import ContentLine exposing (ContentLine)
 import Date
 import DateHelpers
 import Dict exposing (Dict)
+import Ical exposing (JournalStatus(..), Status(..), Transparency(..))
 import Ical.Recurrence as Recurrence exposing (DaySpec, Frequency(..), RecurrenceEnd(..), RecurrenceRule)
 import Time
 import VTimeZone
@@ -129,12 +128,12 @@ The `uid`, `stamp`, and `time` fields are required by
 [RFC 5545 Section 3.6.1](https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.1).
 Parsing will fail if DTSTART is missing from a VEVENT.
 
-The `end` inside `time` is populated from either DTEND or DURATION (which are
+The `end` inside `time` is always populated — from DTEND, DURATION (which are
 [mutually exclusive](https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.1)
-per the spec). When neither is present, the parser applies the RFC default:
+per the spec), or the RFC default when neither is present:
 
-  - DATE events end on the following date
-  - DATE-TIME events end at the same instant they start
+  - DATE events default to ending on the following date
+  - DATE-TIME events default to ending at the same instant they start
 
 -}
 type alias Event =
@@ -164,6 +163,10 @@ type alias Event =
 [RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.2.2)
 requirement that DTSTART and DTEND share the same value type.
 
+The `end` is always populated. When neither DTEND nor DURATION is present in
+the source data, the parser applies the RFC 5545 default: DATE events end on
+the following day, and DATE-TIME events end at the same instant they start.
+
   - `AllDay`: `VALUE=DATE`; the event spans whole days.
   - `WithTime`: a resolved instant in time (UTC or TZID resolved via VTIMEZONE).
   - `FloatingTime`: a local date-time with no timezone; interpreted in the
@@ -171,9 +174,9 @@ requirement that DTSTART and DTEND share the same value type.
 
 -}
 type EventTime
-    = AllDay { start : Date.Date, end : Maybe Date.Date }
-    | WithTime { start : ResolvedTime, end : Maybe ResolvedTime }
-    | FloatingTime { start : LocalDateTime, end : Maybe LocalDateTime }
+    = AllDay { start : Date.Date, end : Date.Date }
+    | WithTime { start : ResolvedTime, end : ResolvedTime }
+    | FloatingTime { start : LocalDateTime, end : LocalDateTime }
 
 
 {-| A typed reference to a specific recurrence instance as used by `EXDATE`,
@@ -234,23 +237,6 @@ type alias LocalDateTime =
     , minute : Int
     , second : Int
     }
-
-
-{-| Event status per
-[RFC 5545 Section 3.8.1.11](https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.1.11).
--}
-type Status
-    = Tentative
-    | Confirmed
-    | Cancelled
-
-
-{-| Event transparency per
-[RFC 5545 Section 3.8.2.7](https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.2.7).
--}
-type Transparency
-    = Opaque
-    | Transparent
 
 
 {-| A parsed ORGANIZER property.
@@ -379,21 +365,6 @@ type JournalTime
     = JournalDate Date.Date
     | JournalDateTime ResolvedTime
     | JournalFloatingTime LocalDateTime
-
-
-{-| Journal status per
-[RFC 5545 Section 3.8.1.11](https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.1.11).
-
-  - `Draft` — the journal entry is a draft.
-  - `Final` — the journal entry is final.
-  - `CancelledJournal` — the journal entry has been cancelled.
-    (Named `CancelledJournal` to avoid a clash with [`Cancelled`](#Status).)
-
--}
-type JournalStatus
-    = Draft
-    | Final
-    | CancelledJournal
 
 
 {-| Parse an iCal string into a Calendar.
@@ -699,7 +670,7 @@ buildEventTime dtstart maybeDtend maybeDuration =
                 IDate startDate ->
                     case maybeDtend of
                         Just (IDate endDate) ->
-                            Ok (AllDay { start = startDate, end = Just endDate })
+                            Ok (AllDay { start = startDate, end = endDate })
 
                         Just _ ->
                             Err "DTEND value type must match DTSTART (expected DATE)"
@@ -711,15 +682,15 @@ buildEventTime dtstart maybeDtend maybeDuration =
                                         Err "DATE DTSTART must use a day- or week-based DURATION"
 
                                     else
-                                        Ok (AllDay { start = startDate, end = Just (addDurationToDate dur startDate) })
+                                        Ok (AllDay { start = startDate, end = addDurationToDate dur startDate })
 
                                 Nothing ->
-                                    Ok (AllDay { start = startDate, end = Just (Date.add Date.Days 1 startDate) })
+                                    Ok (AllDay { start = startDate, end = Date.add Date.Days 1 startDate })
 
                 IDateTime startResolved ->
                     case maybeDtend of
                         Just (IDateTime endResolved) ->
-                            Ok (WithTime { start = startResolved, end = Just endResolved })
+                            Ok (WithTime { start = startResolved, end = endResolved })
 
                         Just _ ->
                             Err "DTEND value type must match DTSTART (expected DATE-TIME)"
@@ -727,15 +698,15 @@ buildEventTime dtstart maybeDtend maybeDuration =
                         Nothing ->
                             case maybeDuration of
                                 Just dur ->
-                                    Ok (WithTime { start = startResolved, end = Just (addDurationToResolved dur startResolved) })
+                                    Ok (WithTime { start = startResolved, end = addDurationToResolved dur startResolved })
 
                                 Nothing ->
-                                    Ok (WithTime { start = startResolved, end = Just startResolved })
+                                    Ok (WithTime { start = startResolved, end = startResolved })
 
                 IFloating startLocal ->
                     case maybeDtend of
                         Just (IFloating endLocal) ->
-                            Ok (FloatingTime { start = startLocal, end = Just endLocal })
+                            Ok (FloatingTime { start = startLocal, end = endLocal })
 
                         Just _ ->
                             Err "DTEND value type must match DTSTART (expected local DATE-TIME)"
@@ -743,10 +714,10 @@ buildEventTime dtstart maybeDtend maybeDuration =
                         Nothing ->
                             case maybeDuration of
                                 Just dur ->
-                                    Ok (FloatingTime { start = startLocal, end = Just (addDurationToLocal dur startLocal) })
+                                    Ok (FloatingTime { start = startLocal, end = addDurationToLocal dur startLocal })
 
                                 Nothing ->
-                                    Ok (FloatingTime { start = startLocal, end = Just startLocal })
+                                    Ok (FloatingTime { start = startLocal, end = startLocal })
 
 
 validateEventRecurrenceFields :
@@ -2213,12 +2184,7 @@ expandSubDaily range event rule intervalMs =
 
                 durationMs : Int
                 durationMs =
-                    case end of
-                        Just e ->
-                            Time.posixToMillis e.posix - startMs
-
-                        Nothing ->
-                            0
+                    Time.posixToMillis end.posix - startMs
 
                 rangeStartMs : Int
                 rangeStartMs =
@@ -2243,12 +2209,7 @@ expandSubDaily range event rule intervalMs =
 
                 durationSeconds : Int
                 durationSeconds =
-                    case end of
-                        Just endTime ->
-                            localDateTimeKey endTime - startSeconds
-
-                        Nothing ->
-                            0
+                    localDateTimeKey end - startSeconds
 
                 rangeStartSeconds : Int
                 rangeStartSeconds =
@@ -2505,12 +2466,11 @@ makeSubDailyOccurrence event tzName currentMs durationMs =
                 , timeZoneContext = Nothing
                 }
             , end =
-                Just
-                    { posix = endPosix
-                    , timeZoneName = tzName
-                    , localDateTime = Nothing
-                    , timeZoneContext = Nothing
-                    }
+                { posix = endPosix
+                , timeZoneName = tzName
+                , localDateTime = Nothing
+                , timeZoneContext = Nothing
+                }
             }
     }
 
@@ -2551,7 +2511,7 @@ makeFloatingSubDailyOccurrence event currentSeconds durationSeconds =
     , time =
         FloatingTime
             { start = start
-            , end = Just end
+            , end = end
             }
     }
 
@@ -2571,12 +2531,7 @@ expandByTimeParts rule event seed candidateDate =
                         let
                             durationMs : Int
                             durationMs =
-                                case end of
-                                    Just e ->
-                                        Time.posixToMillis e.posix - Time.posixToMillis start.posix
-
-                                    Nothing ->
-                                        0
+                                Time.posixToMillis end.posix - Time.posixToMillis start.posix
 
                             hours : List Int
                             hours =
@@ -2630,14 +2585,10 @@ expandByTimeParts rule event seed candidateDate =
                                                                             WithTime
                                                                                 { start = resolvedStart
                                                                                 , end =
-                                                                                    Maybe.map
-                                                                                        (\_ ->
-                                                                                            resolvedTimeFromPosixInTimeZone
-                                                                                                timeZoneName
-                                                                                                timeZoneContext
-                                                                                                (Time.millisToPosix (Time.posixToMillis resolvedStart.posix + durationMs))
-                                                                                        )
-                                                                                        end
+                                                                                    resolvedTimeFromPosixInTimeZone
+                                                                                        timeZoneName
+                                                                                        timeZoneContext
+                                                                                        (Time.millisToPosix (Time.posixToMillis resolvedStart.posix + durationMs))
                                                                                 }
                                                                         }
                                                                     )
@@ -2653,12 +2604,7 @@ expandByTimeParts rule event seed candidateDate =
 
                             durationMs : Int
                             durationMs =
-                                case end of
-                                    Just e ->
-                                        Time.posixToMillis e.posix - Time.posixToMillis start.posix
-
-                                    Nothing ->
-                                        0
+                                Time.posixToMillis end.posix - Time.posixToMillis start.posix
 
                             origHour : Int
                             origHour =
@@ -2725,12 +2671,11 @@ expandByTimeParts rule event seed candidateDate =
                                                                         , timeZoneContext = start.timeZoneContext
                                                                         }
                                                                     , end =
-                                                                        Just
-                                                                            { posix = Time.millisToPosix (newStartMs + durationMs)
-                                                                            , timeZoneName = start.timeZoneName
-                                                                            , localDateTime = Nothing
-                                                                            , timeZoneContext = start.timeZoneContext
-                                                                            }
+                                                                        { posix = Time.millisToPosix (newStartMs + durationMs)
+                                                                        , timeZoneName = start.timeZoneName
+                                                                        , localDateTime = Nothing
+                                                                        , timeZoneContext = start.timeZoneContext
+                                                                        }
                                                                     }
                                                             }
                                                         )
@@ -2745,25 +2690,20 @@ expandByTimeParts rule event seed candidateDate =
 
                     origDuration : { hours : Int, minutes : Int, seconds : Int }
                     origDuration =
-                        case end of
-                            Just e ->
-                                let
-                                    startSecs : Int
-                                    startSecs =
-                                        start.hour * 3600 + start.minute * 60 + start.second
+                        let
+                            startSecs : Int
+                            startSecs =
+                                start.hour * 3600 + start.minute * 60 + start.second
 
-                                    endSecs : Int
-                                    endSecs =
-                                        e.hour * 3600 + e.minute * 60 + e.second
+                            endSecs : Int
+                            endSecs =
+                                end.hour * 3600 + end.minute * 60 + end.second
 
-                                    diff : Int
-                                    diff =
-                                        endSecs - startSecs
-                                in
-                                { hours = diff // 3600, minutes = modBy 60 (diff // 60), seconds = modBy 60 diff }
-
-                            Nothing ->
-                                { hours = 0, minutes = 0, seconds = 0 }
+                            diff : Int
+                            diff =
+                                endSecs - startSecs
+                        in
+                        { hours = diff // 3600, minutes = modBy 60 (diff // 60), seconds = modBy 60 diff }
 
                     hours : List Int
                     hours =
@@ -2827,7 +2767,7 @@ expandByTimeParts rule event seed candidateDate =
                                                     , time =
                                                         FloatingTime
                                                             { start = newStart
-                                                            , end = Just newEnd
+                                                            , end = newEnd
                                                             }
                                                     }
                                                 )
@@ -3775,7 +3715,7 @@ applyBySetPos bySetPos dates =
 occurrenceFromRecurrenceReference : Event -> OccurrenceReference -> Occurrence
 occurrenceFromRecurrenceReference event recurrenceReference =
     case ( event.time, recurrenceReference ) of
-        ( WithTime { end }, AtTime recurrenceTime ) ->
+        ( WithTime _, AtTime recurrenceTime ) ->
             let
                 durationMs : Int
                 durationMs =
@@ -3785,10 +3725,7 @@ occurrenceFromRecurrenceReference event recurrenceReference =
             , time =
                 WithTime
                     { start = recurrenceTime
-                    , end =
-                        Maybe.map
-                            (\_ -> addMillisecondsToResolved durationMs recurrenceTime)
-                            end
+                    , end = addMillisecondsToResolved durationMs recurrenceTime
                     }
             }
 
@@ -3796,21 +3733,13 @@ occurrenceFromRecurrenceReference event recurrenceReference =
             let
                 durationSeconds : Int
                 durationSeconds =
-                    case end of
-                        Just endTime ->
-                            localDateTimeKey endTime - localDateTimeKey start
-
-                        Nothing ->
-                            0
+                    localDateTimeKey end - localDateTimeKey start
             in
             { event = event
             , time =
                 FloatingTime
                     { start = recurrenceTime
-                    , end =
-                        Maybe.map
-                            (\_ -> localDateTimeFromPseudoSeconds (localDateTimeKey recurrenceTime + durationSeconds))
-                            end
+                    , end = localDateTimeFromPseudoSeconds (localDateTimeKey recurrenceTime + durationSeconds)
                     }
             }
 
@@ -3937,7 +3866,7 @@ shiftTime originalTime originalDate newDate =
         AllDay { start, end } ->
             AllDay
                 { start = Date.add Date.Days dayDelta start
-                , end = Maybe.map (Date.add Date.Days dayDelta) end
+                , end = Date.add Date.Days dayDelta end
                 }
 
         WithTime { start, end } ->
@@ -3946,12 +3875,7 @@ shiftTime originalTime originalDate newDate =
                     let
                         durationMs : Int
                         durationMs =
-                            case end of
-                                Just endTime ->
-                                    Time.posixToMillis endTime.posix - Time.posixToMillis start.posix
-
-                                Nothing ->
-                                    0
+                            Time.posixToMillis end.posix - Time.posixToMillis start.posix
 
                         shiftedStart : Maybe ResolvedTime
                         shiftedStart =
@@ -3959,9 +3883,9 @@ shiftTime originalTime originalDate newDate =
 
                         shiftedEnd : Maybe ResolvedTime
                         shiftedEnd =
-                            case ( shiftedStart, end ) of
-                                ( Just shiftedStartResolved, Just endResolved ) ->
-                                    case endResolved.localDateTime of
+                            case shiftedStart of
+                                Just shiftedStartResolved ->
+                                    case end.localDateTime of
                                         Just endLocalDateTime ->
                                             resolveTimeZoneLocalDateTime timeZoneName timeZoneContext (shiftLocalDateTime dayDelta endLocalDateTime)
 
@@ -3973,14 +3897,14 @@ shiftTime originalTime originalDate newDate =
                                                     (Time.millisToPosix (Time.posixToMillis shiftedStartResolved.posix + durationMs))
                                                 )
 
-                                _ ->
+                                Nothing ->
                                     Nothing
                     in
                     case shiftedStart of
                         Just shiftedStartResolved ->
                             WithTime
                                 { start = shiftedStartResolved
-                                , end = shiftedEnd
+                                , end = shiftedEnd |> Maybe.withDefault (resolvedTimeFromPosixInTimeZone timeZoneName timeZoneContext (Time.millisToPosix (Time.posixToMillis shiftedStartResolved.posix + durationMs)))
                                 }
 
                         Nothing ->
@@ -3991,10 +3915,7 @@ shiftTime originalTime originalDate newDate =
                             in
                             WithTime
                                 { start = { start | posix = Time.millisToPosix (Time.posixToMillis start.posix + deltaMs), localDateTime = Nothing }
-                                , end =
-                                    Maybe.map
-                                        (\e -> { e | posix = Time.millisToPosix (Time.posixToMillis e.posix + deltaMs), localDateTime = Nothing })
-                                        end
+                                , end = { end | posix = Time.millisToPosix (Time.posixToMillis end.posix + deltaMs), localDateTime = Nothing }
                                 }
 
                 _ ->
@@ -4005,16 +3926,13 @@ shiftTime originalTime originalDate newDate =
                     in
                     WithTime
                         { start = { start | posix = Time.millisToPosix (Time.posixToMillis start.posix + deltaMs), localDateTime = Nothing }
-                        , end =
-                            Maybe.map
-                                (\e -> { e | posix = Time.millisToPosix (Time.posixToMillis e.posix + deltaMs), localDateTime = Nothing })
-                                end
+                        , end = { end | posix = Time.millisToPosix (Time.posixToMillis end.posix + deltaMs), localDateTime = Nothing }
                         }
 
         FloatingTime { start, end } ->
             FloatingTime
                 { start = shiftLocalDateTime dayDelta start
-                , end = Maybe.map (shiftLocalDateTime dayDelta) end
+                , end = shiftLocalDateTime dayDelta end
                 }
 
 
@@ -4032,12 +3950,7 @@ shiftRecurringTime originalTime originalDate newDate =
                     let
                         durationMs : Int
                         durationMs =
-                            case end of
-                                Just endTime ->
-                                    Time.posixToMillis endTime.posix - Time.posixToMillis start.posix
-
-                                Nothing ->
-                                    0
+                            Time.posixToMillis end.posix - Time.posixToMillis start.posix
 
                         shiftedStart : Maybe ResolvedTime
                         shiftedStart =
@@ -4045,9 +3958,9 @@ shiftRecurringTime originalTime originalDate newDate =
 
                         shiftedEnd : Maybe ResolvedTime
                         shiftedEnd =
-                            case ( shiftedStart, end ) of
-                                ( Just shiftedStartResolved, Just endResolved ) ->
-                                    case endResolved.localDateTime of
+                            case shiftedStart of
+                                Just shiftedStartResolved ->
+                                    case end.localDateTime of
                                         Just endLocalDateTime ->
                                             resolveRecurringTimeZoneLocalDateTime timeZoneName timeZoneContext (shiftLocalDateTime dayDelta endLocalDateTime)
 
@@ -4059,7 +3972,7 @@ shiftRecurringTime originalTime originalDate newDate =
                                                     (Time.millisToPosix (Time.posixToMillis shiftedStartResolved.posix + durationMs))
                                                 )
 
-                                _ ->
+                                Nothing ->
                                     Nothing
                     in
                     shiftedStart
@@ -4067,7 +3980,7 @@ shiftRecurringTime originalTime originalDate newDate =
                             (\shiftedStartResolved ->
                                 WithTime
                                     { start = shiftedStartResolved
-                                    , end = shiftedEnd
+                                    , end = shiftedEnd |> Maybe.withDefault (resolvedTimeFromPosixInTimeZone timeZoneName timeZoneContext (Time.millisToPosix (Time.posixToMillis shiftedStartResolved.posix + durationMs)))
                                     }
                             )
 
@@ -4191,12 +4104,7 @@ timedEventDurationMilliseconds : EventTime -> Int
 timedEventDurationMilliseconds eventTime =
     case eventTime of
         WithTime { start, end } ->
-            case end of
-                Just endTime ->
-                    Time.posixToMillis endTime.posix - Time.posixToMillis start.posix
-
-                Nothing ->
-                    0
+            Time.posixToMillis end.posix - Time.posixToMillis start.posix
 
         _ ->
             0

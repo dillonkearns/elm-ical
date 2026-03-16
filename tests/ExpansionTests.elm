@@ -2,6 +2,7 @@ module ExpansionTests exposing (suite)
 
 import Date
 import Expect
+import Ical exposing (Status(..))
 import Ical.Parser as Parser
 import Ical.Recurrence as Recurrence
 import Test exposing (..)
@@ -1128,9 +1129,8 @@ suite =
                                                 |> Expect.equal (1616065200000 + 86400000)
                                         , \_ ->
                                             -- Next day same end: 2021-03-19T11:30:00Z
-                                            end
-                                                |> Maybe.map (\e -> Time.posixToMillis e.posix)
-                                                |> Expect.equal (Just (1616070600000 + 86400000))
+                                            Time.posixToMillis end.posix
+                                                |> Expect.equal (1616070600000 + 86400000)
                                         ]
                                         ()
 
@@ -2280,7 +2280,7 @@ suite =
                                 occurrences : List Parser.Occurrence
                                 occurrences =
                                     Parser.expand yearRange cal.events
-                                        |> List.filter (\occ -> occ.event.status /= Just Parser.Cancelled)
+                                        |> List.filter (\occ -> occ.event.status /= Just Cancelled)
                             in
                             occurrences
                                 |> List.map (occurrenceDate Time.utc)
@@ -2504,7 +2504,7 @@ makeAllDayEvent : { summary : String, start : Date.Date, end : Date.Date } -> Pa
 makeAllDayEvent { summary, start, end } =
     { uid = "test-uid"
     , stamp = Time.millisToPosix 0
-    , time = Parser.AllDay { start = start, end = Just end }
+    , time = Parser.AllDay { start = start, end = end }
     , created = Nothing
     , lastModified = Nothing
     , summary = Just summary
@@ -2550,7 +2550,7 @@ makeTimedEvent { summary, start, end } =
     , time =
         Parser.WithTime
             { start = utcResolved start
-            , end = Just (utcResolved end)
+            , end = utcResolved end
             }
     , created = Nothing
     , lastModified = Nothing
@@ -2592,7 +2592,7 @@ makeFloatingEvent { summary, year, month, day, hour, minute, second } =
     , time =
         Parser.FloatingTime
             { start = { year = year, month = month, day = day, hour = hour, minute = minute, second = second }
-            , end = Just { year = year, month = month, day = day, hour = hour + 1, minute = minute, second = second }
+            , end = { year = year, month = month, day = day, hour = hour + 1, minute = minute, second = second }
             }
     , created = Nothing
     , lastModified = Nothing

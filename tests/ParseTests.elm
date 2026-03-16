@@ -4,7 +4,8 @@ import ContentLine
 import Date
 import Expect
 import Fuzz
-import Ical
+import Ical exposing (JournalStatus(..), Status(..), Transparency(..))
+import Ical.Generator as Generator
 import Ical.Parser as Parser
 import Ical.Recurrence as Recurrence
 import Iso8601
@@ -825,7 +826,7 @@ endToEndTests =
                                     |> Expect.equal
                                         (Parser.AllDay
                                             { start = Date.fromCalendarDate 2021 Time.Mar 18
-                                            , end = Just (Date.fromCalendarDate 2021 Time.Mar 19)
+                                            , end = Date.fromCalendarDate 2021 Time.Mar 19
                                             }
                                         )
 
@@ -861,7 +862,7 @@ endToEndTests =
                                     |> Expect.equal
                                         (Parser.AllDay
                                             { start = Date.fromCalendarDate 2021 Time.Mar 18
-                                            , end = Just (Date.fromCalendarDate 2021 Time.Mar 19)
+                                            , end = Date.fromCalendarDate 2021 Time.Mar 19
                                             }
                                         )
 
@@ -1029,8 +1030,8 @@ endToEndTests =
                         case cal.events of
                             [ ev ] ->
                                 Expect.all
-                                    [ \e -> e.status |> Expect.equal (Just Parser.Confirmed)
-                                    , \e -> e.transparency |> Expect.equal (Just Parser.Transparent)
+                                    [ \e -> e.status |> Expect.equal (Just Confirmed)
+                                    , \e -> e.transparency |> Expect.equal (Just Transparent)
                                     ]
                                     ev
 
@@ -1066,7 +1067,7 @@ endToEndTests =
                                     |> Expect.equal
                                         (Parser.WithTime
                                             { start = utcResolved (toIso8601 "2021-03-18T16:20:44.000Z")
-                                            , end = Just (utcResolved (toIso8601 "2021-03-18T16:20:44.000Z"))
+                                            , end = utcResolved (toIso8601 "2021-03-18T16:20:44.000Z")
                                             }
                                         )
 
@@ -1102,7 +1103,7 @@ endToEndTests =
                                     |> Expect.equal
                                         (Parser.WithTime
                                             { start = utcResolved (toIso8601 "2021-03-18T16:20:44.000Z")
-                                            , end = Just (utcResolved (toIso8601 "2021-03-18T16:20:44.000Z"))
+                                            , end = utcResolved (toIso8601 "2021-03-18T16:20:44.000Z")
                                             }
                                         )
 
@@ -1138,7 +1139,7 @@ endToEndTests =
                                     |> Expect.equal
                                         (Parser.WithTime
                                             { start = utcResolved (toIso8601 "2021-03-18T16:20:44.000Z")
-                                            , end = Just (utcResolved (toIso8601 "2021-03-18T16:20:44.000Z"))
+                                            , end = utcResolved (toIso8601 "2021-03-18T16:20:44.000Z")
                                             }
                                         )
 
@@ -1505,7 +1506,7 @@ endToEndTests =
                                     |> Expect.equal
                                         (Parser.WithTime
                                             { start = utcResolved (toIso8601 "2021-03-18T10:00:00.000Z")
-                                            , end = Just (utcResolved (toIso8601 "2021-03-18T11:30:00.000Z"))
+                                            , end = utcResolved (toIso8601 "2021-03-18T11:30:00.000Z")
                                             }
                                         )
 
@@ -1542,7 +1543,7 @@ endToEndTests =
                                     |> Expect.equal
                                         (Parser.AllDay
                                             { start = Date.fromCalendarDate 2021 Time.Mar 18
-                                            , end = Just (Date.fromCalendarDate 2021 Time.Mar 20)
+                                            , end = Date.fromCalendarDate 2021 Time.Mar 20
                                             }
                                         )
 
@@ -1600,7 +1601,7 @@ endToEndTests =
                                     |> Expect.equal
                                         (Parser.FloatingTime
                                             { start = { year = 2021, month = Time.Mar, day = 18, hour = 16, minute = 20, second = 44 }
-                                            , end = Just { year = 2021, month = Time.Mar, day = 18, hour = 16, minute = 20, second = 44 }
+                                            , end = { year = 2021, month = Time.Mar, day = 18, hour = 16, minute = 20, second = 44 }
                                             }
                                         )
 
@@ -1636,7 +1637,7 @@ endToEndTests =
                                     |> Expect.equal
                                         (Parser.FloatingTime
                                             { start = { year = 2021, month = Time.Mar, day = 18, hour = 16, minute = 20, second = 44 }
-                                            , end = Just { year = 2021, month = Time.Mar, day = 18, hour = 16, minute = 20, second = 44 }
+                                            , end = { year = 2021, month = Time.Mar, day = 18, hour = 16, minute = 20, second = 44 }
                                             }
                                         )
 
@@ -2270,7 +2271,7 @@ journalTests =
                     Ok cal ->
                         case cal.journals of
                             [ j ] ->
-                                j.status |> Expect.equal (Just Parser.Draft)
+                                j.status |> Expect.equal (Just Draft)
 
                             _ ->
                                 Expect.fail "Expected 1 journal"
@@ -2300,7 +2301,7 @@ journalTests =
                     Ok cal ->
                         case cal.journals of
                             [ j ] ->
-                                j.status |> Expect.equal (Just Parser.Final)
+                                j.status |> Expect.equal (Just Final)
 
                             _ ->
                                 Expect.fail "Expected 1 journal"
@@ -2379,21 +2380,21 @@ roundTripTests =
                 let
                     icsString : String
                     icsString =
-                        [ Ical.event
+                        [ Generator.event
                             { id = "rt-1"
                             , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                             , time =
-                                Ical.withTime
+                                Generator.timedEvent
                                     { start = toIso8601 "2021-03-18T10:00:00.000Z"
                                     , end = toIso8601 "2021-03-18T11:00:00.000Z"
                                     }
                             , summary = "Round-trip test"
                             }
-                            |> Ical.withDescription "A description with, commas; semicolons\nand newlines"
-                            |> Ical.withLocation "Room 42"
+                            |> Generator.withDescription "A description with, commas; semicolons\nand newlines"
+                            |> Generator.withLocation "Room 42"
                         ]
-                            |> Ical.generate
-                                (Ical.config
+                            |> generateEvents
+                                (Generator.config
                                     { id = "//test//test//EN"
                                     , domain = "test.com"
                                     }
@@ -2421,16 +2422,16 @@ roundTripTests =
                 let
                     icsString : String
                     icsString =
-                        [ Ical.event
+                        [ Generator.event
                             { id = "rt-allday"
                             , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                             , time =
-                                Ical.allDay (Date.fromCalendarDate 2021 Time.Mar 18)
+                                Generator.allDay (Date.fromCalendarDate 2021 Time.Mar 18)
                             , summary = "All day round-trip"
                             }
                         ]
-                            |> Ical.generate
-                                (Ical.config
+                            |> generateEvents
+                                (Generator.config
                                     { id = "//test//test//EN"
                                     , domain = "test.com"
                                     }
@@ -2447,7 +2448,7 @@ roundTripTests =
                                             |> Expect.equal
                                                 (Parser.AllDay
                                                     { start = Date.fromCalendarDate 2021 Time.Mar 18
-                                                    , end = Just (Date.fromCalendarDate 2021 Time.Mar 19)
+                                                    , end = Date.fromCalendarDate 2021 Time.Mar 19
                                                     }
                                                 )
                                     ]
@@ -2463,20 +2464,20 @@ roundTripTests =
                 let
                     icsString : String
                     icsString =
-                        [ Ical.event
+                        [ Generator.event
                             { id = "rt-org"
                             , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                             , time =
-                                Ical.withTime
+                                Generator.timedEvent
                                     { start = toIso8601 "2021-03-18T10:00:00.000Z"
                                     , end = toIso8601 "2021-03-18T11:00:00.000Z"
                                     }
                             , summary = "Organizer test"
                             }
-                            |> Ical.withOrganizer { name = "Dillon Kearns", email = "dillon@example.com" }
+                            |> Generator.withOrganizer { name = "Dillon Kearns", email = "dillon@example.com" }
                         ]
-                            |> Ical.generate
-                                (Ical.config
+                            |> generateEvents
+                                (Generator.config
                                     { id = "//test//test//EN"
                                     , domain = "test.com"
                                     }
@@ -2511,23 +2512,23 @@ roundTripTests =
 
                     icsString : String
                     icsString =
-                        [ Ical.event
+                        [ Generator.event
                             { id = "organizer-roundtrip"
                             , stamp = toIso8601 "2024-01-01T00:00:00.000Z"
                             , time =
-                                Ical.withTime
+                                Generator.timedEvent
                                     { start = toIso8601 "2024-01-01T09:00:00.000Z"
                                     , end = toIso8601 "2024-01-01T10:00:00.000Z"
                                     }
                             , summary = "Organizer round-trip"
                             }
-                            |> Ical.withOrganizer
+                            |> Generator.withOrganizer
                                 { name = organizerName
                                 , email = "jane@example.com"
                                 }
                         ]
-                            |> Ical.generate
-                                (Ical.config
+                            |> generateEvents
+                                (Generator.config
                                     { id = "//tests//elm-ical//EN"
                                     , domain = "example.com"
                                     }
@@ -2555,20 +2556,20 @@ roundTripTests =
 
                     icsString : String
                     icsString =
-                        [ Ical.event
+                        [ Generator.event
                             { id = "rt-long"
                             , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                             , time =
-                                Ical.withTime
+                                Generator.timedEvent
                                     { start = toIso8601 "2021-03-18T10:00:00.000Z"
                                     , end = toIso8601 "2021-03-18T11:00:00.000Z"
                                     }
                             , summary = "Long description test"
                             }
-                            |> Ical.withDescription longDesc
+                            |> Generator.withDescription longDesc
                         ]
-                            |> Ical.generate
-                                (Ical.config
+                            |> generateEvents
+                                (Generator.config
                                     { id = "//test//test//EN"
                                     , domain = "test.com"
                                     }
@@ -2591,23 +2592,23 @@ roundTripTests =
                 let
                     icsString : String
                     icsString =
-                        [ Ical.event
+                        [ Generator.event
                             { id = "rt-cal"
                             , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                             , time =
-                                Ical.withTime
+                                Generator.timedEvent
                                     { start = toIso8601 "2021-03-18T10:00:00.000Z"
                                     , end = toIso8601 "2021-03-18T11:00:00.000Z"
                                     }
                             , summary = "Test"
                             }
                         ]
-                            |> Ical.generate
-                                (Ical.config
+                            |> generateEvents
+                                (Generator.config
                                     { id = "//myapp//cal//EN"
                                     , domain = "test.com"
                                     }
-                                    |> Ical.withName "My Calendar"
+                                    |> Generator.withName "My Calendar"
                                 )
                 in
                 case Parser.parse icsString of
@@ -2625,24 +2626,24 @@ roundTripTests =
                 let
                     icsString : String
                     icsString =
-                        [ Ical.event
+                        [ Generator.event
                             { id = "rt-rrule"
                             , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                             , time =
-                                Ical.withTime
+                                Generator.timedEvent
                                     { start = toIso8601 "2021-03-18T10:00:00.000Z"
                                     , end = toIso8601 "2021-03-18T11:00:00.000Z"
                                     }
                             , summary = "Weekly standup"
                             }
-                            |> Ical.withRecurrenceRule
-                                (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
-                                    |> Ical.withCount 10
-                                    |> Ical.withByDay [ Recurrence.every Time.Mon, Recurrence.every Time.Wed ]
+                            |> Generator.withRecurrenceRule
+                                (Generator.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
+                                    |> Generator.withCount 10
+                                    |> Generator.withByDay [ Recurrence.every Time.Mon, Recurrence.every Time.Wed ]
                                 )
                         ]
-                            |> Ical.generate
-                                (Ical.config
+                            |> generateEvents
+                                (Generator.config
                                     { id = "//test//test//EN"
                                     , domain = "test.com"
                                     }
@@ -2674,29 +2675,29 @@ roundTripTests =
                 let
                     icsString : String
                     icsString =
-                        [ Ical.event
+                        [ Generator.event
                             { id = "rt-invalid-by-values"
                             , stamp = toIso8601 "2024-01-01T00:00:00.000Z"
                             , time =
-                                Ical.withTime
+                                Generator.timedEvent
                                     { start = toIso8601 "2024-01-01T09:00:00.000Z"
                                     , end = toIso8601 "2024-01-01T10:00:00.000Z"
                                     }
                             , summary = "Sanitized builder values"
                             }
-                            |> Ical.withRecurrenceRule
-                                (Ical.rule (Recurrence.Yearly { every = 1 })
-                                    |> Ical.withByMonthDay [ 0, 1, 32, -1, -32 ]
-                                    |> Ical.withBySetPos [ 0, 1, 366, 367, -1, -367 ]
-                                    |> Ical.withByHour [ -1, 0, 23, 24 ]
-                                    |> Ical.withByMinute [ -1, 0, 59, 60 ]
-                                    |> Ical.withBySecond [ -1, 0, 60, 61 ]
-                                    |> Ical.withByYearDay [ -367, -1, 0, 1, 366, 367 ]
-                                    |> Ical.withByWeekNo [ -54, -1, 0, 1, 53, 54 ]
+                            |> Generator.withRecurrenceRule
+                                (Generator.rule (Recurrence.Yearly { every = 1 })
+                                    |> Generator.withByMonthDay [ 0, 1, 32, -1, -32 ]
+                                    |> Generator.withBySetPos [ 0, 1, 366, 367, -1, -367 ]
+                                    |> Generator.withByHour [ -1, 0, 23, 24 ]
+                                    |> Generator.withByMinute [ -1, 0, 59, 60 ]
+                                    |> Generator.withBySecond [ -1, 0, 60, 61 ]
+                                    |> Generator.withByYearDay [ -367, -1, 0, 1, 366, 367 ]
+                                    |> Generator.withByWeekNo [ -54, -1, 0, 1, 53, 54 ]
                                 )
                         ]
-                            |> Ical.generate
-                                (Ical.config
+                            |> generateEvents
+                                (Generator.config
                                     { id = "//tests//elm-ical//EN"
                                     , domain = "example.com"
                                     }
@@ -2732,26 +2733,26 @@ roundTripTests =
                 let
                     icsString : String
                     icsString =
-                        [ Ical.event
+                        [ Generator.event
                             { id = "rt-invalid-weekly-all-day"
                             , stamp = toIso8601 "2024-01-01T00:00:00.000Z"
-                            , time = Ical.allDay (Date.fromCalendarDate 2024 Time.Jan 1)
+                            , time = Generator.allDay (Date.fromCalendarDate 2024 Time.Jan 1)
                             , summary = "Weekly all-day recurrence"
                             }
-                            |> Ical.withRecurrenceRule
-                                (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
-                                    |> Ical.withByDay [ Recurrence.every Time.Mon, Recurrence.second Time.Tue ]
-                                    |> Ical.withByMonthDay [ 1, -1 ]
-                                    |> Ical.withBySetPos [ 1 ]
-                                    |> Ical.withByHour [ 9 ]
-                                    |> Ical.withByMinute [ 30 ]
-                                    |> Ical.withBySecond [ 45 ]
-                                    |> Ical.withByYearDay [ 100 ]
-                                    |> Ical.withByWeekNo [ 20 ]
+                            |> Generator.withRecurrenceRule
+                                (Generator.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
+                                    |> Generator.withByDay [ Recurrence.every Time.Mon, Recurrence.second Time.Tue ]
+                                    |> Generator.withByMonthDay [ 1, -1 ]
+                                    |> Generator.withBySetPos [ 1 ]
+                                    |> Generator.withByHour [ 9 ]
+                                    |> Generator.withByMinute [ 30 ]
+                                    |> Generator.withBySecond [ 45 ]
+                                    |> Generator.withByYearDay [ 100 ]
+                                    |> Generator.withByWeekNo [ 20 ]
                                 )
                         ]
-                            |> Ical.generate
-                                (Ical.config
+                            |> generateEvents
+                                (Generator.config
                                     { id = "//tests//elm-ical//EN"
                                     , domain = "example.com"
                                     }
@@ -2789,21 +2790,21 @@ roundTripTests =
                 let
                     icsString : String
                     icsString =
-                        [ Ical.event
+                        [ Generator.event
                             { id = "rt-attendee"
                             , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                             , time =
-                                Ical.withTime
+                                Generator.timedEvent
                                     { start = toIso8601 "2021-03-18T10:00:00.000Z"
                                     , end = toIso8601 "2021-03-18T11:00:00.000Z"
                                     }
                             , summary = "Meeting with attendees"
                             }
-                            |> Ical.withAttendee { name = "Alice", email = "alice@example.com" }
-                            |> Ical.withAttendee { name = "Bob", email = "bob@example.com" }
+                            |> Generator.withAttendee { name = "Alice", email = "alice@example.com" }
+                            |> Generator.withAttendee { name = "Bob", email = "bob@example.com" }
                         ]
-                            |> Ical.generate
-                                (Ical.config
+                            |> generateEvents
+                                (Generator.config
                                     { id = "//test//test//EN"
                                     , domain = "test.com"
                                     }
@@ -2830,19 +2831,19 @@ roundTripTests =
                 let
                     icsString : String
                     icsString =
-                        [ Ical.event
+                        [ Generator.event
                             { id = "rt-floating"
                             , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                             , time =
-                                Ical.floatingTime
+                                Generator.floatingTime
                                     { start = { date = Date.fromCalendarDate 2021 Time.Mar 18, hour = 14, minute = 0, second = 0 }
                                     , end = { date = Date.fromCalendarDate 2021 Time.Mar 18, hour = 15, minute = 30, second = 0 }
                                     }
                             , summary = "Local meeting"
                             }
                         ]
-                            |> Ical.generate
-                                (Ical.config
+                            |> generateEvents
+                                (Generator.config
                                     { id = "//test//test//EN"
                                     , domain = "test.com"
                                     }
@@ -2864,7 +2865,7 @@ roundTripTests =
                                                     , \_ -> start.hour |> Expect.equal 14
                                                     , \_ -> start.minute |> Expect.equal 0
                                                     , \_ -> start.second |> Expect.equal 0
-                                                    , \_ -> end |> Expect.notEqual Nothing
+                                                    , \_ -> end.hour |> Expect.equal 15
                                                     ]
                                                     ()
 
@@ -2883,22 +2884,22 @@ roundTripTests =
                 let
                     icsString : String
                     icsString =
-                        Ical.generateWithJournals
-                            (Ical.config
+                        Generator.generate
+                            (Generator.config
                                 { id = "//test//test//EN"
                                 , domain = "test.com"
                                 }
                             )
                             { events = []
                             , journals =
-                                [ Ical.journal
+                                [ Generator.journal
                                     { id = "rt-journal"
                                     , stamp = toIso8601 "2021-03-18T16:20:44.000Z"
                                     , summary = "Daily notes"
                                     }
-                                    |> Ical.withJournalDate (Date.fromCalendarDate 2021 Time.Mar 18)
-                                    |> Ical.withJournalDescription "Sprint progress discussed."
-                                    |> Ical.withJournalStatus Ical.Draft
+                                    |> Generator.withJournalDate (Date.fromCalendarDate 2021 Time.Mar 18)
+                                    |> Generator.withJournalDescription "Sprint progress discussed."
+                                    |> Generator.withJournalStatus Draft
                                 ]
                             }
                 in
@@ -2913,7 +2914,7 @@ roundTripTests =
                                     , \journal ->
                                         journal.time
                                             |> Expect.equal (Just (Parser.JournalDate (Date.fromCalendarDate 2021 Time.Mar 18)))
-                                    , \journal -> journal.status |> Expect.equal (Just Parser.Draft)
+                                    , \journal -> journal.status |> Expect.equal (Just Draft)
                                     ]
                                     j
 
@@ -2935,19 +2936,19 @@ roundTripTests =
 
                     icsString : String
                     icsString =
-                        [ Ical.event
+                        [ Generator.event
                             { id = "fuzz-1"
                             , stamp = Time.millisToPosix 1616083244000
                             , time =
-                                Ical.withTime
+                                Generator.timedEvent
                                     { start = Time.millisToPosix 1616083244000
                                     , end = Time.millisToPosix 1616086844000
                                     }
                             , summary = summary
                             }
                         ]
-                            |> Ical.generate
-                                (Ical.config
+                            |> generateEvents
+                                (Generator.config
                                     { id = "//test//test//EN"
                                     , domain = "test.com"
                                     }
@@ -2967,20 +2968,20 @@ roundTripTests =
                 let
                     icsString : String
                     icsString =
-                        [ Ical.event
+                        [ Generator.event
                             { id = "fuzz-2"
                             , stamp = Time.millisToPosix 1616083244000
                             , time =
-                                Ical.withTime
+                                Generator.timedEvent
                                     { start = Time.millisToPosix 1616083244000
                                     , end = Time.millisToPosix 1616086844000
                                     }
                             , summary = "Fuzz test"
                             }
-                            |> Ical.withDescription randomDesc
+                            |> Generator.withDescription randomDesc
                         ]
-                            |> Ical.generate
-                                (Ical.config
+                            |> generateEvents
+                                (Generator.config
                                     { id = "//test//test//EN"
                                     , domain = "test.com"
                                     }
@@ -3083,3 +3084,8 @@ toIso8601 string =
 
         Err error ->
             Debug.todo (Debug.toString error)
+
+
+generateEvents : Generator.Config -> List Generator.Event -> String
+generateEvents cfg events =
+    Generator.generate cfg { events = events, journals = [] }

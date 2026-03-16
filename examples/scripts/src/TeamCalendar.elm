@@ -1,7 +1,7 @@
 module TeamCalendar exposing (run)
 
 import Date
-import Ical
+import Ical.Generator as Generator
 import Ical.Recurrence as Recurrence
 import Pages.Script as Script exposing (Script)
 import Time
@@ -20,45 +20,47 @@ generatedCalendar =
         now =
             Time.millisToPosix 1710748800000
 
-        weeklySync : Ical.Event
+        weeklySync : Generator.Event
         weeklySync =
-            Ical.event
+            Generator.event
                 { id = "weekly-sync"
                 , stamp = now
                 , time =
-                    Ical.withTime
+                    Generator.timedEvent
                         { start = Time.millisToPosix 1710781200000
                         , end = Time.millisToPosix 1710784800000
                         }
                 , summary = "Weekly Team Sync"
                 }
-                |> Ical.withLocation "Zoom"
-                |> Ical.withRecurrenceRule
-                    (Ical.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
-                        |> Ical.withByDay [ Recurrence.every Time.Mon, Recurrence.every Time.Wed ]
-                        |> Ical.withCount 6
+                |> Generator.withLocation "Zoom"
+                |> Generator.withRecurrenceRule
+                    (Generator.rule (Recurrence.Weekly { every = 1, weekStart = Time.Mon })
+                        |> Generator.withByDay [ Recurrence.every Time.Mon, Recurrence.every Time.Wed ]
+                        |> Generator.withCount 6
                     )
 
-        releaseDay : Ical.Event
+        releaseDay : Generator.Event
         releaseDay =
-            Ical.event
+            Generator.event
                 { id = "release-day"
                 , stamp = now
-                , time = Ical.allDay (Date.fromCalendarDate 2024 Time.Mar 12)
+                , time = Generator.allDay (Date.fromCalendarDate 2024 Time.Mar 12)
                 , summary = "Release Day"
                 }
-                |> Ical.withDescription "Ship the monthly release checklist."
-                |> Ical.withRecurrenceRule
-                    (Ical.rule (Recurrence.Monthly { every = 1 })
-                        |> Ical.withByDay [ Recurrence.second Time.Tue ]
-                        |> Ical.withCount 3
+                |> Generator.withDescription "Ship the monthly release checklist."
+                |> Generator.withRecurrenceRule
+                    (Generator.rule (Recurrence.Monthly { every = 1 })
+                        |> Generator.withByDay [ Recurrence.second Time.Tue ]
+                        |> Generator.withCount 3
                     )
     in
-    Ical.generate
-        (Ical.config
+    Generator.generate
+        (Generator.config
             { id = "//mycompany//team//EN"
             , domain = "mycompany.com"
             }
-            |> Ical.withName "Engineering Team"
+            |> Generator.withName "Engineering Team"
         )
-        [ weeklySync, releaseDay ]
+        { events = [ weeklySync, releaseDay ]
+        , journals = []
+        }
